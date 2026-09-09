@@ -129,6 +129,51 @@ const clip = file
   : null;
 console.log(JSON.stringify({ clip }, null, 2));
 
+// --- Solo manos: la camara tiene que dejar de verse sin dejar de decodificarse.
+await page.keyboard.press('v');
+// Como en el resto del fichero: el store agrupa las escrituras a localStorage,
+// asi que se espera al valor en vez de dormir una cifra a ojo.
+await page
+  .waitForFunction(() => JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').stageMode === 'hands', {
+    timeout: 5000,
+  })
+  .catch(() => {});
+const handsClipDownload = page.waitForEvent('download', { timeout: 30000 }).catch(() => null);
+await page.click('#clip-button');
+await page.waitForTimeout(2500);
+const handsOnly = await page.evaluate(() => {
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('overlay');
+  const ctx = canvas?.getContext('2d');
+  // El centro del lienzo: si el fondo del modo es opaco de verdad, ahi no queda
+  // ni un pixel de la camara por debajo.
+  const pixel = ctx?.getImageData(Math.floor((canvas?.width ?? 2) / 2), Math.floor((canvas?.height ?? 2) / 2), 1, 1).data;
+  return {
+    cameraHidden: video?.classList.contains('camera-hidden'),
+    videoOpacity: getComputedStyle(video).opacity,
+    // Ocultar el video no puede detenerlo: el seguimiento lee de el.
+    videoPlaying: video.readyState >= 2 && !video.paused,
+    centerAlpha: pixel ? pixel[3] : null,
+    stageMode: JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').stageMode,
+  };
+});
+await page.click('#clip-button');
+const handsFile = await handsClipDownload;
+const handsClip = handsFile
+  ? { name: handsFile.suggestedFilename(), bytes: (await import('node:fs')).statSync(await handsFile.path()).size }
+  : null;
+await page.keyboard.press('v');
+await page
+  .waitForFunction(() => JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').stageMode === 'camera', {
+    timeout: 5000,
+  })
+  .catch(() => {});
+const backToCamera = await page.evaluate(() => ({
+  cameraHidden: document.getElementById('video')?.classList.contains('camera-hidden'),
+  stageMode: JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').stageMode,
+}));
+console.log(JSON.stringify({ handsOnly, handsClip, backToCamera }, null, 2));
+
 // --- Bucles: una toma sin una sola nota no debe dejar una capa fantasma.
 await page.click('#loop-button');
 await page.waitForTimeout(1200);
@@ -266,6 +311,30 @@ if (!clip || clip.bytes < 20000) {
   console.error('\nFALLO: la grabacion del clip no ha producido un fichero utilizable');
   process.exit(1);
 }
+if (!handsOnly.cameraHidden || handsOnly.videoOpacity !== '0' || handsOnly.stageMode !== 'hands') {
+  console.error('\nFALLO: el modo de solo manos no oculta la imagen de la camara');
+  process.exit(1);
+}
+if (!handsOnly.videoPlaying) {
+  console.error('\nFALLO: ocultar la camara ha detenido el video, y el seguimiento lee de el');
+  process.exit(1);
+}
+if (handsOnly.centerAlpha !== 255) {
+  console.error(`\nFALLO: el fondo de solo manos no es opaco (alfa ${handsOnly.centerAlpha})`);
+  process.exit(1);
+}
+// El umbral es mas bajo que el del clip con camara a proposito: sin fotograma de
+// video, lo que se graba es un degradado casi estatico y el codificador lo
+// comprime hasta una fraccion. Lo que se comprueba aqui es que hay fichero y que
+// no esta vacio; que el fondo es opaco de verdad lo dice centerAlpha.
+if (!handsClip || handsClip.bytes < 8000) {
+  console.error('\nFALLO: no se ha podido grabar un clip en modo de solo manos');
+  process.exit(1);
+}
+if (backToCamera.cameraHidden !== false || backToCamera.stageMode !== 'camera') {
+  console.error('\nFALLO: el atajo no devuelve la imagen de la camara');
+  process.exit(1);
+}
 if (loops.lanes !== 0 || loops.undoHidden !== true) {
   console.error('\nFALLO: una toma sin notas ha dejado una capa fantasma');
   process.exit(1);
@@ -280,5 +349,6 @@ if (!state.splashHidden || !state.hudVisible) {
 }
 console.log(
   `\nOK: arranque, modelo, audio, introduccion de ${coachStart.dots} pasos, ayuda, espanol e ingles, ` +
-    `bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB y enlace compartible.`,
+    `bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB, solo manos con clip de ` +
+    `${(handsClip.bytes / 1024).toFixed(0)} kB y enlace compartible.`,
 );

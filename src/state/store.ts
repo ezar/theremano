@@ -3,6 +3,16 @@ import type { PresetId } from '../audio/presets';
 import type { ClipAspect } from '../capture/recorder';
 
 /**
+ * Que se ve detras del esqueleto.
+ *
+ * `hands` no difumina ni recorta el fondo: sencillamente no dibuja el fotograma
+ * de la camara en ningun sitio, ni en pantalla ni en el clip. Lo que sale es el
+ * esqueleto sobre un degradado. Es una garantia, no una estimacion: no hay
+ * mascara que pueda fallar y dejar ver media cara.
+ */
+export type StageMode = 'camera' | 'hands';
+
+/**
  * Estado observable minimo, sin dependencias.
  *
  * Se separa en dos: los ajustes (baja frecuencia, persistidos, con
@@ -33,6 +43,8 @@ export interface Settings {
   showRawTrace: boolean;
   /** Proporcion del clip que se graba para compartir. */
   clipAspect: ClipAspect;
+  /** Fondo de la escena: el video de la camara o solo el esqueleto. */
+  stageMode: StageMode;
   /** Melodia guiada activa. Cadena vacia si no hay ninguna. */
   melodyId: string;
   /** true en cuanto se ha visto la introduccion, se complete o se salte. */
@@ -59,6 +71,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showDiagnostics: true,
   showRawTrace: false,
   clipAspect: 'vertical',
+  stageMode: 'camera',
   melodyId: '',
   onboarded: false,
   locale: 'auto',

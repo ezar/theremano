@@ -25,6 +25,8 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
 - **Clip para compartir** — graba imagen y sonido en 9:16, con la nota y la
   marca sobreimpresas, y lo entrega por la hoja de compartir del móvil o como
   descarga.
+- **Solo manos** — oculta la imagen de la cámara, en pantalla y en el clip: se ve
+  el esqueleto sobre un fondo oscuro, sin cara ni habitación. Tecla **V**.
 - **Introducción interactiva** — cinco pasos que se cierran cuando el gesto
   ocurre de verdad, no cuando se pulsa «siguiente». Repetible desde la ayuda.
 - **Melodías guiadas** — cinco secuencias que seguir, con el objetivo marcado
@@ -63,7 +65,24 @@ una mano no silencia nada: su último estado se conserva 500 ms antes de darla p
 ausente, y el volumen se queda donde estaba en lugar de caer a cero.
 
 Con teclado: **espacio** graba una capa de bucle, **C** graba un clip, **Z**
-quita la última capa, **H** abre la ayuda.
+quita la última capa, **V** oculta o muestra la cámara, **H** abre la ayuda.
+
+### Solo manos
+
+Se puede tocar y grabar sin que salga nada más que las manos. El modo no
+difumina el fondo ni recorta una silueta: sencillamente no dibuja el fotograma
+de la cámara, ni en la pantalla ni en el lienzo del clip. Lo que queda es el
+esqueleto sobre un degradado.
+
+Esa diferencia importa. Un desenfoque o una máscara de segmentación son
+estimaciones, y fallan justo cuando peor viene —un giro brusco, un contraluz—
+dejando ver medio rostro durante unos fotogramas. Aquí no hay nada que estimar:
+los píxeles de la cámara no llegan a pintarse. El vídeo sigue decodificándose
+porque el seguimiento lee de él, pero se queda a opacidad cero debajo de un
+fondo opaco.
+
+La rejilla se dibuja algo más marcada en este modo: los valores originales se
+calibraron contra una imagen de cámara y sobre negro casi desaparecían.
 
 ---
 

@@ -2,7 +2,7 @@ import { PRESETS, type PresetId } from '../audio/presets';
 import { MELODIES } from '../mapping/melodies';
 import { SCALES, type ScaleId } from '../mapping/scales';
 import { i18n, t } from '../i18n';
-import type { Settings, SettingsStore } from '../state/store';
+import type { Settings, SettingsStore, StageMode } from '../state/store';
 import type { CameraInfo } from '../camera/stream';
 import type { ClipAspect } from '../capture/recorder';
 
@@ -141,6 +141,18 @@ export class Controls {
       (value) => this.deps.store.set({ clipAspect: value as ClipAspect }),
     );
     this.hint(s.clipHint);
+
+    this.select(
+      'stage',
+      s.stage,
+      [
+        { value: 'camera', label: s.stageCamera },
+        { value: 'hands', label: s.stageHands },
+      ],
+      (settings) => settings.stageMode,
+      (value) => this.deps.store.set({ stageMode: value as StageMode }),
+    );
+    this.hint(s.stageHint);
 
     this.section(s.instrumentSection);
 

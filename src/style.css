@@ -59,6 +59,14 @@ html, body {
   transform: scaleX(1);
 }
 #video.mirrored { transform: scaleX(-1); }
+/*
+ * Modo de solo manos. El lienzo pinta encima un degradado opaco, asi que esto
+ * es la segunda capa: sin ella, cualquier hueco del lienzo (un giro de pantalla
+ * antes de redimensionar) dejaria ver la habitacion. Se usa opacidad y no
+ * display para que el navegador siga decodificando fotogramas: el seguimiento
+ * de manos los necesita igual.
+ */
+#video.camera-hidden { opacity: 0; }
 
 #overlay { pointer-events: none; }
 
