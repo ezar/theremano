@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BEAT_SECONDS, COUNT_IN_BEATS, beatsLeft, isAccent, isDue, planCountIn } from '../src/audio/countIn';
+import { BEAT_SECONDS, COUNT_IN_BEATS, beatsLeft, isAccent, isDue, isMissed, planCountIn } from '../src/audio/countIn';
 
 /**
  * La claqueta es aritmetica de instantes, y por eso se puede comprobar sin
@@ -55,6 +55,22 @@ describe('claqueta', () => {
     expect(beatsLeft(plan, plan.clicks[2]!)).toBe(2);
     expect(isDue(plan, plan.downbeat - 0.001)).toBe(false);
     expect(isDue(plan, plan.downbeat)).toBe(true);
+  });
+
+  /**
+   * Lo que pasa si el bucle de fotogramas se para en mitad de la cuenta: la
+   * pestana se va al fondo, el movil se bloquea. Al volver, el pulso de entrada
+   * quedo atras, y empezar ahi una toma con un inicio que ya paso la llenaria de
+   * silencio por delante; con veinte segundos fuera, se descartaria sola nada
+   * mas nacer.
+   */
+  it('una entrada que quedo atras se da por perdida', () => {
+    const plan = planCountIn(0);
+    expect(isMissed(plan, plan.downbeat)).toBe(false);
+    // Llegar un poco tarde es normal: los fotogramas no caen en el instante.
+    expect(isMissed(plan, plan.downbeat + BEAT_SECONDS * 0.9)).toBe(false);
+    expect(isMissed(plan, plan.downbeat + BEAT_SECONDS * 1.1)).toBe(true);
+    expect(isMissed(plan, plan.downbeat + 30)).toBe(true);
   });
 
   it('solo el primer pulso lleva acento: es el que marca donde cae el uno', () => {

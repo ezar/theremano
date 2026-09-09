@@ -71,6 +71,19 @@ export function isDue(plan: CountInPlan, now: number): boolean {
   return now >= plan.downbeat;
 }
 
+/**
+ * La entrada se perdio: el pulso de entrada quedo demasiado atras.
+ *
+ * Pasa cuando el bucle de fotogramas se para en mitad de la cuenta —la pestana
+ * se va al fondo, el movil se bloquea—. Arrancar la toma ahi, con un inicio que
+ * ya paso, la llenaria de silencio por delante; y con veinte segundos de
+ * ausencia se descartaria sola nada mas nacer. Un pulso de margen es de sobra:
+ * mas que eso ya no es llegar tarde, es no haber estado.
+ */
+export function isMissed(plan: CountInPlan, now: number): boolean {
+  return now - plan.downbeat > BEAT_SECONDS;
+}
+
 /** El pulso fuerte es el primero: es el que marca donde cae el uno. */
 export function isAccent(index: number): boolean {
   return index === 0;

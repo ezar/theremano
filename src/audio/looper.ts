@@ -1,7 +1,7 @@
 import * as Tone from 'tone';
 import { getPreset, type Preset, type PresetId } from './presets';
 import { LoopTake, MAX_TRACKS, type LiveSnapshot, type LoopEvent } from './loopTake';
-import { beatsLeft, isAccent, isDue, planCountIn, type CountInPlan } from './countIn';
+import { beatsLeft, isAccent, isDue, isMissed, planCountIn, type CountInPlan } from './countIn';
 
 export type { LoopEvent } from './loopTake';
 export { MAX_CYCLE_SECONDS, MAX_TRACKS, MIN_CYCLE_SECONDS } from './loopTake';
@@ -285,7 +285,14 @@ export class Looper {
     if (this.countIn && isDue(this.countIn.plan, Tone.now())) {
       const { plan, presetId } = this.countIn;
       this.stopCountIn();
-      this.startTake(presetId, plan.downbeat);
+      /*
+       * Si el pulso de entrada quedo muy atras, la entrada se perdio y no hay
+       * nada que empezar. Pasa cuando el bucle de fotogramas se para en mitad de
+       * la cuenta: la pestana se va al fondo, el movil se bloquea. Arrancar ahi
+       * la toma con un inicio que ya paso la llenaria de silencio por delante, y
+       * con veinte segundos de ausencia se descartaria sola nada mas nacer.
+       */
+      if (!isMissed(plan, Tone.now())) this.startTake(presetId, plan.downbeat);
     }
 
     const recording = this.recordingTake;
@@ -350,6 +357,17 @@ export class Looper {
     }
     this.startTransport();
     return true;
+  }
+
+  /**
+   * Cancela una claqueta en marcha sin tocar lo demas.
+   *
+   * La llama la aplicacion al suspenderse. Irse de la pestana en mitad de la
+   * cuenta es abandonarla: al volver, los pulsos ya no suenan y el momento de
+   * entrar paso hace rato.
+   */
+  abortCountIn(): void {
+    this.stopCountIn();
   }
 
   clear(): void {

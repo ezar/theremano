@@ -900,6 +900,9 @@ class Theremano {
     if (!runtime.running) return;
     const event = this.mapper.silence();
     if (event === 'release') this.engine.release();
+    // Una claqueta a medias no sobrevive a irse de la pestana: los pulsos ya no
+    // se oyen y el momento de entrar habra pasado para cuando se vuelva.
+    this.looper.abortCountIn();
     this.engine.setMuted(true);
     this.cancelFrame();
     this.overlay.resetEffects();
