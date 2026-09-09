@@ -194,7 +194,8 @@ html, body {
 
 #notice {
   position: absolute;
-  top: calc(14px + var(--safe-t));
+  /* Debajo del chip de la melodia guiada, que ocupa el centro de arriba. */
+  top: calc(62px + var(--safe-t));
   left: 50%;
   transform: translateX(-50%);
   padding: 7px 14px;
@@ -592,3 +593,34 @@ html, body {
   cursor: pointer;
 }
 .share-row button:hover { background: rgba(255, 209, 102, 0.2); }
+
+
+/* ---------- Melodia guiada ---------- */
+
+#guide-chip {
+  position: absolute;
+  top: calc(20px + var(--safe-t));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 15px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  font-size: 0.82rem;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+#guide-progress {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+#guide-chip.done {
+  border-color: rgba(6, 214, 160, 0.6);
+  background: rgba(6, 214, 160, 0.16);
+  color: #06d6a0;
+}
+#guide-chip.done #guide-progress { color: #06d6a0; }

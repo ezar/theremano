@@ -92,6 +92,29 @@ const afterScale = await page.evaluate(() => document.getElementById('note-sub')
 const persisted = await page.evaluate(() => localStorage.getItem('theremano.settings.v1'));
 console.log(JSON.stringify({ fields, afterScale, scale: JSON.parse(persisted ?? '{}').scale }, null, 2));
 
+// --- Melodia guiada: elegirla muestra el progreso y fija la escala sugerida.
+await page.selectOption('#set-melodia', 'blues');
+await page.waitForTimeout(700);
+const guide = await page.evaluate(() => ({
+  visible: !document.getElementById('guide-chip')?.hidden,
+  name: document.getElementById('guide-name')?.textContent,
+  progress: document.getElementById('guide-progress')?.textContent,
+  scale: document.getElementById('set-escala')?.value,
+}));
+console.log(JSON.stringify({ guide }, null, 2));
+
+// --- El modo continuo no tiene zonas: la guia debe retirarse sola.
+await page.selectOption('#set-escala', 'continuous');
+await page.waitForTimeout(700);
+const afterContinuous = await page.evaluate(() => ({
+  melody: document.getElementById('set-melodia')?.value,
+  chipHidden: document.getElementById('guide-chip')?.hidden,
+  toast: document.getElementById('toast')?.textContent,
+}));
+console.log(JSON.stringify({ afterContinuous }, null, 2));
+await page.selectOption('#set-escala', 'blues');
+await page.waitForTimeout(400);
+
 // --- Enlace compartible: tiene que reconstruir la configuracion al abrirlo.
 const link = await page.evaluate(() => {
   const url = new URL(location.href);
@@ -111,6 +134,14 @@ console.log('--- consola ---');
 console.log(logs.slice(-25).join('\n'));
 await browser.close();
 
+if (afterContinuous.melody !== '' || afterContinuous.chipHidden !== true) {
+  console.error('\nFALLO: la guia sigue activa en una escala sin zonas');
+  process.exit(1);
+}
+if (!guide.visible || guide.progress !== '0/9' || guide.scale !== 'blues') {
+  console.error('\nFALLO: la melodia guiada no se ha activado como deberia');
+  process.exit(1);
+}
 if (!clip || clip.bytes < 20000) {
   console.error('\nFALLO: la grabacion del clip no ha producido un fichero utilizable');
   process.exit(1);

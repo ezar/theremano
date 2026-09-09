@@ -1,4 +1,5 @@
 import { PRESETS, type PresetId } from '../audio/presets';
+import { MELODIES } from '../mapping/melodies';
 import { NOTE_NAMES, SCALES, type ScaleId } from '../mapping/scales';
 import type { Settings, SettingsStore } from '../state/store';
 import type { CameraInfo } from '../camera/stream';
@@ -18,6 +19,7 @@ interface ControlsDeps {
   onCameraChange: (deviceId: string | null) => void;
   onRequestClose: () => void;
   onShareLink: () => void;
+  onMelodyChange: (id: string) => void;
 }
 
 type Binder = (settings: Readonly<Settings>) => void;
@@ -143,6 +145,15 @@ export class Controls {
       (v) => `${Math.round(v * 100)}%`,
     );
     this.hint('La mano de expresion manda sobre este valor mientras esta a la vista.');
+
+    this.section('Melodia guiada');
+    this.select(
+      'Melodia',
+      [{ value: '', label: 'Ninguna (tocar libre)' }, ...MELODIES.map((m) => ({ value: m.id, label: m.name }))],
+      (s) => s.melodyId,
+      (value) => this.deps.onMelodyChange(value),
+    );
+    this.hint('Sin presion de tiempo: se sigue el orden de las notas, no el compas.');
 
     this.section('Camara');
     this.cameraSelect = this.select('Dispositivo', [], (s) => s.cameraId ?? '', (value) => {

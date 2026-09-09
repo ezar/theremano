@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "icons": "node scripts/make-icons.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "og": "node scripts/make-og.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",

@@ -8,6 +8,27 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+
+    <!--
+      Vista previa al compartir el enlace. %SITE_URL% lo sustituye vite.config.ts
+      en tiempo de build a partir del entorno de despliegue: los rastreadores
+      sociales no resuelven rutas relativas como hace un navegador, y con una
+      ruta relativa la tarjeta se queda sin imagen.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="theremano" />
+    <meta property="og:title" content="theremano" />
+    <meta property="og:description" content="Un instrumento que se toca con las manos en el aire. Sin contacto, sin instalacion, en el navegador." />
+    <meta property="og:image" content="%SITE_URL%og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="theremano: un instrumento que se toca con las manos en el aire." />
+    <meta property="og:locale" content="es_ES" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="theremano" />
+    <meta name="twitter:description" content="Un instrumento que se toca con las manos en el aire." />
+    <meta name="twitter:image" content="%SITE_URL%og.png" />
+
     <title>theremano</title>
   </head>
   <body>
@@ -32,6 +53,11 @@
             <span class="hand-dot" id="dot-melody" title="Mano de melodia">M</span>
             <span class="hand-dot" id="dot-expression" title="Mano de expresion">E</span>
           </div>
+        </div>
+
+        <div id="guide-chip" hidden>
+          <span id="guide-name"></span>
+          <span id="guide-progress"></span>
         </div>
 
         <div id="loop-lanes"></div>
