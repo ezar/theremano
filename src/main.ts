@@ -1,7 +1,10 @@
 import './style.css';
 
 import { AudioEngine } from './audio/engine';
+import { Looper } from './audio/looper';
 import { getPreset } from './audio/presets';
+import { ClipRecorder, clipRecordingSupported, deliverClip } from './capture/recorder';
+import { decodeSettings, hasShareableKeys, shareUrl } from './state/share';
 import { Camera, HIGH_RES, LOW_RES, attachStream, type CameraInfo } from './camera/stream';
 import { LandmarkFilter } from './filter/vectorFilter';
 import { Mapper } from './mapping/mapper';
@@ -10,7 +13,7 @@ import { Landmarker } from './tracking/landmarker';
 import type { HandFrame, RoleAssignment } from './tracking/types';
 import { Controls } from './ui/controls';
 import { Hud } from './ui/hud';
-import { Overlay } from './ui/overlay';
+import { Overlay, type OverlayFrame } from './ui/overlay';
 import { SettingsStore, runtime, type Settings } from './state/store';
 
 /**
@@ -25,6 +28,15 @@ import { SettingsStore, runtime, type Settings } from './state/store';
 const LOW_FPS_THRESHOLD = 20;
 const LOW_FPS_WINDOW_MS = 3000;
 
+/**
+ * Tope de duracion del clip.
+ *
+ * No es una limitacion tecnica: es que un clip largo no se comparte. Treinta
+ * segundos entran enteros en cualquier sitio donde estos videos circulan, y
+ * obligan a que la toma sea la buena.
+ */
+const CLIP_MAX_SECONDS = 30;
+
 function must<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
   if (!node) throw new Error(`Falta el elemento #${id} en el documento`);
@@ -37,6 +49,8 @@ class Theremano {
   private readonly landmarker = new Landmarker();
   private readonly roles = new RoleTracker();
   private readonly engine = new AudioEngine();
+  private readonly looper = new Looper();
+  private readonly clip = new ClipRecorder();
   private readonly mapper: Mapper;
   private readonly hud = new Hud();
   private readonly overlay: Overlay;
@@ -60,8 +74,15 @@ class Theremano {
   private highRes = true;
   private lastAutoMirror: boolean | null = null;
   private starting = false;
+  private lastEffectsTime = 0;
+  private clipStopping = false;
 
   constructor() {
+    // Un enlace compartido trae escala, tonica y timbre. Se aplica antes de
+    // construir nada, para que el instrumento arranque ya configurado.
+    const fromLink = decodeSettings(window.location.hash);
+    if (hasShareableKeys(fromLink)) this.store.set(fromLink);
+
     const settings = this.store.get();
     this.mapper = new Mapper(settings);
     this.overlay = new Overlay(must<HTMLCanvasElement>('overlay'));
@@ -76,15 +97,121 @@ class Theremano {
         void this.reopenCamera();
       },
       onRequestClose: () => undefined,
+      onShareLink: () => void this.copyShareLink(),
     });
 
     this.store.subscribe((next, changed) => this.onSettingsChanged(next, changed));
     this.startButton.addEventListener('click', () => void this.start());
+    this.bindActions();
 
     window.addEventListener('resize', () => this.overlay.resize());
     window.addEventListener('orientationchange', () => this.overlay.resize());
     document.addEventListener('visibilitychange', () => this.onVisibilityChange());
     window.addEventListener('pagehide', () => this.suspend());
+  }
+
+  // ----------------------------------------------------------------- acciones
+
+  private bindActions(): void {
+    must('loop-button').addEventListener('click', () => this.toggleLoop());
+    must('clip-button').addEventListener('click', () => void this.toggleClip());
+    must('undo-button').addEventListener('click', () => {
+      this.looper.undo();
+      this.hud.toast('Capa eliminada');
+    });
+    this.hud.onLaneClick((id) => {
+      const track = this.looper.state.tracks.find((t) => t.id === id);
+      if (track) this.looper.setMuted(id, !track.muted);
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (!runtime.running || event.metaKey || event.ctrlKey || event.altKey) return;
+      // Escribir en el panel de ajustes no debe disparar la grabacion.
+      const target = event.target as HTMLElement | null;
+      if (target && /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) return;
+
+      if (event.code === 'Space') {
+        event.preventDefault();
+        this.toggleLoop();
+      } else if (event.key.toLowerCase() === 'c') {
+        void this.toggleClip();
+      } else if (event.key.toLowerCase() === 'z') {
+        this.looper.undo();
+      }
+    });
+  }
+
+  private toggleLoop(): void {
+    const hadCycle = this.looper.state.cycleSeconds > 0;
+    switch (this.looper.toggle(this.store.get().preset)) {
+      case 'rejected':
+        this.hud.toast('No caben mas capas. Quita alguna con Deshacer.');
+        return;
+      case 'started':
+        this.hud.toast(hadCycle ? 'Grabando capa sobre el bucle' : 'Grabando. Lo que toques ahora marca el compas.');
+        return;
+      case 'saved':
+        this.hud.toast(`Capa ${this.looper.state.tracks.length} anadida`);
+        return;
+      case 'discarded':
+        this.hud.toast('No has tocado nada, asi que no hay capa');
+        return;
+    }
+  }
+
+  private async toggleClip(): Promise<void> {
+    if (this.clipStopping) return;
+
+    if (this.clip.isRecording) {
+      await this.finishClip();
+      return;
+    }
+    if (!clipRecordingSupported()) {
+      this.hud.toast('Este navegador no permite grabar video');
+      return;
+    }
+    const audio = this.engine.captureStream();
+    if (!this.clip.start(audio, this.store.get().clipAspect)) {
+      this.hud.toast('No se ha podido empezar a grabar');
+      return;
+    }
+    this.hud.toast('Grabando clip. Pulsa otra vez para terminar.');
+  }
+
+  private async finishClip(): Promise<void> {
+    this.clipStopping = true;
+    try {
+      const result = await this.clip.stop();
+      this.hud.setClipRecording(false, 0, CLIP_MAX_SECONDS);
+      if (!result || result.seconds < 0.6) {
+        this.hud.toast('El clip era demasiado corto');
+        return;
+      }
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+      const delivery = await deliverClip(result, `theremano-${stamp}`);
+      const messages: Record<typeof delivery, string> = {
+        shared: 'Compartido',
+        downloaded: 'Clip descargado',
+        cancelled: 'Compartir cancelado',
+        failed: 'No se ha podido guardar el clip',
+      };
+      this.hud.toast(messages[delivery]);
+    } finally {
+      this.clipStopping = false;
+    }
+  }
+
+  private async copyShareLink(): Promise<void> {
+    const url = shareUrl(this.store.get());
+    try {
+      await navigator.clipboard.writeText(url);
+      this.hud.toast('Enlace copiado');
+    } catch {
+      // Sin permiso de portapapeles, al menos que quede en la barra de
+      // direcciones para poder copiarlo a mano.
+      window.location.hash = url.split('#')[1] ?? '';
+      this.hud.toast('Enlace en la barra de direcciones');
+    }
   }
 
   // ---------------------------------------------------------------- arranque
@@ -109,6 +236,8 @@ class Theremano {
 
       this.setStatus('Iniciando audio...');
       await this.engine.start(settings.preset, settings.masterVolume);
+
+      this.looper.attach(this.engine.loopOutput);
 
       await this.landmarker.load((message) => this.setStatus(message));
       await this.landmarker.warmUp((message) => this.setStatus(message));
@@ -241,18 +370,57 @@ class Theremano {
     runtime.expressionVisible = assignment.expression !== null;
     runtime.expressionHeld = assignment.expression?.held ?? false;
     runtime.latencyMs = this.estimateLatency(now, metadata);
+    runtime.midi = output.midi;
 
-    this.overlay.draw(
-      {
-        assignment,
-        layout: this.mapper.currentLayout,
-        pitchX: output.pitchX,
-        gateOpen: output.gateOpen,
-        showRawTrace: settings.showRawTrace,
-      },
-      this.video.videoWidth,
-      this.video.videoHeight,
-    );
+    // La capa que se este grabando guarda el gesto, no el sonido.
+    this.looper.capture({
+      gateEvent: output.gateEvent,
+      gateOpen: output.gateOpen,
+      freq: output.freq,
+      cutoffNorm: output.cutoffNorm,
+      gain: output.volume,
+    });
+
+    const loops = this.looper.state;
+    const frame: OverlayFrame = {
+      assignment,
+      layout: this.mapper.currentLayout,
+      pitchX: output.pitchX,
+      midi: output.midi,
+      noteName: output.noteName,
+      gateOpen: output.gateOpen,
+      volume: output.volume,
+      loops,
+      showRawTrace: settings.showRawTrace,
+    };
+
+    // Los efectos avanzan una vez por fotograma aunque se pinten dos veces:
+    // si dependieran del numero de destinos, grabar aceleraria las particulas.
+    const dt = this.lastEffectsTime > 0 ? (now - this.lastEffectsTime) / 1000 : 1 / 60;
+    this.lastEffectsTime = now;
+    if (output.gateEvent === 'attack') {
+      this.overlay.attack(frame);
+      this.hud.dismissHint();
+    }
+    this.overlay.update(frame, dt);
+
+    this.overlay.paint(this.overlay.screenTarget, frame, this.video.videoWidth, this.video.videoHeight);
+
+    const clipTarget = this.clip.target;
+    if (clipTarget) {
+      // El clip se dibuja aparte y completo: incluye el fotograma de la camara,
+      // la nota y la marca, porque en el video no hay HUD de HTML detras.
+      this.overlay.paint(clipTarget, frame, this.video.videoWidth, this.video.videoHeight, {
+        video: this.video,
+        mirror: settings.mirror,
+        watermark: true,
+        caption: true,
+      });
+      this.hud.setClipRecording(true, this.clip.seconds, CLIP_MAX_SECONDS);
+      if (this.clip.seconds >= CLIP_MAX_SECONDS) void this.finishClip();
+    }
+
+    this.hud.setLoops(loops);
     this.hud.update(runtime, settings);
   }
 
@@ -400,6 +568,7 @@ class Theremano {
     if (!runtime.running) return;
     this.engine.setMuted(false);
     this.lastFrameTime = 0;
+    this.lastEffectsTime = 0;
     this.lastMediaTime = -1;
     void this.requestWakeLock();
     this.scheduleFrame();
@@ -412,6 +581,8 @@ class Theremano {
     if (event === 'release') this.engine.release();
     this.engine.setMuted(true);
     this.cancelFrame();
+    this.overlay.resetEffects();
+    this.lastEffectsTime = 0;
     void this.releaseWakeLock();
   }
 

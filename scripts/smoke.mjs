@@ -58,6 +58,29 @@ const state = await page.evaluate(() => {
 
 console.log(JSON.stringify(state, null, 2));
 
+// --- Grabacion de clip: la funcion de compartir tiene que producir un fichero.
+const download = page.waitForEvent('download', { timeout: 30000 }).catch(() => null);
+await page.click('#clip-button');
+await page.waitForTimeout(2500);
+await page.click('#clip-button');
+const file = await download;
+const clip = file
+  ? { name: file.suggestedFilename(), bytes: (await import('node:fs')).statSync(await file.path()).size }
+  : null;
+console.log(JSON.stringify({ clip }, null, 2));
+
+// --- Bucles: una toma sin una sola nota no debe dejar una capa fantasma.
+await page.click('#loop-button');
+await page.waitForTimeout(1200);
+await page.click('#loop-button');
+await page.waitForTimeout(400);
+const loops = await page.evaluate(() => ({
+  lanes: document.querySelectorAll('.loop-lane').length,
+  undoHidden: document.getElementById('undo-button')?.hidden,
+  toast: document.getElementById('toast')?.textContent,
+}));
+console.log(JSON.stringify({ loops }, null, 2));
+
 // El panel de ajustes tiene que abrir y responder.
 await page.click('#settings-toggle');
 await page.waitForTimeout(400);
@@ -67,7 +90,20 @@ await page.selectOption('#set-tonica', '2');
 await page.waitForTimeout(600);
 const afterScale = await page.evaluate(() => document.getElementById('note-sub')?.textContent);
 const persisted = await page.evaluate(() => localStorage.getItem('theremano.settings.v1'));
-console.log(JSON.stringify({ fields, afterScale, persisted: JSON.parse(persisted ?? 'null') }, null, 2));
+console.log(JSON.stringify({ fields, afterScale, scale: JSON.parse(persisted ?? '{}').scale }, null, 2));
+
+// --- Enlace compartible: tiene que reconstruir la configuracion al abrirlo.
+const link = await page.evaluate(() => {
+  const url = new URL(location.href);
+  url.hash = 'e=major&t=0&o=2&r=3&v=flute';
+  return url.toString();
+});
+const fresh = await ctx.newPage();
+await fresh.goto(link, { waitUntil: 'domcontentloaded' });
+await fresh.waitForTimeout(800);
+const restored = await fresh.evaluate(() => JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}'));
+console.log(JSON.stringify({ fromLink: { scale: restored.scale, tonicPc: restored.tonicPc, octaves: restored.octaves, preset: restored.preset } }, null, 2));
+await fresh.close();
 
 await page.screenshot({ path: screenshot });
 const errors = logs.filter((l) => l.startsWith('[pageerror]') || l.startsWith('[error]'));
@@ -75,6 +111,14 @@ console.log('--- consola ---');
 console.log(logs.slice(-25).join('\n'));
 await browser.close();
 
+if (!clip || clip.bytes < 20000) {
+  console.error('\nFALLO: la grabacion del clip no ha producido un fichero utilizable');
+  process.exit(1);
+}
+if (loops.lanes !== 0 || loops.undoHidden !== true) {
+  console.error('\nFALLO: una toma sin notas ha dejado una capa fantasma');
+  process.exit(1);
+}
 if (state.error || errors.length > 0) {
   console.error(`\nFALLO: ${state.error ?? errors.join('\n')}`);
   process.exit(1);
@@ -83,4 +127,4 @@ if (!state.splashHidden || !state.hudVisible) {
   console.error('\nFALLO: el instrumento no llego a arrancar');
   process.exit(1);
 }
-console.log('\nOK: arranque, modelo, audio y bucle en marcha.');
+console.log(`\nOK: arranque, modelo, audio, bucle en marcha, clip de ${(clip.bytes / 1024).toFixed(0)} kB y enlace compartible.`);

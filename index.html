@@ -34,9 +34,24 @@
           </div>
         </div>
 
+        <div id="loop-lanes"></div>
+        <div id="hint">Junta el pulgar y el indice para que suene</div>
+
         <div id="diagnostics"></div>
         <div id="notice" hidden></div>
       </div>
+
+      <div id="actions" class="hidden">
+        <button id="loop-button" class="action" title="Grabar una capa de bucle (espacio)">
+          <span class="dot"></span><span class="label">Bucle</span>
+        </button>
+        <button id="clip-button" class="action primary" title="Grabar un clip para compartir (C)">
+          <span class="dot"></span><span class="label">Grabar clip</span>
+        </button>
+        <button id="undo-button" class="action ghost" title="Quitar la ultima capa (Z)" hidden>Deshacer</button>
+      </div>
+
+      <div id="toast" hidden></div>
 
       <button id="settings-toggle" class="hidden" aria-label="Ajustes" aria-expanded="false">Ajustes</button>
       <aside id="settings-panel" hidden aria-label="Panel de ajustes"></aside>
@@ -49,6 +64,7 @@
             <li><b>Mano derecha</b> &mdash; muevela para elegir la nota. <b>Junta pulgar e indice</b> para que suene.</li>
             <li><b>Altura de esa mano</b> &mdash; abre o cierra el brillo del sonido.</li>
             <li><b>Mano izquierda</b> &mdash; sube o baja para el volumen. <b>Numero de dedos</b> (1 a 4) elige el timbre.</li>
+            <li><b>Graba capas</b> y superponlas, y llevate el resultado en video.</li>
           </ul>
           <button id="start-button">Empezar</button>
           <p id="splash-status">Necesita permiso de camara. El audio no sale de tu dispositivo.</p>
