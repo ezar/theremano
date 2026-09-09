@@ -55,8 +55,10 @@ build, el directorio de salida y las cabeceras de caché para el modelo y el WAS
 
 **GitHub Pages** también sirve, porque la salida es estática y no hay funciones
 de servidor. El flujo de trabajo `.github/workflows/pages.yml` construye con
-`BASE_PATH=/<repo>/` y publica; hay que poner *Settings → Pages → Source* en
-*GitHub Actions*. Todo el código referencia sus activos con
+`BASE_PATH=/<repo>/` y publica, pero **es manual**: primero hay que habilitar
+Pages en *Settings → Pages → Source: GitHub Actions*, y después lanzarlo desde la
+pestaña *Actions*. Se dejó así para que un repositorio sin Pages habilitado no
+arrastre un check en rojo en cada push. Todo el código referencia sus activos con
 `import.meta.env.BASE_URL`, así que el mismo build vale para la raíz de un
 dominio y para una subcarpeta.
 
