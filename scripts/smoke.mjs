@@ -310,6 +310,86 @@ console.log(JSON.stringify({ afterContinuous }, null, 2));
 await page.selectOption('#set-scale', 'blues');
 await page.waitForTimeout(400);
 
+// --- Interpretacion en el enlace. Se abre uno guardado de la version 1, con
+// cuatro notas de theremin dentro, y se comprueba que suena sin camara: la
+// pantalla inicial cambia, escuchar arranca el audio y no aparece ningun error.
+const V1_LINK =
+  'ARgBAQAcAAAA9BqMzAqA9BqMzBSA9BqMzB6A9BqMzCiA9BqMzCuA9BqMzC1A9BqMzEYAIByMzFCAIByMzFqAIByMzGSAIByMzG6AIByMzHGAIByMzHNAIByMzIwAsB2MzJaAsB2MzKCAsB2MzKqAsB2MzLSAsB2MzLeAsB2MzLlAsB2MzNIAIByMzNyAIByMzOaAIByMzPCAIByMzPqAIByMzP2AIByMzP9AIByMzA';
+const invited = await ctx.newPage();
+const inviteLogs = [];
+invited.on('pageerror', (e) => inviteLogs.push(e.message));
+/*
+ * Sonda de audio. Que el boton cambie de rotulo solo demuestra que el codigo
+ * llego hasta el final; lo que hay que demostrar es que sale senal. Se envuelve
+ * connect() para colgar un analizador de todo lo que llegue al destino, y se
+ * guarda el pico. Va en un initScript porque tiene que estar puesto antes de que
+ * la pagina cree su contexto de audio.
+ */
+await invited.addInitScript(() => {
+  const nativeConnect = AudioNode.prototype.connect;
+  window.__peak = 0;
+  AudioNode.prototype.connect = function (target, ...rest) {
+    try {
+      if (target instanceof AudioDestinationNode) {
+        const context = target.context;
+        if (!context.__probe) {
+          const probe = context.createAnalyser();
+          probe.fftSize = 2048;
+          context.__probe = probe;
+          const buffer = new Float32Array(probe.fftSize);
+          setInterval(() => {
+            probe.getFloatTimeDomainData(buffer);
+            for (const value of buffer) {
+              const level = Math.abs(value);
+              if (level > window.__peak) window.__peak = level;
+            }
+          }, 60);
+        }
+        nativeConnect.call(this, context.__probe);
+      }
+    } catch {
+      /* la sonda nunca puede tumbar a la pagina que observa */
+    }
+    return nativeConnect.call(this, target, ...rest);
+  };
+});
+// Sin permiso de camara a proposito: escuchar no puede depender de darlo.
+await invited.goto(`${url.replace(/#.*$/, '')}#p=${V1_LINK}`, { waitUntil: 'domcontentloaded' });
+await invited.waitForTimeout(900);
+const beforeListening = await invited.evaluate(() => ({
+  invitacion: !document.getElementById('splash-invite')?.hidden,
+  botonEscuchar: !document.getElementById('listen-button')?.hidden,
+  textoEmpezar: document.getElementById('start-button')?.textContent,
+  error: document.getElementById('splash-error')?.hidden === false,
+  // Nada puede sonar antes de que alguien lo pida: sin esto, el pico de despues
+  // no probaria que el sonido viene de escuchar el enlace.
+  picoDeAudio: Number((window.__peak ?? 0).toFixed(4)),
+}));
+await invited.click('#listen-button');
+await invited.waitForTimeout(1500);
+// Cuatro notas en un ciclo de 2,8 s: con tres segundos de escucha ha sonado la
+// vuelta entera.
+await invited.waitForTimeout(3000);
+const listening = await invited.evaluate(() => ({
+  etiqueta: document.getElementById('listen-button')?.textContent,
+  error: document.getElementById('splash-error')?.hidden === false,
+  picoDeAudio: Number((window.__peak ?? 0).toFixed(4)),
+}));
+console.log(JSON.stringify({ beforeListening, listening, erroresInvitado: inviteLogs }, null, 2));
+
+// Un enlace manipulado no puede acabar sonando ni dejando la pantalla a medias.
+const broken = await ctx.newPage();
+await broken.goto(`${url.replace(/#.*$/, '')}#p=${V1_LINK.slice(0, 40)}`, { waitUntil: 'domcontentloaded' });
+await broken.waitForTimeout(700);
+const rejected = await broken.evaluate(() => ({
+  botonEscuchar: !document.getElementById('listen-button')?.hidden,
+  error: document.getElementById('splash-error')?.textContent,
+  textoEmpezar: document.getElementById('start-button')?.textContent,
+}));
+console.log(JSON.stringify({ rejected }, null, 2));
+await invited.close();
+await broken.close();
+
 // --- Enlace compartible: tiene que reconstruir la configuracion al abrirlo.
 const link = await page.evaluate(() => {
   const url = new URL(location.href);
@@ -416,6 +496,31 @@ if (combo.alfaDelSelect !== 1 || combo.alfaDeLaOpcion !== 1) {
 }
 if (combo.contraste < 4.5) {
   console.error(`\nFALLO: el texto del desplegable no contrasta con su fondo (${combo.contraste}:1)`);
+  process.exit(1);
+}
+if (beforeListening.picoDeAudio !== 0) {
+  console.error('\nFALLO: la pagina ha sonado sola, sin que nadie pulse');
+  process.exit(1);
+}
+if (!beforeListening.invitacion || !beforeListening.botonEscuchar || beforeListening.error) {
+  console.error('\nFALLO: un enlace con interpretacion no cambia la pantalla inicial');
+  process.exit(1);
+}
+if (beforeListening.textoEmpezar === listening.etiqueta || listening.error) {
+  console.error('\nFALLO: escuchar el enlace no ha arrancado, o ha dado error');
+  process.exit(1);
+}
+// Lo que de verdad promete la funcion: que sale sonido, y sin tocar la camara.
+if (listening.picoDeAudio < 0.01) {
+  console.error(`\nFALLO: el enlace no ha producido sonido (pico ${listening.picoDeAudio})`);
+  process.exit(1);
+}
+if (inviteLogs.length > 0) {
+  console.error(`\nFALLO: la pagina invitada ha dado errores: ${inviteLogs.join(' | ')}`);
+  process.exit(1);
+}
+if (rejected.botonEscuchar || !rejected.error) {
+  console.error('\nFALLO: un enlace manipulado no se rechaza como deberia');
   process.exit(1);
 }
 if (loops.lanes !== 0 || loops.undoHidden !== true) {

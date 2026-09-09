@@ -50,6 +50,8 @@ export function applyStaticStrings(): void {
     return li;
   }));
   setText('start-button', s.splash.start);
+  setText('splash-invite', s.splash.invite);
+  setText('listen-button', s.splash.listen);
   setText('splash-status', s.splash.permissionNote);
 
   setText('hint', s.hud.hint);

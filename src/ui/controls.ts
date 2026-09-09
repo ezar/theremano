@@ -20,6 +20,7 @@ interface ControlsDeps {
   onCameraChange: (deviceId: string | null) => void;
   onRequestClose: () => void;
   onShareLink: () => void;
+  onSharePerformance: () => void;
   onMelodyChange: (id: string) => void;
   onLocaleChange: (preference: string) => void;
   localePreference: () => string;
@@ -138,8 +139,14 @@ export class Controls {
     copy.type = 'button';
     copy.textContent = s.copyLink;
     copy.addEventListener('click', () => this.deps.onShareLink());
-    share.append(copy);
+    const performance = document.createElement('button');
+    performance.type = 'button';
+    performance.id = 'share-performance';
+    performance.textContent = s.copyPerformance;
+    performance.addEventListener('click', () => this.deps.onSharePerformance());
+    share.append(copy, performance);
     this.panel.append(share);
+    this.hint(s.performanceHint);
 
     this.select(
       'clip-format',

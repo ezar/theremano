@@ -30,9 +30,28 @@ export function encodeSettings(settings: Readonly<Settings>): string {
   return params.toString();
 }
 
-export function shareUrl(settings: Readonly<Settings>): string {
+/**
+ * @param performance interpretacion codificada, o null para un enlace de solo
+ * ajustes. Va en el mismo fragmento y detras de todo lo demas: si algo recorta
+ * el enlace por largo, lo que se pierde es la interpretacion y no la escala.
+ */
+export function shareUrl(settings: Readonly<Settings>, performance: string | null = null): string {
   const { origin, pathname } = window.location;
-  return `${origin}${pathname}#${encodeSettings(settings)}`;
+  const params = encodeSettings(settings);
+  return `${origin}${pathname}#${performance ? `${params}&p=${performance}` : params}`;
+}
+
+/**
+ * La interpretacion tal cual viene, sin decodificar.
+ *
+ * Se devuelve en crudo a proposito: este modulo sabe de ajustes, y quien sepa
+ * del formato de la interpretacion es quien tiene que validarla.
+ */
+export function readPerformanceParam(hash: string): string | null {
+  const raw = hash.startsWith('#') ? hash.slice(1) : hash;
+  if (!raw) return null;
+  const value = new URLSearchParams(raw).get('p');
+  return value && value.length > 0 ? value : null;
 }
 
 /**

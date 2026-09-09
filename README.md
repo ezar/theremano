@@ -34,6 +34,9 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
   tiempo: se sigue el orden, no el compás.
 - **Enlace con la configuración** — escala, tónica y timbre viajan en el
   fragmento de la dirección, y el enlace trae vista previa al compartirlo.
+- **Enlace con lo que tocaste** — lo grabado en la estación de bucles cabe en la
+  propia dirección. Quien la abre lo oye sintetizado en su navegador, **sin dar
+  permiso de cámara**, y puede tocar encima con un botón.
 
 ---
 
@@ -163,6 +166,39 @@ Tres detalles de cómo se escriben:
 Greensleeves va en su versión eolia, con séptima menor. La escala menor de la
 aplicación no tiene sensible, y forzarla dejaría esa nota cayendo en la zona de
 al lado; además es como se ha tocado durante siglos.
+
+---
+
+## Sobre el enlace con lo que tocaste
+
+La estación de bucles no graba audio, graba gestos, y esa decisión es la que hace
+posible esto: una interpretación cabe en unos cientos de bytes, y unos cientos de
+bytes caben en una dirección. No hay fichero que subir ni servidor donde dejarlo.
+
+Quien abre ese enlace se encuentra la pantalla inicial cambiada, con un botón de
+**Escuchar** por delante del de empezar. Escuchar arranca solo el audio: ni
+cámara, ni modelo, ni bucle de fotogramas. Eso importa más de lo que parece,
+porque el permiso de cámara es la puerta donde se queda la mitad de la gente, y
+aquí se puede oír lo que te han mandado antes de decidir si entras.
+
+El formato es binario y va en base64 de direcciones. Seis bytes por evento: el
+tipo y el instante empaquetados en dieciséis bits, la altura en centésimas de
+semitono, y un byte para el brillo y otro para el volumen. Al reproducir, cada
+parámetro es una rampa hasta el siguiente y no un salto, así que se puede
+remuestrear a 10 Hz sin escalonar el sonido: un glissando sigue siendo un
+glissando. Si aun así no cabe en 1400 bytes, se baja a 5 Hz, y solo entonces se
+empiezan a soltar capas.
+
+Lo que se decodifica viene de una dirección que cualquiera puede escribir a mano,
+así que se valida entero y se rechaza en bloque: versión, duración del ciclo,
+timbres que existan, recuentos que cuadren, eventos dentro del ciclo y ni un byte
+de sobra al final. Medio bucle reconstruido de un enlace roto sonaría a fallo del
+instrumento.
+
+Hay un enlace de la versión 1 guardado en las pruebas. No comprueba que el
+codificador siga produciendo esos mismos bytes —cambiar el remuestreo por dentro
+es legítimo— sino que se sigue pudiendo leer: romper los enlaces que ya están
+circulando por ahí, no.
 
 ---
 

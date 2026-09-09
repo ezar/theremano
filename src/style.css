@@ -405,6 +405,47 @@ html, body {
 #start-button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 16px 40px rgba(255, 209, 102, 0.32); }
 #start-button:disabled { opacity: 0.55; cursor: progress; box-shadow: none; }
 
+/*
+ * Invitacion: la linea y el boton que solo aparecen cuando el enlace trae musica
+ * dentro. Escuchar va primero y con el color de marca; empezar queda como boton
+ * secundario, porque quien llega asi viene a oir, no a montar nada.
+ */
+.invite {
+  margin: 0 0 18px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(255, 209, 102, 0.1);
+  border: 1px solid rgba(255, 209, 102, 0.35);
+  color: var(--fg);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+#listen-button {
+  padding: 15px 42px;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent);
+  color: #10121a;
+  font-size: 1.05rem;
+  font-weight: 650;
+  cursor: pointer;
+  /* En bloque para que empezar caiga debajo y no al lado: son dos decisiones
+     distintas, no dos mitades de la misma. */
+  display: block;
+  margin: 0 auto 12px;
+  box-shadow: 0 12px 34px rgba(255, 209, 102, 0.24);
+}
+#listen-button:disabled { opacity: 0.55; cursor: progress; box-shadow: none; }
+
+/* Con invitacion, empezar deja de ser la accion principal. */
+#listen-button:not([hidden]) ~ #start-button {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--edge);
+  box-shadow: none;
+}
+
 #splash-status { color: var(--muted); font-size: 0.8rem; margin-top: 18px; min-height: 1.2em; }
 
 #splash-error {
