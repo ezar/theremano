@@ -124,6 +124,35 @@ describe('toma de una capa de bucle', () => {
     expect(long.finish(999)!.cycleSeconds).toBe(MAX_CYCLE_SECONDS);
   });
 
+  it('una sobregrabacion se corta al completar una vuelta', () => {
+    // Sin tope, la segunda pasada se pliega sobre los mismos instantes que la
+    // primera y los eventos de ambas chocan sobre una voz monofonica: la capa
+    // no sale mas larga, sale corrompida.
+    const cycle = 3;
+    const overdub = new LoopTake('bass', 0, cycle);
+    expect(overdub.overflowed(cycle - 0.1)).toBe(false);
+    expect(overdub.overflowed(cycle)).toBe(true);
+
+    // La primera capa, en cambio, puede crecer hasta el tope absoluto.
+    const first = new LoopTake('bass', 0, 0);
+    expect(first.overflowed(cycle)).toBe(false);
+    expect(first.overflowed(MAX_CYCLE_SECONDS)).toBe(true);
+  });
+
+  it('graba una nota que ya sonaba al pulsar grabar', () => {
+    // Se esta tocando, gusta como suena, y se pulsa grabar sin soltar la pinza.
+    // No llega ningun evento de ataque, solo fotogramas con el gate abierto.
+    const take = new LoopTake('theremin', 0, 0);
+    for (let frame = 0; frame <= 2 * FPS; frame += 1) {
+      take.capture(frame / FPS, { ...silent, gateOpen: true });
+    }
+    const finished = take.finish(2);
+    expect(finished, 'la toma no deberia descartarse').not.toBe(null);
+    const attacks = finished!.events.filter((e) => e.kind === 'attack');
+    expect(attacks).toHaveLength(1);
+    expect(finished!.events.filter((e) => e.kind === 'release')).toHaveLength(1);
+  });
+
   it('wrapTime devuelve siempre algo dentro del ciclo', () => {
     for (const t of [-9.5, -0.1, 0, 3.9, 4, 12.3]) {
       const w = wrapTime(t, 4);

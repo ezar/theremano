@@ -37,6 +37,15 @@ describe('configuracion en el enlace', () => {
     expect(decodeSettings('#e=major&t=200&basura=1')).toEqual({ scale: 'major' });
   });
 
+  it('no inventa una tonica cuando el enlace no la trae', () => {
+    // Number(null) vale 0, y 0 es una tonica valida. Sin comprobar que el
+    // parametro existe, cualquier ancla de la pagina fijaria la tonica en Do.
+    expect(decodeSettings('#e=major')).toEqual({ scale: 'major' });
+    expect(decodeSettings('#seccion-2')).toEqual({});
+    expect(decodeSettings('#t=')).toEqual({});
+    expect(decodeSettings('#t=0')).toEqual({ tonicPc: 0 });
+  });
+
   it('sabe si un enlace traia algo que aplicar', () => {
     expect(hasShareableKeys({})).toBe(false);
     expect(hasShareableKeys({ scale: 'blues' })).toBe(true);

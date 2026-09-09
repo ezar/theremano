@@ -49,6 +49,8 @@ export interface FinishedTake {
 export class LoopTake {
   private readonly events: LoopEvent[] = [];
   private lastParamAt = -Infinity;
+  /** Si hay una nota abierta ahora mismo dentro de la toma. */
+  private noteOpen = false;
 
   constructor(
     readonly presetId: PresetId,
@@ -66,9 +68,17 @@ export class LoopTake {
     return this.events.some((e) => e.kind === 'attack');
   }
 
-  /** true si la primera capa ha llegado al tope y hay que cerrarla. */
+  /**
+   * true cuando la toma ha dado todo lo que puede dar y hay que cerrarla.
+   *
+   * La primera capa se corta al llegar al tope absoluto. Una sobregrabacion se
+   * corta al completar una vuelta: si siguiera, la segunda pasada se plegaria
+   * sobre los mismos instantes que la primera y los ataques, sueltas y
+   * parametros de ambas chocarian sobre una voz que es monofonica. El resultado
+   * no seria una capa mas larga, seria una capa corrompida.
+   */
   overflowed(elapsed: number): boolean {
-    return this.isFirst && elapsed >= MAX_CYCLE_SECONDS;
+    return elapsed >= (this.isFirst ? MAX_CYCLE_SECONDS : this.cycleSeconds);
   }
 
   /** @param elapsed segundos desde que empezo la grabacion. */
@@ -78,17 +88,29 @@ export class LoopTake {
 
     if (live.gateEvent === 'attack') {
       this.events.push({ t, kind: 'attack', ...base });
+      this.noteOpen = true;
       this.lastParamAt = elapsed;
       return;
     }
     if (live.gateEvent === 'release') {
       this.events.push({ t, kind: 'release', ...base });
+      this.noteOpen = false;
       return;
     }
-    // Fuera de las notas no hay nada que guardar, y dentro basta con muestrear:
-    // guardar los sesenta fotogramas por segundo multiplicaria el tamano sin
-    // que se oyera la diferencia.
     if (!live.gateOpen) return;
+
+    // Empezar a grabar con una nota ya sonando es lo normal: se esta tocando
+    // algo, gusta, y se pulsa grabar sin soltar. Sin este ataque sintetico la
+    // toma solo tendria parametros, se daria por vacia y se descartaria entera.
+    if (!this.noteOpen) {
+      this.events.push({ t, kind: 'attack', ...base });
+      this.noteOpen = true;
+      this.lastParamAt = elapsed;
+      return;
+    }
+
+    // Dentro de la nota basta con muestrear: guardar los sesenta fotogramas por
+    // segundo multiplicaria el tamano sin que se oyera la diferencia.
     if (elapsed - this.lastParamAt < 1 / PARAM_HZ) return;
     this.lastParamAt = elapsed;
     this.events.push({ t, kind: 'param', ...base });
@@ -108,9 +130,10 @@ export class LoopTake {
     }
 
     // Una nota que sigue abierta al cortar sonaria para siempre en cada vuelta.
-    const last = this.events[this.events.length - 1]!;
-    if (last.kind !== 'release') {
+    if (this.noteOpen) {
+      const last = this.events[this.events.length - 1]!;
       this.events.push({ ...last, kind: 'release', t: wrapTime(this.offset + elapsed, this.cycleSeconds) });
+      this.noteOpen = false;
     }
     this.events.sort((a, b) => a.t - b.t);
 

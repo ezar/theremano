@@ -51,16 +51,26 @@ export function decodeSettings(hash: string): Partial<ShareableSettings> {
   const preset = params.get('v');
   if (preset && PRESETS.some((p) => p.id === preset)) out.preset = preset as PresetId;
 
-  const tonic = Number(params.get('t'));
-  if (Number.isInteger(tonic) && tonic >= 0 && tonic <= 11) out.tonicPc = tonic;
+  // Hay que comprobar que el parametro existe antes de convertirlo: Number(null)
+  // vale 0, y 0 es una tonica perfectamente valida. Sin esto, cualquier ancla de
+  // la pagina ("#seccion-2") acabaria fijando la tonica en Do y guardandola.
+  const tonic = readInt(params, 't', 0, 11);
+  if (tonic !== null) out.tonicPc = tonic;
 
-  const octave = Number(params.get('o'));
-  if (Number.isInteger(octave) && octave >= 1 && octave <= 5) out.baseOctave = octave;
+  const octave = readInt(params, 'o', 1, 5);
+  if (octave !== null) out.baseOctave = octave;
 
-  const range = Number(params.get('r'));
-  if (Number.isInteger(range) && range >= 1 && range <= 4) out.octaves = range;
+  const range = readInt(params, 'r', 1, 4);
+  if (range !== null) out.octaves = range;
 
   return out;
+}
+
+function readInt(params: URLSearchParams, key: string, min: number, max: number): number | null {
+  const raw = params.get(key);
+  if (raw === null || raw.trim() === '') return null;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= min && value <= max ? value : null;
 }
 
 export function hasShareableKeys(patch: Partial<ShareableSettings>): boolean {
