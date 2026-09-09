@@ -18,8 +18,6 @@ import type { ScaleId } from './scales';
 
 export interface Melody {
   id: string;
-  name: string;
-  hint: string;
   /**
    * Semitonos sobre la tonica. Se resuelven contra la escala activa buscando la
    * zona mas cercana, de modo que cualquier melodia se puede tocar en cualquier
@@ -32,36 +30,26 @@ export interface Melody {
 export const MELODIES: readonly Melody[] = [
   {
     id: 'ascenso',
-    name: 'Subida',
-    hint: 'De izquierda a derecha, sin prisa.',
     notes: [0, 3, 5, 7, 10, 12],
     suggestedScale: 'pentatonic',
   },
   {
     id: 'ida-vuelta',
-    name: 'Ida y vuelta',
-    hint: 'Sube y baja por el mismo camino.',
     notes: [0, 3, 5, 7, 5, 3, 0],
     suggestedScale: 'pentatonic',
   },
   {
     id: 'llamada',
-    name: 'Llamada y respuesta',
-    hint: 'Vuelve a la tonica entre cada salto.',
     notes: [0, 3, 0, 5, 0, 7, 5, 3, 0],
     suggestedScale: 'pentatonic',
   },
   {
     id: 'blues',
-    name: 'Vuelta de blues',
-    hint: 'La nota de paso es la que le da el color.',
     notes: [0, 3, 5, 6, 7, 6, 5, 3, 0],
     suggestedScale: 'blues',
   },
   {
     id: 'octavas',
-    name: 'Saltos de octava',
-    hint: 'Cruza el encuadre entero de una vez.',
     notes: [0, 7, 12, 7, 12, 19, 12, 0],
     suggestedScale: 'pentatonic',
   },

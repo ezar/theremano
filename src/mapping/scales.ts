@@ -11,21 +11,18 @@ export type ScaleId = 'chromatic' | 'major' | 'minor' | 'pentatonic' | 'blues' |
 
 export interface ScaleDef {
   id: ScaleId;
-  name: string;
   /** Grados en semitonos dentro de la octava. Vacio = sin cuantizar. */
   degrees: readonly number[];
 }
 
 export const SCALES: readonly ScaleDef[] = [
-  { id: 'pentatonic', name: 'Pentatonica menor', degrees: [0, 3, 5, 7, 10] },
-  { id: 'blues', name: 'Blues', degrees: [0, 3, 5, 6, 7, 10] },
-  { id: 'minor', name: 'Menor natural', degrees: [0, 2, 3, 5, 7, 8, 10] },
-  { id: 'major', name: 'Mayor', degrees: [0, 2, 4, 5, 7, 9, 11] },
-  { id: 'chromatic', name: 'Cromatica', degrees: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] },
-  { id: 'continuous', name: 'Continua (sin cuantizar)', degrees: [] },
+  { id: 'pentatonic', degrees: [0, 3, 5, 7, 10] },
+  { id: 'blues', degrees: [0, 3, 5, 6, 7, 10] },
+  { id: 'minor', degrees: [0, 2, 3, 5, 7, 8, 10] },
+  { id: 'major', degrees: [0, 2, 4, 5, 7, 9, 11] },
+  { id: 'chromatic', degrees: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] },
+  { id: 'continuous', degrees: [] },
 ];
-
-export const NOTE_NAMES = ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'] as const;
 
 export function getScale(id: ScaleId): ScaleDef {
   return SCALES.find((s) => s.id === id) ?? SCALES[0]!;
@@ -40,11 +37,16 @@ export function midiToFreq(midi: number): number {
   return 440 * 2 ** ((midi - 69) / 12);
 }
 
-export function midiToName(midi: number): string {
+/**
+ * @param names las doce notas en la notacion del idioma activo. Se pasa en lugar
+ * de leerse de un modulo global porque este fichero no debe saber nada de la
+ * interfaz, y porque asi las pruebas fijan la notacion que comprueban.
+ */
+export function midiToName(midi: number, names: readonly string[]): string {
   const rounded = Math.round(midi);
   const pc = ((rounded % 12) + 12) % 12;
   const octave = Math.floor(rounded / 12) - 1;
-  return `${NOTE_NAMES[pc]}${octave}`;
+  return `${names[pc] ?? '?'}${octave}`;
 }
 
 /**
@@ -86,7 +88,6 @@ export function createLayout(scaleId: ScaleId, tonicPc: number, baseOctave: numb
 export interface PitchResult {
   freq: number;
   midi: number;
-  name: string;
   /** Indice de zona, o -1 en modo continuo. */
   index: number;
 }
@@ -101,12 +102,12 @@ export function pitchAt(layout: PitchLayout, x: number): PitchResult {
   const clamped = Math.min(1, Math.max(0, x));
   if (layout.degrees.length === 0) {
     const midi = layout.baseMidi + clamped * layout.octaves * 12;
-    return { freq: midiToFreq(midi), midi, name: midiToName(midi), index: -1 };
+    return { freq: midiToFreq(midi), midi, index: -1 };
   }
   const n = layout.degrees.length;
   const index = Math.min(n - 1, Math.max(0, Math.round(clamped * (n - 1))));
   const midi = layout.baseMidi + (layout.degrees[index] ?? 0);
-  return { freq: midiToFreq(midi), midi, name: midiToName(midi), index };
+  return { freq: midiToFreq(midi), midi, index };
 }
 
 /** Centro horizontal de cada zona, para dibujar la rejilla. */

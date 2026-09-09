@@ -16,7 +16,7 @@ describe('melodias guiadas', () => {
       for (const scale of ['pentatonic', 'blues', 'major', 'minor', 'chromatic'] as const) {
         const layout = createLayout(scale, 9, 3, 2);
         const targets = resolveTargets(melody, layout);
-        expect(targets, `${melody.name} en ${scale}`).toHaveLength(melody.notes.length);
+        expect(targets, `${melody.id} en ${scale}`).toHaveLength(melody.notes.length);
         for (const zone of targets) {
           expect(zone).toBeGreaterThanOrEqual(0);
           expect(zone).toBeLessThan(layout.degrees.length);

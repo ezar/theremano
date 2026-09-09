@@ -8,7 +8,6 @@ export type PresetId = 'theremin' | 'strings' | 'flute' | 'bass';
 
 export interface Preset {
   id: PresetId;
-  name: string;
   /** Dedos extendidos que lo seleccionan. */
   fingers: number;
   oscillator: {
@@ -42,7 +41,6 @@ export interface Preset {
 export const PRESETS: readonly Preset[] = [
   {
     id: 'theremin',
-    name: 'Theremin',
     fingers: 1,
     oscillator: { type: 'sine' },
     envelope: { attack: 0.06, decay: 0.1, sustain: 1, release: 0.25 },
@@ -55,7 +53,6 @@ export const PRESETS: readonly Preset[] = [
   },
   {
     id: 'strings',
-    name: 'Cuerdas',
     fingers: 2,
     oscillator: { type: 'fatsawtooth', count: 3, spread: 18 },
     envelope: { attack: 0.14, decay: 0.2, sustain: 0.85, release: 0.4 },
@@ -68,7 +65,6 @@ export const PRESETS: readonly Preset[] = [
   },
   {
     id: 'flute',
-    name: 'Flauta',
     fingers: 3,
     oscillator: { type: 'triangle' },
     envelope: { attack: 0.03, decay: 0.08, sustain: 0.95, release: 0.18 },
@@ -81,7 +77,6 @@ export const PRESETS: readonly Preset[] = [
   },
   {
     id: 'bass',
-    name: 'Bajo acido',
     fingers: 4,
     oscillator: { type: 'square' },
     envelope: { attack: 0.008, decay: 0.12, sustain: 0.75, release: 0.12 },

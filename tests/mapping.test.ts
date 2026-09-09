@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { countExtendedFingers, palmCenter, pinchRatio } from '../src/mapping/features';
 import { buildDegreeTable, createLayout, isContinuous, midiToName, pitchAt, zoneCenters } from '../src/mapping/scales';
+import { es } from '../src/i18n/es';
+import { en } from '../src/i18n/en';
+
+/** Nombre de la nota en la notacion latina, que es la que usan estas pruebas. */
+const nameOf = (midi: number) => midiToName(midi, es.notes);
 import { presetForFingerCount, PRESETS } from '../src/audio/presets';
 import { jitter, makeHand, mulberry32 } from './helpers';
 
@@ -47,8 +52,8 @@ describe('escalas y cuantizacion', () => {
 
   it('los bordes del encuadre son la tonica grave y la tonica aguda', () => {
     const layout = createLayout('pentatonic', 9, 3, 2);
-    expect(pitchAt(layout, 0).name).toBe('La3');
-    expect(pitchAt(layout, 1).name).toBe('La5');
+    expect(nameOf(pitchAt(layout, 0).midi)).toBe('La3');
+    expect(nameOf(pitchAt(layout, 1).midi)).toBe('La5');
   });
 
   it('el modo continuo no cuantiza y recorre el rango entero', () => {
@@ -71,16 +76,21 @@ describe('escalas y cuantizacion', () => {
     }
   });
 
-  it('nombra las notas en notacion latina', () => {
-    expect(midiToName(69)).toBe('La4');
-    expect(midiToName(60)).toBe('Do4');
-    expect(midiToName(61)).toBe('Do#4');
+  it('nombra las notas en la notacion de cada idioma', () => {
+    expect(midiToName(69, es.notes)).toBe('La4');
+    expect(midiToName(60, es.notes)).toBe('Do4');
+    expect(midiToName(61, es.notes)).toBe('Do#4');
+    // El mundo anglosajon lee C D E: ver la notacion equivocada convierte la
+    // rejilla en ruido para quien sabe algo de musica.
+    expect(midiToName(69, en.notes)).toBe('A4');
+    expect(midiToName(60, en.notes)).toBe('C4');
+    expect(midiToName(61, en.notes)).toBe('C#4');
   });
 
   it('una posicion fuera de rango se recorta en lugar de romper', () => {
     const layout = createLayout('blues', 4, 2, 3);
-    expect(pitchAt(layout, -5).name).toBe(pitchAt(layout, 0).name);
-    expect(pitchAt(layout, 9).name).toBe(pitchAt(layout, 1).name);
+    expect(pitchAt(layout, -5).midi).toBe(pitchAt(layout, 0).midi);
+    expect(pitchAt(layout, 9).midi).toBe(pitchAt(layout, 1).midi);
   });
 });
 

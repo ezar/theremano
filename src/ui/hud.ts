@@ -1,5 +1,5 @@
-import { getPreset } from '../audio/presets';
-import { getScale, NOTE_NAMES } from '../mapping/scales';
+import { getScale, midiToName } from '../mapping/scales';
+import { i18n, t } from '../i18n';
 import type { LoopState } from '../audio/looper';
 import type { Runtime, Settings } from '../state/store';
 import { pitchHue } from './target';
@@ -43,6 +43,7 @@ export class Hud {
   private readonly guideProgress = el('guide-progress');
 
   private toastHandle: number | null = null;
+  private localeSubscribed = false;
   private hintHidden = false;
   private laneSignature = '';
   private onLaneToggle: ((id: number) => void) | null = null;
@@ -68,6 +69,20 @@ export class Hud {
   show(): void {
     this.root.classList.remove('hidden');
     this.actions.classList.remove('hidden');
+    if (this.localeSubscribed) return;
+    this.localeSubscribed = true;
+    // El HUD compara cada campo con lo ultimo que pinto para no tocar el DOM
+    // sesenta veces por segundo. Al cambiar de idioma esa memoria pasa a ser
+    // mentira, asi que se descarta y todo se vuelve a escribir.
+    i18n.subscribe(() => {
+      this.last.note = '';
+      this.last.sub = '';
+      this.last.preset = '';
+      this.last.guide = '';
+      this.last.loopLabel = '';
+      this.last.clipLabel = '';
+      this.laneSignature = '';
+    });
   }
 
   /** El aviso inicial desaparece en cuanto se toca la primera nota. */
@@ -102,7 +117,7 @@ export class Hud {
   setClipRecording(recording: boolean, seconds: number, maxSeconds: number): void {
     this.stage.classList.toggle('recording', recording);
     this.clipButton.classList.toggle('armed', recording);
-    const label = recording ? `${Math.max(0, maxSeconds - seconds).toFixed(0)} s` : 'Grabar clip';
+    const label = recording ? `${Math.max(0, maxSeconds - seconds).toFixed(0)} s` : t().actions.clip;
     if (label !== this.last.clipLabel) {
       this.clipButton.querySelector('.label')!.textContent = label;
       this.last.clipLabel = label;
@@ -123,7 +138,8 @@ export class Hud {
   setLoops(loops: LoopState): void {
     this.loopButton.classList.toggle('armed', loops.recording);
     this.loopButton.disabled = !loops.recording && loops.full;
-    const label = loops.recording ? 'Parar' : loops.full ? 'Capas llenas' : 'Bucle';
+    const strings = t().actions;
+    const label = loops.recording ? strings.loopStop : loops.full ? strings.loopFull : strings.loop;
     if (label !== this.last.loopLabel) {
       this.loopButton.querySelector('.label')!.textContent = label;
       this.last.loopLabel = label;
@@ -142,22 +158,23 @@ export class Hud {
       const lane = document.createElement('div');
       lane.className = `loop-lane${track.muted ? ' muted' : ''}`;
       lane.dataset['id'] = String(track.id);
-      lane.title = track.muted ? 'Capa silenciada. Pulsa para activarla.' : 'Pulsa para silenciar esta capa.';
+      lane.title = track.muted ? t().hud.layerMuted : t().hud.layerActive;
       const swatch = document.createElement('span');
       swatch.className = 'swatch';
       swatch.style.background = `hsl(${track.hue}, 90%, 62%)`;
       swatch.style.color = `hsl(${track.hue}, 90%, 62%)`;
       const text = document.createElement('span');
-      text.textContent = `Capa ${i + 1}`;
+      text.textContent = t().hud.layer(i + 1);
       lane.append(swatch, text);
       this.lanes.append(lane);
     }
   }
 
   setSubtitle(settings: Readonly<Settings>): void {
+    const strings = t();
     const scale = getScale(settings.scale);
-    const tonic = NOTE_NAMES[settings.tonicPc] ?? '?';
-    const sub = scale.degrees.length === 0 ? scale.name : `${scale.name} · ${tonic}`;
+    const name = strings.scales[scale.id];
+    const sub = scale.degrees.length === 0 ? name : `${name} · ${strings.notes[settings.tonicPc] ?? '?'}`;
     if (sub !== this.last.sub) {
       this.noteSub.textContent = sub;
       this.last.sub = sub;
@@ -165,9 +182,10 @@ export class Hud {
   }
 
   update(runtime: Runtime, settings: Readonly<Settings>): void {
-    if (runtime.noteName !== this.last.note) {
-      this.note.textContent = runtime.noteName;
-      this.last.note = runtime.noteName;
+    const noteName = runtime.melodyVisible || runtime.gateOpen ? midiToName(runtime.midi, t().notes) : '--';
+    if (noteName !== this.last.note) {
+      this.note.textContent = noteName;
+      this.last.note = noteName;
     }
     if (runtime.gateOpen !== this.last.sounding) {
       this.note.classList.toggle('sounding', runtime.gateOpen);
@@ -186,10 +204,10 @@ export class Hud {
       this.last.volume = volumePct;
     }
 
-    const preset = getPreset(settings.preset);
-    if (preset.name !== this.last.preset) {
-      this.presetName.textContent = preset.name;
-      this.last.preset = preset.name;
+    const presetName = t().presets[settings.preset];
+    if (presetName !== this.last.preset) {
+      this.presetName.textContent = presetName;
+      this.last.preset = presetName;
     }
     if (runtime.fingerCount !== this.last.fingers) {
       this.presetFingers.textContent = runtime.expressionVisible ? `${runtime.fingerCount}/4` : '';

@@ -1,0 +1,227 @@
+import type { Strings } from './strings';
+
+/** English. */
+export const en: Strings = {
+  htmlLang: 'en',
+  notes: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'],
+
+  splash: {
+    tagline: 'An instrument you play with your hands in the air.',
+    bullets: [
+      'Move your hands in the air and it sounds. Nothing to install, nothing to touch.',
+      'When you start, a five-step walkthrough runs with the camera already on.',
+      'Record layers, stack them, and take the result away as a video.',
+    ],
+    start: 'Start',
+    starting: 'Getting ready...',
+    permissionNote: 'Needs camera permission. The audio never leaves your device.',
+  },
+  loading: {
+    camera: 'Asking for camera access...',
+    audio: 'Starting audio...',
+    vision: 'Loading the vision engine...',
+    model: 'Loading the hand model...',
+    warmup: 'Warming up inference...',
+  },
+  errors: {
+    permission:
+      'No camera permission. Grant it from the padlock in the address bar and try again. ' +
+      'Remember that browsers only allow the camera over https or on localhost.',
+    notFound: 'No camera was found on this device.',
+    busy: 'The camera is busy in another application. Close it and try again.',
+    generic: (detail) => `Could not start: ${detail}`,
+  },
+
+  hud: {
+    hint: 'Pinch thumb and index finger to make it sound',
+    melodyDot: 'Melody hand',
+    expressionDot: 'Expression hand',
+    volume: 'Volume (expression hand)',
+    guideDone: 'done',
+    lowPerformance: 'Low performance: dropping the camera to 640x480',
+    cameraSwitchFailed: 'Could not switch camera',
+    layer: (index) => `Layer ${index}`,
+    layerMuted: 'Layer muted. Tap to bring it back.',
+    layerActive: 'Tap to mute this layer.',
+  },
+
+  actions: {
+    loop: 'Loop',
+    loopStop: 'Stop',
+    loopFull: 'Layers full',
+    loopTitle: 'Record a loop layer (space)',
+    clip: 'Record clip',
+    clipTitle: 'Record a clip to share (C)',
+    undo: 'Undo',
+    undoTitle: 'Remove the last layer (Z)',
+    settings: 'Settings',
+    close: 'Close',
+    helpTitle: 'Help',
+  },
+
+  coach: {
+    optional: 'optional',
+    skipStep: 'Skip this step',
+    skipStepOptional: 'One hand is enough',
+    skipAll: 'I know how to play',
+    steps: {
+      hand: {
+        title: 'Show one hand',
+        body: 'Whichever you like: it makes no difference, and one is enough to play.',
+      },
+      move: {
+        title: 'Move it left and right',
+        body: 'That is where the note lives: low on the left, high on the right.',
+      },
+      pinch: {
+        title: 'Pinch thumb and index finger',
+        body: 'That pinch is the key: while they touch, it sounds.',
+      },
+      play: {
+        title: 'Keep pinching and move',
+        body: 'That is playing. Open your fingers to stop the note.',
+      },
+      volume: {
+        title: 'If you have a hand to spare, raise it',
+        body:
+          'The second hand raises and lowers the volume, and the number of fingers picks the timbre. ' +
+          'Everything else works with a single hand: if you would rather stay that way, volume and timbre are in Settings.',
+      },
+    },
+  },
+
+  help: {
+    title: 'How to play',
+    close: 'Close',
+    gestures: [
+      {
+        what: 'Either hand',
+        does: 'The first one that shows up plays the melody, left or right. One hand plays the whole instrument.',
+      },
+      { what: 'Melody hand, left and right', does: 'Picks the note. Low on the left, high on the right.' },
+      { what: 'Thumb against index finger', does: 'The key. Together it sounds, apart it stops.' },
+      { what: 'That same hand, up and down', does: 'Brightness of the sound. Up is bright, down is dark.' },
+      {
+        what: 'Second hand, up and down',
+        does: 'Volume. Without it the last value stays and you set it in Settings; losing it never mutes.',
+        optional: true,
+      },
+      {
+        what: 'Extended fingers on that hand (1 to 4)',
+        does: 'Changes the timbre. A fist is ignored on purpose. Also available in Settings.',
+        optional: true,
+      },
+    ],
+    recordTitle: 'Record and share',
+    record: [
+      'Loop records a layer. The first one sets the bar; the rest stack on top. Up to four.',
+      'Record clip saves a vertical video with sound, ready to share. Thirty seconds maximum.',
+      'In Settings you can copy a link carrying your scale, your tonic and your timbre.',
+    ],
+    keysTitle: 'Keyboard shortcuts',
+    keys: [
+      { key: 'Space', does: 'record or close a loop layer' },
+      { key: 'C', does: 'start or finish a clip' },
+      { key: 'Z', does: 'remove the last layer' },
+      { key: 'H', does: 'open or close this help' },
+      { key: 'Esc', does: 'close this panel or the settings' },
+    ],
+    troubleTitle: 'If something is off',
+    trouble: [
+      'It does not see your hand. It needs light from the front and the whole hand inside the frame, about half a metre away.',
+      'No sound. Check that the pinch closes fully: the circle between your fingers lights up when it sounds.',
+      'It stutters. Close other tabs. If the frame rate drops far enough, the camera scales itself down.',
+      'No camera. Browsers only allow it over https or on localhost, and you have to grant permission.',
+    ],
+    replay: 'Play the walkthrough again',
+  },
+
+  settings: {
+    language: 'Language',
+    languageAuto: 'Automatic',
+    shareSection: 'Share',
+    copyLink: 'Copy a link with this setup',
+    clipFormat: 'Clip format',
+    clipVertical: 'Vertical 9:16',
+    clipLandscape: 'Landscape 16:9',
+    clipHint: 'Vertical is what the apps where these videos live ask for.',
+    instrumentSection: 'Instrument',
+    scale: 'Scale',
+    tonic: 'Tonic',
+    baseOctave: 'Lowest octave',
+    range: 'Range',
+    rangeUnit: (value) => `${value} oct`,
+    preset: 'Timbre',
+    baseVolume: 'Base volume',
+    baseVolumeHint: 'The expression hand overrides this value while it is in view.',
+    guideSection: 'Guided melody',
+    melody: 'Melody',
+    melodyNone: 'None (free play)',
+    melodyHint: 'No time pressure: you follow the order of the notes, not the beat.',
+    cameraSection: 'Camera',
+    device: 'Device',
+    defaultCamera: 'Default camera',
+    mirror: 'Mirror horizontally',
+    smoothingSection: 'Smoothing',
+    smoothingHint:
+      'minCutoff lowers the jitter at rest. beta gives back response to fast movement. You tune it by ear, not by eye.',
+    pitchCutoff: 'Pitch · minCutoff',
+    pitchBeta: 'Pitch · beta',
+    controlCutoff: 'Control · minCutoff',
+    controlBeta: 'Control · beta',
+    overlayCutoff: 'Overlay · minCutoff',
+    overlayBeta: 'Overlay · beta',
+    hudSection: 'HUD',
+    showDiagnostics: 'Show fps and latency',
+    showRawTrace: 'Overlay unfiltered points',
+    reset: 'Reset',
+  },
+
+  toast: {
+    layerRecording: 'Recording a layer over the loop',
+    layerRecordingFirst: 'Recording. What you play now sets the bar.',
+    layerSaved: (count) => `Layer ${count} added`,
+    layerDiscarded: 'You did not play anything, so there is no layer',
+    layerRemoved: 'Layer removed',
+    layersFull: 'No room for more layers. Remove one with Undo.',
+    clipRecording: 'Recording a clip. Press again to finish.',
+    clipUnsupported: 'This browser cannot record video',
+    clipFailed: 'Could not start recording',
+    clipTooShort: 'The clip was too short',
+    clipShared: 'Shared',
+    clipDownloaded: 'Clip downloaded',
+    clipCancelled: 'Sharing cancelled',
+    clipSaveFailed: 'Could not save the clip',
+    linkCopied: 'Link copied',
+    linkInAddressBar: 'Link is in the address bar',
+    guideStart: (name, hint) => `${name}. ${hint}`,
+    guideFinished: (accuracy) => `Melody finished with ${accuracy}% accuracy. Record a clip and show it off.`,
+    guideNeedsScale: 'The guide needs a quantised scale, so it has been turned off',
+    onboardingDone: 'You know how to play now. Try recording a layer with the Loop button.',
+    onboardingSkipped: 'You can replay it any time from the help panel.',
+  },
+
+  overlay: { melodyTag: 'MELODY', expressionTag: 'EXPRESSION' },
+
+  scales: {
+    pentatonic: 'Minor pentatonic',
+    blues: 'Blues',
+    minor: 'Natural minor',
+    major: 'Major',
+    chromatic: 'Chromatic',
+    continuous: 'Continuous (no quantising)',
+  },
+  presets: {
+    theremin: 'Theremin',
+    strings: 'Strings',
+    flute: 'Flute',
+    bass: 'Acid bass',
+  },
+  melodies: {
+    ascenso: { name: 'Climb', hint: 'Left to right, no rush.' },
+    'ida-vuelta': { name: 'There and back', hint: 'Up and down the same path.' },
+    llamada: { name: 'Call and response', hint: 'Return to the tonic between each jump.' },
+    blues: { name: 'Blues turnaround', hint: 'The passing note is what gives it the colour.' },
+    octavas: { name: 'Octave jumps', hint: 'Cross the whole frame in one go.' },
+  },
+};

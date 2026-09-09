@@ -37,6 +37,8 @@ export interface Settings {
   melodyId: string;
   /** true en cuanto se ha visto la introduccion, se complete o se salte. */
   onboarded: boolean;
+  /** Idioma elegido, o 'auto' para seguir al navegador. */
+  locale: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -59,6 +61,7 @@ export const DEFAULT_SETTINGS: Settings = {
   clipAspect: 'vertical',
   melodyId: '',
   onboarded: false,
+  locale: 'auto',
 };
 
 const STORAGE_KEY = 'theremano.settings.v1';

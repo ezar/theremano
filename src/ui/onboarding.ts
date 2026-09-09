@@ -43,9 +43,8 @@ interface StepProgress {
 }
 
 export interface OnboardingStep {
+  /** Tambien la clave con la que la vista busca su texto. */
   id: string;
-  title: string;
-  body: string;
   /**
    * Un paso opcional ensena algo que el instrumento no necesita para funcionar.
    * Se marca como tal en el dato y no solo en el texto, porque quien no pueda o
@@ -63,37 +62,22 @@ const span = (p: Readonly<StepProgress>): number => (p.max >= p.min ? p.max - p.
 export const STEPS: readonly OnboardingStep[] = [
   {
     id: 'hand',
-    title: 'Ensena una mano',
-    body: 'La que prefieras: da igual cual, y con una basta para tocar.',
-    // Un instante suelto puede ser una deteccion falsa; medio segundo, no.
     isDone: (p) => p.held >= 0.5,
   },
   {
     id: 'move',
-    title: 'Muevela a izquierda y derecha',
-    body: 'Ahi esta la nota: grave a la izquierda, aguda a la derecha.',
     isDone: (p) => span(p) >= 0.4,
   },
   {
     id: 'pinch',
-    title: 'Junta el pulgar y el indice',
-    body: 'Esa pinza es la llave: mientras esten juntos, suena.',
     isDone: (p) => p.attacks >= 1,
   },
   {
     id: 'play',
-    title: 'Sin soltar la pinza, muevete',
-    body: 'Eso ya es tocar. Suelta los dedos para callar.',
-    // Hay que sostener la nota y ademas recorrer algo: sostener sin moverse no
-    // ensena nada, y moverse sin sostener tampoco.
     isDone: (p) => p.held >= 1 && span(p) >= 0.12,
   },
   {
     id: 'volume',
-    title: 'Si te queda una mano libre, levantala',
-    body:
-      'La segunda mano sube y baja el volumen, y el numero de dedos elige el timbre. ' +
-      'Todo lo demas funciona con una sola mano: si prefieres seguir asi, el volumen y el timbre estan en Ajustes.',
     optional: true,
     isDone: (p) => span(p) >= 0.3,
   },

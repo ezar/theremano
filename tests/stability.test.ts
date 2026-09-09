@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { OneEuroFilter, DEFAULT_D_CUTOFF } from '../src/filter/oneEuro';
 import { melodyFeatures } from '../src/mapping/features';
-import { createLayout, pitchAt } from '../src/mapping/scales';
+import { createLayout, midiToName, pitchAt } from '../src/mapping/scales';
+import { es } from '../src/i18n/es';
 import { DEFAULT_SETTINGS } from '../src/state/store';
 import { cents, jitter, makeHand, mulberry32 } from './helpers';
 
@@ -52,7 +53,7 @@ function runStill(scale: 'pentatonic' | 'continuous', sigma: number, filtered = 
     if (t < 0.5) continue;
     const pitch = pitchAt(layout, x);
     freqs.push(pitch.freq);
-    notes.add(pitch.name);
+    notes.add(midiToName(pitch.midi, es.notes));
   }
 
   return { drift: cents(Math.max(...freqs), Math.min(...freqs)), notes };
