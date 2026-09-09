@@ -272,10 +272,16 @@ class Theremano {
       this.guide = null;
       return;
     }
-    if (options.applySuggestedScale && this.store.get().scale !== melody.suggestedScale) {
+    if (options.applySuggestedScale) {
       // La escala sugerida es parte de la melodia: pedirla y no ponerla dejaria
-      // objetivos aproximados donde deberia haber notas exactas.
-      this.store.set({ scale: melody.suggestedScale });
+      // objetivos aproximados donde deberia haber notas exactas. El rango va en
+      // el mismo lote porque una cancion que no cabe en el encuadre reparte dos
+      // notas distintas en la misma zona y deja de reconocerse. Solo se amplia:
+      // quien toca con cuatro octavas no las pierde por elegir una melodia.
+      const patch: Partial<Settings> = {};
+      if (this.store.get().scale !== melody.suggestedScale) patch.scale = melody.suggestedScale;
+      if (this.store.get().octaves < melody.minOctaves) patch.octaves = melody.minOctaves;
+      if (Object.keys(patch).length > 0) this.store.set(patch);
     }
     this.guide = new GuideSession(melody, this.mapper.currentLayout);
     const copy = t().melodies[melody.id];
