@@ -55,12 +55,18 @@ build, el directorio de salida y las cabeceras de caché para el modelo y el WAS
 
 **GitHub Pages** también sirve, porque la salida es estática y no hay funciones
 de servidor. El flujo de trabajo `.github/workflows/pages.yml` construye con
-`BASE_PATH=/<repo>/` y publica. Todo el código referencia sus activos con
+`BASE_PATH=/<repo>/` y publica; hay que poner *Settings → Pages → Source* en
+*GitHub Actions*. Todo el código referencia sus activos con
 `import.meta.env.BASE_URL`, así que el mismo build vale para la raíz de un
 dominio y para una subcarpeta.
 
-Lo único que Pages no da es un dominio propio con HTTPS que ya tengas: si vas a
-enseñarlo desde el móvil, Vercel es más cómodo.
+La diferencia entre las dos está en las cabeceras. El despliegue pesa 31 MB y un
+visitante nuevo se descarga unos 19 MB: el modelo y una variante del WASM. En
+Vercel esos ficheros van con `immutable` y un año de caché. Pages no permite
+cabeceras propias, así que los revalida a menudo; el service worker lo tapa a
+partir de la segunda visita, pero la primera es peor. Con el límite blando de
+100 GB al mes de Pages salen unas 5.000 primeras visitas, de sobra para una
+prueba conceptual. Si el repositorio es privado, Pages necesita plan de pago.
 
 ---
 

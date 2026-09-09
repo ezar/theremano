@@ -24,6 +24,22 @@ const MODEL_MIN_BYTES = 5_000_000;
 const WASM_SRC = resolve(root, 'node_modules/@mediapipe/tasks-vision/wasm');
 const WASM_DEST = resolve(root, 'public/wasm');
 
+/**
+ * De las tres variantes que trae el paquete solo se copian dos.
+ * `FilesetResolver.forVisionTasks` compone el nombre del fichero a partir de si
+ * el navegador soporta SIMD, y elige entre `vision_wasm_internal` y
+ * `vision_wasm_nosimd_internal`. La tercera, `vision_wasm_module_internal`,
+ * pertenece a otro punto de entrada que esta aplicacion no usa: comprobado
+ * observando las peticiones reales del navegador, solo se pide la primera.
+ * Son 11 MB que no pintan nada en el despliegue.
+ */
+const WASM_FILES = [
+  'vision_wasm_internal.js',
+  'vision_wasm_internal.wasm',
+  'vision_wasm_nosimd_internal.js',
+  'vision_wasm_nosimd_internal.wasm',
+];
+
 const exists = async (path) => access(path).then(() => true, () => false);
 
 async function fetchModel() {
@@ -72,8 +88,17 @@ async function copyWasm() {
     throw new Error('Falta node_modules/@mediapipe/tasks-vision/wasm. Ejecuta npm install primero.');
   }
   await rm(WASM_DEST, { recursive: true, force: true });
-  await cp(WASM_SRC, WASM_DEST, { recursive: true });
-  console.log('[assets] WASM de MediaPipe copiado a public/wasm');
+  await mkdir(WASM_DEST, { recursive: true });
+  let bytes = 0;
+  for (const name of WASM_FILES) {
+    const from = resolve(WASM_SRC, name);
+    if (!(await exists(from))) {
+      throw new Error(`El paquete de MediaPipe ya no trae ${name}. Revisa WASM_FILES en este script.`);
+    }
+    await cp(from, resolve(WASM_DEST, name));
+    bytes += (await stat(from)).size;
+  }
+  console.log(`[assets] WASM de MediaPipe copiado a public/wasm (${(bytes / 1e6).toFixed(1)} MB)`);
 }
 
 await copyWasm();
