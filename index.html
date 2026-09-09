@@ -63,6 +63,16 @@
         <div id="loop-lanes"></div>
         <div id="hint">Junta el pulgar y el indice para que suene</div>
 
+        <section id="coach" hidden aria-live="polite">
+          <div id="coach-dots"></div>
+          <h2 id="coach-title"></h2>
+          <p id="coach-body"></p>
+          <div id="coach-actions">
+            <button id="coach-skip-step" type="button">Saltar este paso</button>
+            <button id="coach-skip-all" type="button">Ya se tocar</button>
+          </div>
+        </section>
+
         <div id="diagnostics"></div>
         <div id="notice" hidden></div>
       </div>
@@ -79,18 +89,71 @@
 
       <div id="toast" hidden></div>
 
+      <button id="help-toggle" class="hidden" aria-label="Ayuda" title="Ayuda">?</button>
       <button id="settings-toggle" class="hidden" aria-label="Ajustes" aria-expanded="false">Ajustes</button>
+
+      <section id="help" hidden aria-label="Ayuda">
+        <div id="help-sheet">
+          <header>
+            <h2>Como se toca</h2>
+            <button id="help-close" type="button" aria-label="Cerrar ayuda">Cerrar</button>
+          </header>
+
+          <table class="help-table">
+            <tbody>
+              <tr><th>Mano de melodia, a izquierda y derecha</th><td>Elige la nota. Grave a la izquierda, aguda a la derecha.</td></tr>
+              <tr><th>Pulgar contra indice</th><td>La llave. Juntos suena, separados calla.</td></tr>
+              <tr><th>Esa misma mano, arriba y abajo</th><td>Brillo del sonido. Arriba claro, abajo oscuro.</td></tr>
+              <tr><th>Mano de expresion, arriba y abajo</th><td>Volumen.</td></tr>
+              <tr><th>Dedos extendidos de esa mano (1 a 4)</th><td>Cambia el timbre. El puno se ignora a proposito.</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Grabar y compartir</h3>
+          <ul class="help-list">
+            <li><b>Bucle</b> graba una capa. La primera marca el compas; las siguientes se superponen. Hasta cuatro.</li>
+            <li><b>Grabar clip</b> guarda un video vertical con sonido, listo para compartir. Maximo 30 segundos.</li>
+            <li>En <b>Ajustes</b> puedes copiar un enlace que lleva tu escala, tu tonica y tu timbre.</li>
+          </ul>
+
+          <h3>Atajos de teclado</h3>
+          <ul class="help-list keys">
+            <li><kbd>Espacio</kbd> grabar o cerrar una capa de bucle</li>
+            <li><kbd>C</kbd> empezar o terminar un clip</li>
+            <li><kbd>Z</kbd> quitar la ultima capa</li>
+            <li><kbd>Esc</kbd> cerrar este panel o los ajustes</li>
+          </ul>
+
+          <h3>Si algo no va</h3>
+          <ul class="help-list">
+            <li><b>No detecta la mano.</b> Necesita luz de frente y la mano entera dentro del encuadre, a medio metro o asi.</li>
+            <li><b>No suena.</b> Comprueba que la pinza se cierra del todo: el circulo entre los dedos se enciende cuando suena.</li>
+            <li><b>Va a tirones.</b> Cierra otras pestanas. Si los fps bajan mucho, la camara se reduce sola.</li>
+            <li><b>No hay camara.</b> El navegador solo la permite en https o en localhost, y hay que dar permiso.</li>
+          </ul>
+
+          <div class="help-actions">
+            <button id="help-replay" type="button">Repetir la introduccion</button>
+          </div>
+        </div>
+      </section>
       <aside id="settings-panel" hidden aria-label="Panel de ajustes"></aside>
 
       <section id="splash">
         <div id="splash-inner">
           <h1>theremano</h1>
           <p class="tagline">Un instrumento que se toca con las manos en el aire.</p>
+          <!--
+            La lista de gestos que habia aqui se la ha llevado la introduccion
+            guiada. Explicar un gesto por escrito antes de que haya camara es
+            pedirle a alguien que memorice algo que aun no puede probar, y esa
+            lista se salta sin leer. Aqui solo queda lo que hace falta para
+            decidir si pulsar el boton.
+          -->
           <ul class="howto">
-            <li><b>Mano derecha</b> &mdash; muevela para elegir la nota. <b>Junta pulgar e indice</b> para que suene.</li>
-            <li><b>Altura de esa mano</b> &mdash; abre o cierra el brillo del sonido.</li>
-            <li><b>Mano izquierda</b> &mdash; sube o baja para el volumen. <b>Numero de dedos</b> (1 a 4) elige el timbre.</li>
-            <li><b>Graba capas</b> y superponlas, y llevate el resultado en video.</li>
+            <li>Mueve las manos en el aire y suena. Nada que instalar, nada que tocar.</li>
+            <li>Al entrar <b>te guio en cinco pasos</b>, con la camara ya puesta.</li>
+            <li>Graba capas, superponlas y llevate el resultado en video.</li>
           </ul>
           <button id="start-button">Empezar</button>
           <p id="splash-status">Necesita permiso de camara. El audio no sale de tu dispositivo.</p>

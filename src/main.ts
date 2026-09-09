@@ -12,8 +12,11 @@ import { Mapper } from './mapping/mapper';
 import { RoleTracker } from './tracking/handedness';
 import { Landmarker } from './tracking/landmarker';
 import type { HandFrame, RoleAssignment } from './tracking/types';
+import { CoachView } from './ui/coach';
 import { Controls } from './ui/controls';
+import { Help } from './ui/help';
 import { Hud } from './ui/hud';
+import { Onboarding } from './ui/onboarding';
 import { Overlay, type OverlayFrame } from './ui/overlay';
 import { SettingsStore, runtime, type Settings } from './state/store';
 
@@ -56,6 +59,9 @@ class Theremano {
   private readonly hud = new Hud();
   private readonly overlay: Overlay;
   private readonly controls: Controls;
+  private readonly onboarding = new Onboarding();
+  private readonly coach: CoachView;
+  private readonly help: Help;
 
   private readonly video = must<HTMLVideoElement>('video');
   private readonly splash = must('splash');
@@ -103,6 +109,12 @@ class Theremano {
       onMelodyChange: (id) => this.store.set({ melodyId: id }),
     });
 
+    this.coach = new CoachView({
+      onSkipStep: () => this.advanceCoach(this.onboarding.skipStep()),
+      onSkipAll: () => this.finishOnboarding('Puedes repetirla cuando quieras desde la ayuda.'),
+    });
+    this.help = new Help({ onReplay: () => this.startOnboarding() });
+
     this.store.subscribe((next, changed) => this.onSettingsChanged(next, changed));
     this.startButton.addEventListener('click', () => void this.start());
     this.bindActions();
@@ -135,6 +147,13 @@ class Theremano {
       // Escribir en el panel de ajustes no debe disparar la grabacion.
       const target = event.target as HTMLElement | null;
       if (target && /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) return;
+
+      if (event.key === '?' || (event.key === 'h' && !event.shiftKey)) {
+        this.help.setOpen(!this.help.isOpen);
+        return;
+      }
+      // Con la ayuda abierta, el espacio hace scroll: no debe grabar tambien.
+      if (this.help.isOpen) return;
 
       if (event.code === 'Space') {
         event.preventDefault();
@@ -235,6 +254,27 @@ class Theremano {
     this.hud.toast(`Melodia completada con un ${accuracy}% de acierto. Graba un clip y ensenalo.`, 5200);
   }
 
+  private startOnboarding(): void {
+    this.onboarding.start();
+    this.coach.render(this.onboarding.step, this.onboarding.index, this.onboarding.total);
+    this.hud.dismissHint();
+  }
+
+  private advanceCoach(event: 'advanced' | 'finished' | null): void {
+    if (event === null) return;
+    this.coach.render(this.onboarding.step, this.onboarding.index, this.onboarding.total);
+    if (event === 'finished') this.finishOnboarding('Ya sabes tocar. Prueba a grabar una capa con el boton Bucle.');
+  }
+
+  private finishOnboarding(message: string): void {
+    this.onboarding.stop();
+    this.coach.render(null, 0, this.onboarding.total);
+    // Se marca visto tanto si se completa como si se salta: insistir con algo
+    // que ya se ha rechazado una vez es la forma mas rapida de molestar.
+    this.store.set({ onboarded: true });
+    this.hud.toast(message, 4800);
+  }
+
   private async copyShareLink(): Promise<void> {
     const url = shareUrl(this.store.get());
     try {
@@ -283,8 +323,10 @@ class Theremano {
       this.hud.setSubtitle(this.store.get());
       this.hud.show();
       this.controls.reveal();
+      this.help.reveal();
 
       runtime.running = true;
+      if (!this.store.get().onboarded) this.startOnboarding();
       this.splash.classList.add('leaving');
       window.setTimeout(() => {
         this.splash.hidden = true;
@@ -455,6 +497,23 @@ class Theremano {
       this.hud.setClipRecording(true, this.clip.seconds, CLIP_MAX_SECONDS);
       if (this.clip.seconds >= CLIP_MAX_SECONDS) void this.finishClip();
     }
+
+    if (this.onboarding.isActive) {
+      this.advanceCoach(
+        this.onboarding.update({
+          melodyVisible: runtime.melodyVisible,
+          melodyHeld: runtime.melodyHeld,
+          expressionVisible: runtime.expressionVisible,
+          expressionHeld: runtime.expressionHeld,
+          gateOpen: output.gateOpen,
+          attack: output.gateEvent === 'attack',
+          pitchX: output.pitchX,
+          volume: output.volume,
+          dt,
+        }),
+      );
+    }
+    this.coach.render(this.onboarding.step, this.onboarding.index, this.onboarding.total);
 
     this.hud.setLoops(loops);
     this.hud.setGuide(
