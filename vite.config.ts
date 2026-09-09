@@ -9,6 +9,34 @@ import { VitePWA } from 'vite-plugin-pwa';
  */
 const base = process.env.BASE_PATH ?? '/';
 
+/**
+ * Direccion absoluta del sitio, para las etiquetas sociales.
+ *
+ * Las imagenes de Open Graph y Twitter no son recursos que cargue el navegador:
+ * son metadatos que leen rastreadores externos, y los principales exigen una
+ * direccion absoluta en lugar de resolver `./og.png` contra la pagina. Con una
+ * ruta relativa la tarjeta se queda sin imagen, que es justo lo que la funcion
+ * pretendia evitar.
+ *
+ * Se deduce del entorno de despliegue para que el mismo codigo sirva en Vercel y
+ * en GitHub Pages. En desarrollo no hay direccion publica y se cae a la relativa:
+ * nadie comparte un enlace de localhost.
+ */
+function resolveSiteUrl(): string {
+  const explicit = process.env.SITE_URL;
+  if (explicit) return explicit.endsWith('/') ? explicit : `${explicit}/`;
+
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+  if (vercel) return `https://${vercel}/`;
+
+  const owner = process.env.GITHUB_REPOSITORY_OWNER;
+  if (owner && process.env.BASE_PATH) return `https://${owner}.github.io${base}`;
+
+  return './';
+}
+
+const siteUrl = resolveSiteUrl();
+
 export default defineConfig({
   base,
   test: {
@@ -26,6 +54,10 @@ export default defineConfig({
     port: 5173,
   },
   plugins: [
+    {
+      name: 'theremano-social-urls',
+      transformIndexHtml: (html) => html.replaceAll('%SITE_URL%', siteUrl),
+    },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],

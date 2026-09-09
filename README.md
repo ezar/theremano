@@ -102,6 +102,12 @@ El vídeo lleva la dirección impresa. Es la única pieza de todo esto que exist
 por una razón que no es musical: un vídeo compartido sin la dirección es un
 callejón sin salida para quien lo ve.
 
+La imagen de vista previa del enlace se genera con `npm run og` y se versiona.
+Su dirección en las etiquetas es **absoluta**, deducida en tiempo de build del
+entorno de despliegue (`SITE_URL`, las variables de Vercel, o el owner del
+repositorio en Pages): los rastreadores sociales no resuelven rutas relativas
+como hace un navegador, y con una ruta relativa la tarjeta se queda sin imagen.
+
 ---
 
 ## Arrancar en local
@@ -252,8 +258,10 @@ Los que se pueden comprobar de forma automática están en `tests/`:
   descarta en lugar de dejar una capa fantasma.
 - **Un enlace manipulado no impide arrancar**: se aplica lo que se reconoce y se
   descarta el resto, y un fragmento sin tónica no inventa una.
-- **Una melodía guiada se puede completar en cualquier escala**, y cambiar de
-  escala a mitad no pierde el progreso.
+- **Una melodía guiada se puede completar en cualquier escala** que reparta el
+  encuadre en zonas, y cambiar de escala a mitad no pierde el progreso. En modo
+  continuo no hay zonas, así que la guía se retira sola en lugar de quedarse
+  puesta y muerta.
 
 Los que exigen oído o un dispositivo real —25 fps en un móvil de gama media,
 ausencia de chasquidos— no se pueden afirmar desde aquí y quedan por verificar

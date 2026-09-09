@@ -103,6 +103,18 @@ const guide = await page.evaluate(() => ({
 }));
 console.log(JSON.stringify({ guide }, null, 2));
 
+// --- El modo continuo no tiene zonas: la guia debe retirarse sola.
+await page.selectOption('#set-escala', 'continuous');
+await page.waitForTimeout(700);
+const afterContinuous = await page.evaluate(() => ({
+  melody: document.getElementById('set-melodia')?.value,
+  chipHidden: document.getElementById('guide-chip')?.hidden,
+  toast: document.getElementById('toast')?.textContent,
+}));
+console.log(JSON.stringify({ afterContinuous }, null, 2));
+await page.selectOption('#set-escala', 'blues');
+await page.waitForTimeout(400);
+
 // --- Enlace compartible: tiene que reconstruir la configuracion al abrirlo.
 const link = await page.evaluate(() => {
   const url = new URL(location.href);
@@ -122,6 +134,10 @@ console.log('--- consola ---');
 console.log(logs.slice(-25).join('\n'));
 await browser.close();
 
+if (afterContinuous.melody !== '' || afterContinuous.chipHidden !== true) {
+  console.error('\nFALLO: la guia sigue activa en una escala sin zonas');
+  process.exit(1);
+}
 if (!guide.visible || guide.progress !== '0/9' || guide.scale !== 'blues') {
   console.error('\nFALLO: la melodia guiada no se ha activado como deberia');
   process.exit(1);

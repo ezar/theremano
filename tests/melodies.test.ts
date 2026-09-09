@@ -25,12 +25,17 @@ describe('melodias guiadas', () => {
     }
   });
 
-  it('en modo continuo no hay zonas, y la guia lo admite sin romperse', () => {
+  it('en modo continuo la guia no puede avanzar, y por eso hay que retirarla', () => {
+    // El modo continuo no reparte el encuadre en zonas. La sesion no se rompe,
+    // pero se queda en 0/0 sin objetivo y sin poder terminar nunca. Documentado
+    // aqui porque es la razon por la que la aplicacion desactiva la guia al
+    // elegir esta escala en lugar de dejarla puesta y muerta.
     const session = new GuideSession(MELODIES[0]!, createLayout('continuous', 9, 3, 2));
     expect(session.total).toBe(0);
     expect(session.targetZone).toBe(null);
     expect(session.finished).toBe(false);
     expect(session.onAttack(0)).toBe('miss');
+    expect(session.finished, 'nunca podria darse por completada').toBe(false);
   });
 
   it('avanza al acertar y no retrocede al fallar', () => {
