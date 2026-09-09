@@ -13,7 +13,15 @@
 
 export interface CoachSignals {
   melodyVisible: boolean;
+  /**
+   * true cuando la mano no se ve ahora mismo y se esta sosteniendo su ultimo
+   * estado. El instrumento la conserva 500 ms para que un fallo puntual de
+   * deteccion no corte una nota, pero para ensenar no vale: una sola deteccion
+   * falsa daria medio segundo de mano "visible" y cerraria el primer paso sola.
+   */
+  melodyHeld: boolean;
   expressionVisible: boolean;
+  expressionHeld: boolean;
   gateOpen: boolean;
   /** true solo en el fotograma en que se abre el gate. */
   attack: boolean;
@@ -132,10 +140,10 @@ export class Onboarding {
     // haria que el recorrido de la mano contase para el paso del volumen.
     switch (step.id) {
       case 'hand':
-        p.held = signals.melodyVisible ? p.held + signals.dt : 0;
+        p.held = seesMelody(signals) ? p.held + signals.dt : 0;
         break;
       case 'move':
-        if (signals.melodyVisible && signals.pitchX >= 0) track(p, signals.pitchX);
+        if (seesMelody(signals) && signals.pitchX >= 0) track(p, signals.pitchX);
         break;
       case 'play':
         if (signals.gateOpen) {
@@ -144,7 +152,7 @@ export class Onboarding {
         }
         break;
       case 'volume':
-        if (signals.expressionVisible) track(p, signals.volume);
+        if (signals.expressionVisible && !signals.expressionHeld) track(p, signals.volume);
         break;
       default:
         break;
@@ -164,6 +172,11 @@ export class Onboarding {
     }
     return 'advanced';
   }
+}
+
+/** Mano de melodia detectada ahora mismo, no recordada. */
+function seesMelody(signals: CoachSignals): boolean {
+  return signals.melodyVisible && !signals.melodyHeld;
 }
 
 function blank(): StepProgress {

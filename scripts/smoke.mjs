@@ -53,6 +53,14 @@ while (await page.evaluate(() => !document.getElementById('coach')?.hidden)) {
   await page.waitForTimeout(120);
   if (++skips > 12) break;
 }
+// El store agrupa las escrituras a localStorage con 250 ms de retardo, asi que
+// leer la bandera justo despues del ultimo salto es una carrera: la prueba
+// fallaria con la aplicacion funcionando bien.
+await page
+  .waitForFunction(() => JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').onboarded === true, {
+    timeout: 5000,
+  })
+  .catch(() => {});
 const coachEnd = await page.evaluate(() => ({
   visible: !document.getElementById('coach')?.hidden,
   onboarded: JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').onboarded,

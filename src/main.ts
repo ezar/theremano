@@ -502,7 +502,9 @@ class Theremano {
       this.advanceCoach(
         this.onboarding.update({
           melodyVisible: runtime.melodyVisible,
+          melodyHeld: runtime.melodyHeld,
           expressionVisible: runtime.expressionVisible,
+          expressionHeld: runtime.expressionHeld,
           gateOpen: output.gateOpen,
           attack: output.gateEvent === 'attack',
           pitchX: output.pitchX,

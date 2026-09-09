@@ -13,7 +13,9 @@ import { Onboarding, STEPS, type CoachSignals } from '../src/ui/onboarding';
 const FPS = 60;
 const idle: CoachSignals = {
   melodyVisible: false,
+  melodyHeld: false,
   expressionVisible: false,
+  expressionHeld: false,
   gateOpen: false,
   attack: false,
   pitchX: -1,
@@ -56,6 +58,24 @@ describe('introduccion guiada', () => {
     expect(coach.step?.id).toBe('hand');
     expect(feed(coach, { melodyVisible: true }, 1)).toEqual(['advanced']);
     expect(coach.step?.id).toBe('move');
+  });
+
+  it('una mano recordada no cuenta como mano vista', () => {
+    // El instrumento conserva 500 ms la ultima posicion de una mano perdida,
+    // para que un fallo de deteccion no corte una nota. Ese margen no puede
+    // valer para ensenar: una sola deteccion falsa daria medio segundo de mano
+    // "visible" y cerraria el primer paso sin que nadie haya levantado nada.
+    const coach = new Onboarding();
+    coach.start();
+    expect(feed(coach, { melodyVisible: true, melodyHeld: true }, 5)).toEqual([]);
+    expect(coach.step?.id).toBe('hand');
+    expect(feed(coach, { melodyVisible: true }, 1)).toEqual(['advanced']);
+  });
+
+  it('el paso del volumen tampoco acepta una segunda mano recordada', () => {
+    const coach = coachAt('volume');
+    expect(feed(coach, { expressionVisible: true, expressionHeld: true }, 3, (t) => ({ volume: t < 1.5 ? 0.05 : 0.95 }))).toEqual([]);
+    expect(coach.step?.id).toBe('volume');
   });
 
   it('una deteccion parpadeante no cuenta como mano sostenida', () => {
