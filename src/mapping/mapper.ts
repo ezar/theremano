@@ -46,7 +46,6 @@ export interface MappingOutput {
   midi: number;
   /** Zona de la escala en la que esta la mano, o -1 en modo continuo. */
   zoneIndex: number;
-  noteName: string;
   glide: number;
   /** 0 = oscuro, 1 = brillante. */
   cutoffNorm: number;
@@ -74,7 +73,6 @@ export class Mapper {
   private candidateStreak = 0;
   private lastFreq = 440;
   private lastMidi = 69;
-  private lastNote = '--';
   private lastZone = -1;
 
   constructor(settings: Readonly<Settings>) {
@@ -139,7 +137,6 @@ export class Mapper {
       const pitch = pitchAt(this.layout, pitchX);
       this.lastFreq = pitch.freq;
       this.lastMidi = pitch.midi;
-      this.lastNote = pitch.name;
       this.lastZone = pitch.index;
     } else {
       // La mano ha desaparecido de verdad (mas alla del margen de 500 ms).
@@ -171,7 +168,6 @@ export class Mapper {
       freq: this.lastFreq,
       midi: this.lastMidi,
       zoneIndex: this.lastZone,
-      noteName: this.lastNote,
       glide: isContinuous(this.layout.scaleId) ? CONTINUOUS_GLIDE : QUANTIZED_GLIDE,
       cutoffNorm,
       volume: this.volume,

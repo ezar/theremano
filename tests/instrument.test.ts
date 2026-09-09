@@ -103,7 +103,7 @@ describe('el instrumento de punta a punta', () => {
     const low = rig.step([pinched(0.2)], 10);
     const high = rig.step([pinched(0.8)], 20);
     expect(high.freq).toBeGreaterThan(low.freq);
-    expect(low.noteName).not.toBe(high.noteName);
+    expect(low.midi).not.toBe(high.midi);
   });
 
   it('subir la mano abre el filtro y bajarla lo cierra', () => {

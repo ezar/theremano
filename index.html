@@ -24,6 +24,7 @@
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="theremano: un instrumento que se toca con las manos en el aire." />
     <meta property="og:locale" content="es_ES" />
+    <meta property="og:locale:alternate" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="theremano" />
     <meta name="twitter:description" content="Un instrumento que se toca con las manos en el aire." />
@@ -42,7 +43,7 @@
           <div id="note-sub"></div>
         </div>
 
-        <div id="volume-rail" title="Volumen (mano de expresion)">
+        <div id="volume-rail">
           <div id="volume-track"><div id="volume-fill"></div></div>
           <span id="volume-value">0</span>
         </div>
@@ -50,8 +51,8 @@
         <div id="bottom-left">
           <div id="preset-chip"><span id="preset-name">Theremin</span><span id="preset-fingers"></span></div>
           <div id="hands-chip">
-            <span class="hand-dot" id="dot-melody" title="Mano de melodia">M</span>
-            <span class="hand-dot" id="dot-expression" title="Mano de expresion">E</span>
+            <span class="hand-dot" id="dot-melody">M</span>
+            <span class="hand-dot" id="dot-expression">E</span>
           </div>
         </div>
 
@@ -61,7 +62,7 @@
         </div>
 
         <div id="loop-lanes"></div>
-        <div id="hint">Junta el pulgar y el indice para que suene</div>
+        <div id="hint"></div>
 
         <section id="coach" hidden aria-live="polite">
           <div id="coach-dots"></div>
@@ -69,8 +70,8 @@
           <span id="coach-optional" hidden>opcional</span>
           <p id="coach-body"></p>
           <div id="coach-actions">
-            <button id="coach-skip-step" type="button">Saltar este paso</button>
-            <button id="coach-skip-all" type="button">Ya se tocar</button>
+            <button id="coach-skip-step" type="button"></button>
+            <button id="coach-skip-all" type="button"></button>
           </div>
         </section>
 
@@ -79,63 +80,29 @@
       </div>
 
       <div id="actions" class="hidden">
-        <button id="loop-button" class="action" title="Grabar una capa de bucle (espacio)">
-          <span class="dot"></span><span class="label">Bucle</span>
+        <button id="loop-button" class="action">
+          <span class="dot"></span><span class="label"></span>
         </button>
-        <button id="clip-button" class="action primary" title="Grabar un clip para compartir (C)">
-          <span class="dot"></span><span class="label">Grabar clip</span>
+        <button id="clip-button" class="action primary">
+          <span class="dot"></span><span class="label"></span>
         </button>
-        <button id="undo-button" class="action ghost" title="Quitar la ultima capa (Z)" hidden>Deshacer</button>
+        <button id="undo-button" class="action ghost" hidden></button>
       </div>
 
       <div id="toast" hidden></div>
 
-      <button id="help-toggle" class="hidden" aria-label="Ayuda" title="Ayuda">?</button>
-      <button id="settings-toggle" class="hidden" aria-label="Ajustes" aria-expanded="false">Ajustes</button>
+      <button id="help-toggle" class="hidden">?</button>
+      <button id="settings-toggle" class="hidden" aria-expanded="false"></button>
 
-      <section id="help" hidden aria-label="Ayuda">
+      <section id="help" hidden>
         <div id="help-sheet">
           <header>
-            <h2>Como se toca</h2>
-            <button id="help-close" type="button" aria-label="Cerrar ayuda">Cerrar</button>
+            <h2 id="help-title"></h2>
+            <button id="help-close" type="button"></button>
           </header>
-
-          <table class="help-table">
-            <tbody>
-              <tr><th>Cualquiera de las dos manos</th><td>La primera que aparece toca la melodia, sea la izquierda o la derecha. Con una sola mano se toca el instrumento entero.</td></tr>
-              <tr><th>Mano de melodia, a izquierda y derecha</th><td>Elige la nota. Grave a la izquierda, aguda a la derecha.</td></tr>
-              <tr><th>Pulgar contra indice</th><td>La llave. Juntos suena, separados calla.</td></tr>
-              <tr><th>Esa misma mano, arriba y abajo</th><td>Brillo del sonido. Arriba claro, abajo oscuro.</td></tr>
-              <tr><th>Segunda mano, arriba y abajo <em>(opcional)</em></th><td>Volumen. Sin ella se mantiene el ultimo valor y se ajusta en Ajustes; perderla nunca silencia.</td></tr>
-              <tr><th>Dedos extendidos de esa mano (1 a 4) <em>(opcional)</em></th><td>Cambia el timbre. El puno se ignora a proposito. Tambien se cambia en Ajustes.</td></tr>
-            </tbody>
-          </table>
-
-          <h3>Grabar y compartir</h3>
-          <ul class="help-list">
-            <li><b>Bucle</b> graba una capa. La primera marca el compas; las siguientes se superponen. Hasta cuatro.</li>
-            <li><b>Grabar clip</b> guarda un video vertical con sonido, listo para compartir. Maximo 30 segundos.</li>
-            <li>En <b>Ajustes</b> puedes copiar un enlace que lleva tu escala, tu tonica y tu timbre.</li>
-          </ul>
-
-          <h3>Atajos de teclado</h3>
-          <ul class="help-list keys">
-            <li><kbd>Espacio</kbd> grabar o cerrar una capa de bucle</li>
-            <li><kbd>C</kbd> empezar o terminar un clip</li>
-            <li><kbd>Z</kbd> quitar la ultima capa</li>
-            <li><kbd>Esc</kbd> cerrar este panel o los ajustes</li>
-          </ul>
-
-          <h3>Si algo no va</h3>
-          <ul class="help-list">
-            <li><b>No detecta la mano.</b> Necesita luz de frente y la mano entera dentro del encuadre, a medio metro o asi.</li>
-            <li><b>No suena.</b> Comprueba que la pinza se cierra del todo: el circulo entre los dedos se enciende cuando suena.</li>
-            <li><b>Va a tirones.</b> Cierra otras pestanas. Si los fps bajan mucho, la camara se reduce sola.</li>
-            <li><b>No hay camara.</b> El navegador solo la permite en https o en localhost, y hay que dar permiso.</li>
-          </ul>
-
+          <div id="help-body"></div>
           <div class="help-actions">
-            <button id="help-replay" type="button">Repetir la introduccion</button>
+            <button id="help-replay" type="button"></button>
           </div>
         </div>
       </section>
@@ -144,21 +111,10 @@
       <section id="splash">
         <div id="splash-inner">
           <h1>theremano</h1>
-          <p class="tagline">Un instrumento que se toca con las manos en el aire.</p>
-          <!--
-            La lista de gestos que habia aqui se la ha llevado la introduccion
-            guiada. Explicar un gesto por escrito antes de que haya camara es
-            pedirle a alguien que memorice algo que aun no puede probar, y esa
-            lista se salta sin leer. Aqui solo queda lo que hace falta para
-            decidir si pulsar el boton.
-          -->
-          <ul class="howto">
-            <li>Mueve las manos en el aire y suena. Nada que instalar, nada que tocar.</li>
-            <li>Al entrar <b>te guio en cinco pasos</b>, con la camara ya puesta.</li>
-            <li>Graba capas, superponlas y llevate el resultado en video.</li>
-          </ul>
-          <button id="start-button">Empezar</button>
-          <p id="splash-status">Necesita permiso de camara. El audio no sale de tu dispositivo.</p>
+          <p class="tagline" id="splash-tagline"></p>
+          <ul class="howto" id="splash-bullets"></ul>
+          <button id="start-button"></button>
+          <p id="splash-status"></p>
           <p id="splash-error" hidden></p>
         </div>
       </section>

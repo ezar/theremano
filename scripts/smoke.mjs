@@ -50,12 +50,14 @@ const coachStart = await page.evaluate(() => ({
 // camino que el paso de la segunda mano se anuncia como opcional.
 let skips = 0;
 const optionalSteps = [];
+const allSteps = [];
 while (await page.evaluate(() => !document.getElementById('coach')?.hidden)) {
   const step = await page.evaluate(() => ({
     title: document.getElementById('coach-title')?.textContent,
     optional: !document.getElementById('coach-optional')?.hidden,
     skipLabel: document.getElementById('coach-skip-step')?.textContent,
   }));
+  allSteps.push(step);
   if (step.optional) optionalSteps.push({ title: step.title, skipLabel: step.skipLabel });
   await page.click('#coach-skip-step');
   await page.waitForTimeout(120);
@@ -143,34 +145,58 @@ console.log(JSON.stringify({ loops }, null, 2));
 await page.click('#settings-toggle');
 await page.waitForTimeout(400);
 const fields = await page.evaluate(() => document.querySelectorAll('#settings-panel .field').length);
-await page.selectOption('#set-escala', 'blues');
-await page.selectOption('#set-tonica', '2');
+await page.selectOption('#set-scale', 'blues');
+await page.selectOption('#set-tonic', '2');
 await page.waitForTimeout(600);
 const afterScale = await page.evaluate(() => document.getElementById('note-sub')?.textContent);
 const persisted = await page.evaluate(() => localStorage.getItem('theremano.settings.v1'));
 console.log(JSON.stringify({ fields, afterScale, scale: JSON.parse(persisted ?? '{}').scale }, null, 2));
 
 // --- Melodia guiada: elegirla muestra el progreso y fija la escala sugerida.
-await page.selectOption('#set-melodia', 'blues');
+await page.selectOption('#set-melody', 'blues');
 await page.waitForTimeout(700);
 const guide = await page.evaluate(() => ({
   visible: !document.getElementById('guide-chip')?.hidden,
   name: document.getElementById('guide-name')?.textContent,
   progress: document.getElementById('guide-progress')?.textContent,
-  scale: document.getElementById('set-escala')?.value,
+  scale: document.getElementById('set-scale')?.value,
 }));
 console.log(JSON.stringify({ guide }, null, 2));
 
+// --- Idiomas. El navegador de esta prueba esta en ingles, asi que la
+// autodeteccion debe haber elegido ingles sola; despues se comprueban los dos
+// a mano, incluida la notacion de las notas, que cambia con el idioma.
+const autoDetected = await page.evaluate(() => document.documentElement.lang);
+
+await page.selectOption('#set-language', 'en');
+await page.waitForTimeout(500);
+const english = await page.evaluate(() => ({
+  lang: document.documentElement.lang,
+  hint: document.getElementById('hint')?.textContent,
+  settings: document.getElementById('settings-toggle')?.textContent,
+  notes: [...(document.getElementById('set-tonic')?.options ?? [])].map((o) => o.text).slice(0, 3),
+}));
+
+await page.selectOption('#set-language', 'es');
+await page.waitForTimeout(500);
+const spanish = await page.evaluate(() => ({
+  lang: document.documentElement.lang,
+  hint: document.getElementById('hint')?.textContent,
+  settings: document.getElementById('settings-toggle')?.textContent,
+  notes: [...(document.getElementById('set-tonic')?.options ?? [])].map((o) => o.text).slice(0, 3),
+}));
+console.log(JSON.stringify({ autoDetected, english, spanish }, null, 2));
+
 // --- El modo continuo no tiene zonas: la guia debe retirarse sola.
-await page.selectOption('#set-escala', 'continuous');
+await page.selectOption('#set-scale', 'continuous');
 await page.waitForTimeout(700);
 const afterContinuous = await page.evaluate(() => ({
-  melody: document.getElementById('set-melodia')?.value,
+  melody: document.getElementById('set-melody')?.value,
   chipHidden: document.getElementById('guide-chip')?.hidden,
   toast: document.getElementById('toast')?.textContent,
 }));
 console.log(JSON.stringify({ afterContinuous }, null, 2));
-await page.selectOption('#set-escala', 'blues');
+await page.selectOption('#set-scale', 'blues');
 await page.waitForTimeout(400);
 
 // --- Enlace compartible: tiene que reconstruir la configuracion al abrirlo.
@@ -196,7 +222,23 @@ if (!coachStart.visible || coachStart.dots !== 5 || coachStart.current !== 1) {
   console.error('\nFALLO: la introduccion no aparece al llegar por primera vez');
   process.exit(1);
 }
-if (optionalSteps.length !== 1 || !/una mano/.test(optionalSteps[0]?.skipLabel ?? '')) {
+if (autoDetected !== 'en') {
+  console.error('\nFALLO: la autodeteccion no ha seguido al idioma del navegador');
+  process.exit(1);
+}
+if (english.lang !== 'en' || !/Pinch/.test(english.hint ?? '') || english.notes.join() !== 'C,C#,D') {
+  console.error('\nFALLO: el ingles no se aplica del todo (incluida la notacion de notas)');
+  process.exit(1);
+}
+if (spanish.lang !== 'es' || !/índice/.test(spanish.hint ?? '') || spanish.notes.join() !== 'Do,Do#,Re') {
+  console.error('\nFALLO: el espanol no se aplica del todo, o le faltan las tildes');
+  process.exit(1);
+}
+// Sin buscar un texto concreto: la aplicacion puede estar en cualquiera de los
+// dos idiomas. Lo que importa es que haya exactamente un paso opcional y que su
+// boton diga algo distinto que el de los demas.
+const plainLabels = new Set(allSteps.filter((s) => !s.optional).map((s) => s.skipLabel));
+if (optionalSteps.length !== 1 || plainLabels.has(optionalSteps[0]?.skipLabel)) {
   console.error('\nFALLO: el paso de la segunda mano no se anuncia como opcional');
   process.exit(1);
 }
@@ -237,5 +279,6 @@ if (!state.splashHidden || !state.hudVisible) {
   process.exit(1);
 }
 console.log(
-  `\nOK: arranque, modelo, audio, introduccion de ${coachStart.dots} pasos, ayuda, bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB y enlace compartible.`,
+  `\nOK: arranque, modelo, audio, introduccion de ${coachStart.dots} pasos, ayuda, espanol e ingles, ` +
+    `bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB y enlace compartible.`,
 );

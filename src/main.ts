@@ -6,6 +6,8 @@ import { getPreset } from './audio/presets';
 import { ClipRecorder, clipRecordingSupported, deliverClip } from './capture/recorder';
 import { GuideSession, getMelody } from './mapping/melodies';
 import { decodeSettings, hasShareableKeys, shareUrl } from './state/share';
+import { i18n, t } from './i18n';
+import { applyStaticStrings } from './ui/static';
 import { Camera, HIGH_RES, LOW_RES, attachStream, type CameraInfo } from './camera/stream';
 import { LandmarkFilter } from './filter/vectorFilter';
 import { Mapper } from './mapping/mapper';
@@ -92,6 +94,11 @@ class Theremano {
     if (hasShareableKeys(fromLink)) this.store.set(fromLink);
 
     const settings = this.store.get();
+    // Antes que nada: el idioma decide el texto de todo lo que se construye a
+    // continuacion, incluido el HTML estatico de la pantalla inicial.
+    i18n.init(settings.locale);
+    applyStaticStrings();
+
     this.mapper = new Mapper(settings);
     this.overlay = new Overlay(must<HTMLCanvasElement>('overlay'));
     this.overlayFilters = {
@@ -107,11 +114,20 @@ class Theremano {
       onRequestClose: () => undefined,
       onShareLink: () => void this.copyShareLink(),
       onMelodyChange: (id) => this.store.set({ melodyId: id }),
+      // Solo escribe en el store: aplicar el idioma es cosa del suscriptor de
+      // ajustes, para que Restablecer, que tambien lo cambia, pase por el mismo
+      // camino en lugar de dejar la pantalla en un idioma y el selector en otro.
+      onLocaleChange: (preference) => this.store.set({ locale: preference }),
+      localePreference: () => this.store.get().locale,
+    });
+    i18n.subscribe(() => {
+      applyStaticStrings();
+      this.hud.setSubtitle(this.store.get());
     });
 
     this.coach = new CoachView({
       onSkipStep: () => this.advanceCoach(this.onboarding.skipStep()),
-      onSkipAll: () => this.finishOnboarding('Puedes repetirla cuando quieras desde la ayuda.'),
+      onSkipAll: () => this.finishOnboarding(t().toast.onboardingSkipped),
     });
     this.help = new Help({ onReplay: () => this.startOnboarding() });
 
@@ -135,7 +151,7 @@ class Theremano {
     must('clip-button').addEventListener('click', () => void this.toggleClip());
     must('undo-button').addEventListener('click', () => {
       this.looper.undo();
-      this.hud.toast('Capa eliminada');
+      this.hud.toast(t().toast.layerRemoved);
     });
     this.hud.onLaneClick((id) => {
       const track = this.looper.state.tracks.find((t) => t.id === id);
@@ -170,16 +186,16 @@ class Theremano {
     const hadCycle = this.looper.state.cycleSeconds > 0;
     switch (this.looper.toggle(this.store.get().preset)) {
       case 'rejected':
-        this.hud.toast('No caben mas capas. Quita alguna con Deshacer.');
+        this.hud.toast(t().toast.layersFull);
         return;
       case 'started':
-        this.hud.toast(hadCycle ? 'Grabando capa sobre el bucle' : 'Grabando. Lo que toques ahora marca el compas.');
+        this.hud.toast(hadCycle ? t().toast.layerRecording : t().toast.layerRecordingFirst);
         return;
       case 'saved':
-        this.hud.toast(`Capa ${this.looper.state.tracks.length} anadida`);
+        this.hud.toast(t().toast.layerSaved(this.looper.state.tracks.length));
         return;
       case 'discarded':
-        this.hud.toast('No has tocado nada, asi que no hay capa');
+        this.hud.toast(t().toast.layerDiscarded);
         return;
     }
   }
@@ -192,15 +208,15 @@ class Theremano {
       return;
     }
     if (!clipRecordingSupported()) {
-      this.hud.toast('Este navegador no permite grabar video');
+      this.hud.toast(t().toast.clipUnsupported);
       return;
     }
     const audio = this.engine.captureStream();
     if (!this.clip.start(audio, this.store.get().clipAspect)) {
-      this.hud.toast('No se ha podido empezar a grabar');
+      this.hud.toast(t().toast.clipFailed);
       return;
     }
-    this.hud.toast('Grabando clip. Pulsa otra vez para terminar.');
+    this.hud.toast(t().toast.clipRecording);
   }
 
   private async finishClip(): Promise<void> {
@@ -209,16 +225,16 @@ class Theremano {
       const result = await this.clip.stop();
       this.hud.setClipRecording(false, 0, CLIP_MAX_SECONDS);
       if (!result || result.seconds < 0.6) {
-        this.hud.toast('El clip era demasiado corto');
+        this.hud.toast(t().toast.clipTooShort);
         return;
       }
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
       const delivery = await deliverClip(result, `theremano-${stamp}`);
       const messages: Record<typeof delivery, string> = {
-        shared: 'Compartido',
-        downloaded: 'Clip descargado',
-        cancelled: 'Compartir cancelado',
-        failed: 'No se ha podido guardar el clip',
+        shared: t().toast.clipShared,
+        downloaded: t().toast.clipDownloaded,
+        cancelled: t().toast.clipCancelled,
+        failed: t().toast.clipSaveFailed,
       };
       this.hud.toast(messages[delivery]);
     } finally {
@@ -243,15 +259,15 @@ class Theremano {
       this.store.set({ scale: melody.suggestedScale });
     }
     this.guide = new GuideSession(melody, this.mapper.currentLayout);
-    if (runtime.running) this.hud.toast(`${melody.name}. ${melody.hint}`, 4200);
+    const copy = t().melodies[melody.id];
+    if (runtime.running && copy) this.hud.toast(t().toast.guideStart(copy.name, copy.hint), 4200);
   }
 
   private scoreGuide(zoneIndex: number): void {
     const guide = this.guide;
     if (!guide || guide.finished || zoneIndex < 0) return;
     if (guide.onAttack(zoneIndex) !== 'finished') return;
-    const accuracy = Math.round(guide.accuracy * 100);
-    this.hud.toast(`Melodia completada con un ${accuracy}% de acierto. Graba un clip y ensenalo.`, 5200);
+    this.hud.toast(t().toast.guideFinished(Math.round(guide.accuracy * 100)), 5200);
   }
 
   private startOnboarding(): void {
@@ -263,7 +279,7 @@ class Theremano {
   private advanceCoach(event: 'advanced' | 'finished' | null): void {
     if (event === null) return;
     this.coach.render(this.onboarding.step, this.onboarding.index, this.onboarding.total);
-    if (event === 'finished') this.finishOnboarding('Ya sabes tocar. Prueba a grabar una capa con el boton Bucle.');
+    if (event === 'finished') this.finishOnboarding(t().toast.onboardingDone);
   }
 
   private finishOnboarding(message: string): void {
@@ -279,12 +295,12 @@ class Theremano {
     const url = shareUrl(this.store.get());
     try {
       await navigator.clipboard.writeText(url);
-      this.hud.toast('Enlace copiado');
+      this.hud.toast(t().toast.linkCopied);
     } catch {
       // Sin permiso de portapapeles, al menos que quede en la barra de
       // direcciones para poder copiarlo a mano.
       window.location.hash = url.split('#')[1] ?? '';
-      this.hud.toast('Enlace en la barra de direcciones');
+      this.hud.toast(t().toast.linkInAddressBar);
     }
   }
 
@@ -301,20 +317,21 @@ class Theremano {
 
       // Tanto la camara como el contexto de audio exigen un gesto del usuario:
       // este es el unico momento en el que se pueden arrancar los dos.
-      this.setStatus('Pidiendo acceso a la camara...');
+      this.setStatus(t().loading.camera);
       const state = await this.camera.open({ deviceId: settings.cameraId, ...HIGH_RES });
       this.highRes = true;
       await attachStream(this.video, state.stream);
       this.applyMirror(state.frontFacing);
       this.store.set({ cameraId: state.deviceId });
 
-      this.setStatus('Iniciando audio...');
+      this.setStatus(t().loading.audio);
       await this.engine.start(settings.preset, settings.masterVolume);
 
       this.looper.attach(this.engine.loopOutput);
 
-      await this.landmarker.load((message) => this.setStatus(message));
-      await this.landmarker.warmUp((message) => this.setStatus(message));
+      const loading = t().loading;
+      await this.landmarker.load(loading, (message) => this.setStatus(message));
+      await this.landmarker.warmUp(loading.warmup, (message) => this.setStatus(message));
 
       void this.refreshCameraList();
       void this.requestWakeLock();
@@ -346,15 +363,13 @@ class Theremano {
     const name = error instanceof DOMException ? error.name : '';
     let message: string;
     if (name === 'NotAllowedError' || name === 'SecurityError') {
-      message =
-        'No hay permiso de camara. Concedelo en el candado de la barra de direcciones y vuelve a intentarlo. ' +
-        'Recuerda que el navegador solo permite la camara en https o en localhost.';
+      message = t().errors.permission;
     } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-      message = 'No se ha encontrado ninguna camara disponible en este dispositivo.';
+      message = t().errors.notFound;
     } else if (name === 'NotReadableError') {
-      message = 'La camara esta ocupada por otra aplicacion. Cierrala y vuelve a intentarlo.';
+      message = t().errors.busy;
     } else {
-      message = `No se ha podido arrancar: ${error instanceof Error ? error.message : String(error)}`;
+      message = t().errors.generic(error instanceof Error ? error.message : String(error));
     }
     this.splashError.textContent = message;
     this.splashError.hidden = false;
@@ -433,7 +448,6 @@ class Theremano {
     if (output.preset) this.store.set({ preset: output.preset.id });
 
     runtime.gateOpen = output.gateOpen;
-    runtime.noteName = output.noteName;
     runtime.freq = output.freq;
     runtime.pitchX = output.pitchX;
     runtime.pitchXRaw = output.pitchXRaw;
@@ -463,7 +477,6 @@ class Theremano {
       layout: this.mapper.currentLayout,
       pitchX: output.pitchX,
       midi: output.midi,
-      noteName: output.noteName,
       gateOpen: output.gateOpen,
       volume: output.volume,
       loops,
@@ -519,7 +532,7 @@ class Theremano {
     this.hud.setGuide(
       this.guide
         ? {
-            name: this.guide.melody.name,
+            name: t().melodies[this.guide.melody.id]?.name ?? this.guide.melody.id,
             done: this.guide.done,
             total: this.guide.total,
             finished: this.guide.finished,
@@ -583,9 +596,12 @@ class Theremano {
 
     this.lowFpsSince = null;
     this.highRes = false;
-    runtime.notice = 'Rendimiento bajo: se reduce la camara a 640x480';
+    // Se compara el mensaje exacto, no su comienzo: buscar un prefijo en
+    // espanol dejaba el aviso ingles clavado en pantalla para siempre.
+    const notice = t().hud.lowPerformance;
+    runtime.notice = notice;
     window.setTimeout(() => {
-      if (runtime.notice?.startsWith('Rendimiento bajo')) runtime.notice = null;
+      if (runtime.notice === notice) runtime.notice = null;
     }, 5000);
     void this.reopenCamera();
   }
@@ -608,9 +624,10 @@ class Theremano {
       void this.refreshCameraList();
     } catch (error) {
       console.error('[theremano] no se pudo reabrir la camara', error);
-      runtime.notice = 'No se ha podido cambiar de camara';
+      const notice = t().hud.cameraSwitchFailed;
+      runtime.notice = notice;
       window.setTimeout(() => {
-        runtime.notice = null;
+        if (runtime.notice === notice) runtime.notice = null;
       }, 4000);
     }
   }
@@ -652,6 +669,7 @@ class Theremano {
       this.mapper.syncSettings(settings);
       this.hud.setSubtitle(settings);
     }
+    if (changed.has('locale')) i18n.set(settings.locale);
     if (changed.has('melodyId')) this.syncGuide(settings.melodyId, { applySuggestedScale: true });
 
     // El modo continuo no reparte el encuadre en zonas, asi que una guia activa
@@ -662,7 +680,7 @@ class Theremano {
     // cambios que pudieran venir en el mismo lote.
     if (changed.has('scale') && settings.scale === 'continuous' && settings.melodyId) {
       this.store.set({ melodyId: '' });
-      this.hud.toast('La guia necesita una escala cuantizada, asi que se ha desactivado');
+      this.hud.toast(t().toast.guideNeedsScale);
     }
 
     // Cambiar de escala o de rango mueve las zonas bajo los pies de la guia.

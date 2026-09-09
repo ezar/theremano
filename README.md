@@ -15,7 +15,8 @@ no al revés.
 
 ## Qué hace
 
-Se toca en el aire, se graba por capas y se sale de ahí con un vídeo.
+Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
+**español e inglés**, y sigue al idioma del navegador salvo que se elija otro.
 
 - **Instrumento** — una voz monofónica controlada con las dos manos, con
   cuantización a escala para que suene bien desde el primer minuto.
@@ -63,6 +64,25 @@ ausente, y el volumen se queda donde estaba en lugar de caer a cero.
 
 Con teclado: **espacio** graba una capa de bucle, **C** graba un clip, **Z**
 quita la última capa, **H** abre la ayuda.
+
+---
+
+## Sobre los idiomas
+
+Todo el texto visible vive en `src/i18n/`, fuera de los módulos que hacen el
+trabajo. El tipo `Strings` obliga a que los dos idiomas tengan exactamente las
+mismas claves: una traducción a medias no compila.
+
+La notación de las notas forma parte de la traducción. El mundo hispanohablante
+lee Do Re Mi y el anglosajón C D E, y ver la notación equivocada convierte la
+rejilla en ruido para quien sabe algo de música.
+
+El panel de ayuda se construye desde el diccionario en lugar de estar escrito en
+el HTML. Dos idiomas escritos a mano en el documento se desincronizan a la
+primera corrección que se hace solo en uno.
+
+El identificador de cada control sale de una clave fija y no de su etiqueta: si
+dependiera del rótulo, cambiar de idioma renombraría todos los controles.
 
 ---
 
@@ -219,6 +239,7 @@ src/
     hud.ts                nota, volumen, latencia, fps
     controls.ts           panel de ajustes
   state/store.ts          estado observable, sin dependencias
+  i18n/                   todo el texto visible, en español e inglés
 ```
 
 Por fotograma: la cámara entrega una imagen, el landmarker devuelve de cero a dos
@@ -295,6 +316,8 @@ Los que se pueden comprobar de forma automática están en `tests/`:
   descarta en lugar de dejar una capa fantasma.
 - **Un enlace manipulado no impide arrancar**: se aplica lo que se reconoce y se
   descarta el resto, y un fragmento sin tónica no inventa una.
+- **Ningún idioma tiene cadenas vacías**, los dos cubren todas las escalas,
+  timbres, melodías y pasos, y el español conserva sus tildes y sus eñes.
 - **Solo el paso de la segunda mano está marcado como opcional**, y la marca vive
   en el dato para que la tarjeta pueda anunciarla antes de que nadie lo intente.
 - **Ningún paso de la introducción se cierra solo**: cada uno se prueba con la

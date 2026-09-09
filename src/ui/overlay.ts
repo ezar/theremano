@@ -1,6 +1,7 @@
 import { HAND_BONES, point, type Finger, type Landmark, type RoleAssignment } from '../tracking/types';
 import { denormalize, palmCenter } from '../mapping/features';
 import { midiToName, zoneCenters, type PitchLayout } from '../mapping/scales';
+import { t } from '../i18n';
 import type { LoopState } from '../audio/looper';
 import { Visualizer } from './visualizer';
 import { coverRect, pitchHue, type RenderTarget } from './target';
@@ -30,7 +31,6 @@ export interface OverlayFrame {
   layout: PitchLayout;
   pitchX: number;
   midi: number;
-  noteName: string;
   gateOpen: boolean;
   volume: number;
   loops: LoopState;
@@ -114,12 +114,12 @@ export class Overlay {
 
     if (expression) {
       this.drawHand(target, rect, expression.hand.landmarks, expression.held, 0.5);
-      this.drawRoleTag(target, rect, expression.hand.landmarks, 'expresion', expression.held);
+      this.drawRoleTag(target, rect, expression.hand.landmarks, t().overlay.expressionTag, expression.held);
     }
     if (melody) {
       if (frame.showRawTrace) this.drawRawTrace(target, rect, melody.hand.raw);
       this.drawHand(target, rect, melody.hand.landmarks, melody.held, 1, frame.gateOpen);
-      this.drawRoleTag(target, rect, melody.hand.landmarks, 'melodia', melody.held);
+      this.drawRoleTag(target, rect, melody.hand.landmarks, t().overlay.melodyTag, melody.held);
       this.drawPinch(target, rect, melody.hand.landmarks, frame);
     }
 
@@ -239,7 +239,7 @@ export class Overlay {
       if (isTonic || isActive || isTarget) {
         const labelX = Math.min(Math.max(x, labelPad), target.width - labelPad);
         ctx.fillStyle = isActive ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.38)';
-        ctx.fillText(midiToName(frame.layout.baseMidi + semitone), labelX, labelY);
+        ctx.fillText(midiToName(frame.layout.baseMidi + semitone, t().notes), labelX, labelY);
       }
     }
     ctx.restore();
@@ -345,7 +345,7 @@ export class Overlay {
     ctx.font = `${10 * target.unit}px ui-monospace, monospace`;
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.fillText(label.toUpperCase(), palm.x, palm.y - 14 * target.unit);
+    ctx.fillText(label, palm.x, palm.y - 14 * target.unit);
     ctx.restore();
   }
 
@@ -407,7 +407,7 @@ export class Overlay {
     ctx.shadowBlur = 18 * target.unit;
     ctx.shadowColor = 'rgba(0,0,0,0.8)';
     ctx.fillStyle = frame.gateOpen ? `hsla(${pitchHue(frame.midi)}, 95%, 72%, 1)` : 'rgba(255,255,255,0.55)';
-    ctx.fillText(frame.noteName, 26 * target.unit, 26 * target.unit);
+    ctx.fillText(midiToName(frame.midi, t().notes), 26 * target.unit, 26 * target.unit);
     ctx.restore();
   }
 

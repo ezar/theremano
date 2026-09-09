@@ -28,11 +28,11 @@ export class Landmarker {
     return this.delegateUsed;
   }
 
-  async load(onProgress?: (message: string) => void): Promise<void> {
-    onProgress?.('Cargando motor de vision...');
+  async load(labels: { vision: string; model: string }, onProgress?: (message: string) => void): Promise<void> {
+    onProgress?.(labels.vision);
     const fileset = await FilesetResolver.forVisionTasks(WASM_PATH);
 
-    onProgress?.('Cargando modelo de manos...');
+    onProgress?.(labels.model);
     const options = {
       baseOptions: { modelAssetPath: MODEL_PATH, delegate: 'GPU' as const },
       runningMode: 'VIDEO' as const,
@@ -61,9 +61,9 @@ export class Landmarker {
    * magnitud mas que las siguientes. Hacerla contra un lienzo en blanco durante
    * la pantalla de carga evita que el primer gesto real llegue tarde.
    */
-  async warmUp(onProgress?: (message: string) => void): Promise<void> {
+  async warmUp(label: string, onProgress?: (message: string) => void): Promise<void> {
     if (!this.landmarker) return;
-    onProgress?.('Calentando la inferencia...');
+    onProgress?.(label);
     const canvas = document.createElement('canvas');
     canvas.width = 64;
     canvas.height = 64;

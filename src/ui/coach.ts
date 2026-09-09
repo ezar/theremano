@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { OnboardingStep } from './onboarding';
 
 /**
@@ -39,18 +40,21 @@ export class CoachView {
       return;
     }
 
-    const signature = `${step.id}|${index}/${total}`;
+    const strings = t();
+    const copy = strings.coach.steps[step.id];
+    const signature = `${strings.htmlLang}|${step.id}|${index}/${total}`;
     if (signature === this.rendered) return;
     this.rendered = signature;
 
     this.root.hidden = false;
-    this.title.textContent = step.title;
-    this.body.textContent = step.body;
+    this.title.textContent = copy?.title ?? step.id;
+    this.body.textContent = copy?.body ?? '';
+    this.badge.textContent = strings.coach.optional;
 
     // En un paso opcional el boton deja de sonar a rendirse: no se esta saltando
     // nada, se esta eligiendo tocar con una mano.
     this.badge.hidden = !step.optional;
-    this.skipStep.textContent = step.optional ? 'Sigo con una mano' : 'Saltar este paso';
+    this.skipStep.textContent = step.optional ? strings.coach.skipStepOptional : strings.coach.skipStep;
 
     if (this.dotCount !== total) {
       this.dotCount = total;

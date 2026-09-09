@@ -1,0 +1,227 @@
+import type { Strings } from './strings';
+
+/** Español. Con las tildes y las eñes que le faltaban. */
+export const es: Strings = {
+  htmlLang: 'es',
+  notes: ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'],
+
+  splash: {
+    tagline: 'Un instrumento que se toca con las manos en el aire.',
+    bullets: [
+      'Mueve las manos en el aire y suena. Nada que instalar, nada que tocar.',
+      'Al entrar te guío en cinco pasos, con la cámara ya puesta.',
+      'Graba capas, superponlas y llévate el resultado en vídeo.',
+    ],
+    start: 'Empezar',
+    starting: 'Preparando...',
+    permissionNote: 'Necesita permiso de cámara. El audio no sale de tu dispositivo.',
+  },
+  loading: {
+    camera: 'Pidiendo acceso a la cámara...',
+    audio: 'Iniciando el audio...',
+    vision: 'Cargando el motor de visión...',
+    model: 'Cargando el modelo de manos...',
+    warmup: 'Calentando la inferencia...',
+  },
+  errors: {
+    permission:
+      'No hay permiso de cámara. Concédelo en el candado de la barra de direcciones y vuelve a intentarlo. ' +
+      'Recuerda que el navegador solo permite la cámara en https o en localhost.',
+    notFound: 'No se ha encontrado ninguna cámara disponible en este dispositivo.',
+    busy: 'La cámara está ocupada por otra aplicación. Ciérrala y vuelve a intentarlo.',
+    generic: (detail) => `No se ha podido arrancar: ${detail}`,
+  },
+
+  hud: {
+    hint: 'Junta el pulgar y el índice para que suene',
+    melodyDot: 'Mano de melodía',
+    expressionDot: 'Mano de expresión',
+    volume: 'Volumen (mano de expresión)',
+    guideDone: 'completada',
+    lowPerformance: 'Rendimiento bajo: se reduce la cámara a 640x480',
+    cameraSwitchFailed: 'No se ha podido cambiar de cámara',
+    layer: (index) => `Capa ${index}`,
+    layerMuted: 'Capa silenciada. Pulsa para activarla.',
+    layerActive: 'Pulsa para silenciar esta capa.',
+  },
+
+  actions: {
+    loop: 'Bucle',
+    loopStop: 'Parar',
+    loopFull: 'Capas llenas',
+    loopTitle: 'Grabar una capa de bucle (espacio)',
+    clip: 'Grabar clip',
+    clipTitle: 'Grabar un clip para compartir (C)',
+    undo: 'Deshacer',
+    undoTitle: 'Quitar la última capa (Z)',
+    settings: 'Ajustes',
+    close: 'Cerrar',
+    helpTitle: 'Ayuda',
+  },
+
+  coach: {
+    optional: 'opcional',
+    skipStep: 'Saltar este paso',
+    skipStepOptional: 'Sigo con una mano',
+    skipAll: 'Ya sé tocar',
+    steps: {
+      hand: {
+        title: 'Enseña una mano',
+        body: 'La que prefieras: da igual cuál, y con una basta para tocar.',
+      },
+      move: {
+        title: 'Muévela a izquierda y derecha',
+        body: 'Ahí está la nota: grave a la izquierda, aguda a la derecha.',
+      },
+      pinch: {
+        title: 'Junta el pulgar y el índice',
+        body: 'Esa pinza es la llave: mientras estén juntos, suena.',
+      },
+      play: {
+        title: 'Sin soltar la pinza, muévete',
+        body: 'Eso ya es tocar. Suelta los dedos para callar.',
+      },
+      volume: {
+        title: 'Si te queda una mano libre, levántala',
+        body:
+          'La segunda mano sube y baja el volumen, y el número de dedos elige el timbre. ' +
+          'Todo lo demás funciona con una sola mano: si prefieres seguir así, el volumen y el timbre están en Ajustes.',
+      },
+    },
+  },
+
+  help: {
+    title: 'Cómo se toca',
+    close: 'Cerrar',
+    gestures: [
+      {
+        what: 'Cualquiera de las dos manos',
+        does: 'La primera que aparece toca la melodía, sea la izquierda o la derecha. Con una sola mano se toca el instrumento entero.',
+      },
+      { what: 'Mano de melodía, a izquierda y derecha', does: 'Elige la nota. Grave a la izquierda, aguda a la derecha.' },
+      { what: 'Pulgar contra índice', does: 'La llave. Juntos suena, separados calla.' },
+      { what: 'Esa misma mano, arriba y abajo', does: 'Brillo del sonido. Arriba claro, abajo oscuro.' },
+      {
+        what: 'Segunda mano, arriba y abajo',
+        does: 'Volumen. Sin ella se mantiene el último valor y se ajusta en Ajustes; perderla nunca silencia.',
+        optional: true,
+      },
+      {
+        what: 'Dedos extendidos de esa mano (1 a 4)',
+        does: 'Cambia el timbre. El puño se ignora a propósito. También se cambia en Ajustes.',
+        optional: true,
+      },
+    ],
+    recordTitle: 'Grabar y compartir',
+    record: [
+      'Bucle graba una capa. La primera marca el compás; las siguientes se superponen. Hasta cuatro.',
+      'Grabar clip guarda un vídeo vertical con sonido, listo para compartir. Máximo 30 segundos.',
+      'En Ajustes puedes copiar un enlace que lleva tu escala, tu tónica y tu timbre.',
+    ],
+    keysTitle: 'Atajos de teclado',
+    keys: [
+      { key: 'Espacio', does: 'grabar o cerrar una capa de bucle' },
+      { key: 'C', does: 'empezar o terminar un clip' },
+      { key: 'Z', does: 'quitar la última capa' },
+      { key: 'H', does: 'abrir o cerrar esta ayuda' },
+      { key: 'Esc', does: 'cerrar este panel o los ajustes' },
+    ],
+    troubleTitle: 'Si algo no va',
+    trouble: [
+      'No detecta la mano. Necesita luz de frente y la mano entera dentro del encuadre, a medio metro o así.',
+      'No suena. Comprueba que la pinza se cierra del todo: el círculo entre los dedos se enciende cuando suena.',
+      'Va a tirones. Cierra otras pestañas. Si los fps bajan mucho, la cámara se reduce sola.',
+      'No hay cámara. El navegador solo la permite en https o en localhost, y hay que dar permiso.',
+    ],
+    replay: 'Repetir la introducción',
+  },
+
+  settings: {
+    language: 'Idioma',
+    languageAuto: 'Automático',
+    shareSection: 'Compartir',
+    copyLink: 'Copiar enlace con esta configuración',
+    clipFormat: 'Formato del clip',
+    clipVertical: 'Vertical 9:16',
+    clipLandscape: 'Apaisado 16:9',
+    clipHint: 'Vertical es lo que piden las aplicaciones donde estos vídeos se ven.',
+    instrumentSection: 'Instrumento',
+    scale: 'Escala',
+    tonic: 'Tónica',
+    baseOctave: 'Octava más grave',
+    range: 'Rango',
+    rangeUnit: (value) => `${value} oct`,
+    preset: 'Timbre',
+    baseVolume: 'Volumen base',
+    baseVolumeHint: 'La mano de expresión manda sobre este valor mientras está a la vista.',
+    guideSection: 'Melodía guiada',
+    melody: 'Melodía',
+    melodyNone: 'Ninguna (tocar libre)',
+    melodyHint: 'Sin presión de tiempo: se sigue el orden de las notas, no el compás.',
+    cameraSection: 'Cámara',
+    device: 'Dispositivo',
+    defaultCamera: 'Cámara por defecto',
+    mirror: 'Espejo horizontal',
+    smoothingSection: 'Suavizado',
+    smoothingHint:
+      'minCutoff baja el temblor en reposo. beta devuelve respuesta al movimiento rápido. Se afina escuchando, no mirando.',
+    pitchCutoff: 'Tono · minCutoff',
+    pitchBeta: 'Tono · beta',
+    controlCutoff: 'Control · minCutoff',
+    controlBeta: 'Control · beta',
+    overlayCutoff: 'Overlay · minCutoff',
+    overlayBeta: 'Overlay · beta',
+    hudSection: 'HUD',
+    showDiagnostics: 'Mostrar fps y latencia',
+    showRawTrace: 'Superponer puntos sin filtrar',
+    reset: 'Restablecer',
+  },
+
+  toast: {
+    layerRecording: 'Grabando capa sobre el bucle',
+    layerRecordingFirst: 'Grabando. Lo que toques ahora marca el compás.',
+    layerSaved: (count) => `Capa ${count} añadida`,
+    layerDiscarded: 'No has tocado nada, así que no hay capa',
+    layerRemoved: 'Capa eliminada',
+    layersFull: 'No caben más capas. Quita alguna con Deshacer.',
+    clipRecording: 'Grabando clip. Pulsa otra vez para terminar.',
+    clipUnsupported: 'Este navegador no permite grabar vídeo',
+    clipFailed: 'No se ha podido empezar a grabar',
+    clipTooShort: 'El clip era demasiado corto',
+    clipShared: 'Compartido',
+    clipDownloaded: 'Clip descargado',
+    clipCancelled: 'Compartir cancelado',
+    clipSaveFailed: 'No se ha podido guardar el clip',
+    linkCopied: 'Enlace copiado',
+    linkInAddressBar: 'Enlace en la barra de direcciones',
+    guideStart: (name, hint) => `${name}. ${hint}`,
+    guideFinished: (accuracy) => `Melodía completada con un ${accuracy}% de acierto. Graba un clip y enséñalo.`,
+    guideNeedsScale: 'La guía necesita una escala cuantizada, así que se ha desactivado',
+    onboardingDone: 'Ya sabes tocar. Prueba a grabar una capa con el botón Bucle.',
+    onboardingSkipped: 'Puedes repetirla cuando quieras desde la ayuda.',
+  },
+
+  overlay: { melodyTag: 'MELODÍA', expressionTag: 'EXPRESIÓN' },
+
+  scales: {
+    pentatonic: 'Pentatónica menor',
+    blues: 'Blues',
+    minor: 'Menor natural',
+    major: 'Mayor',
+    chromatic: 'Cromática',
+    continuous: 'Continua (sin cuantizar)',
+  },
+  presets: {
+    theremin: 'Theremín',
+    strings: 'Cuerdas',
+    flute: 'Flauta',
+    bass: 'Bajo ácido',
+  },
+  melodies: {
+    ascenso: { name: 'Subida', hint: 'De izquierda a derecha, sin prisa.' },
+    'ida-vuelta': { name: 'Ida y vuelta', hint: 'Sube y baja por el mismo camino.' },
+    llamada: { name: 'Llamada y respuesta', hint: 'Vuelve a la tónica entre cada salto.' },
+    blues: { name: 'Vuelta de blues', hint: 'La nota de paso es la que le da el color.' },
+    octavas: { name: 'Saltos de octava', hint: 'Cruza el encuadre entero de una vez.' },
+  },
+};

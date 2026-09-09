@@ -1,6 +1,7 @@
 import { PRESETS, type PresetId } from '../audio/presets';
 import { MELODIES } from '../mapping/melodies';
-import { NOTE_NAMES, SCALES, type ScaleId } from '../mapping/scales';
+import { SCALES, type ScaleId } from '../mapping/scales';
+import { i18n, t } from '../i18n';
 import type { Settings, SettingsStore } from '../state/store';
 import type { CameraInfo } from '../camera/stream';
 import type { ClipAspect } from '../capture/recorder';
@@ -20,6 +21,8 @@ interface ControlsDeps {
   onRequestClose: () => void;
   onShareLink: () => void;
   onMelodyChange: (id: string) => void;
+  onLocaleChange: (preference: string) => void;
+  localePreference: () => string;
 }
 
 type Binder = (settings: Readonly<Settings>) => void;
@@ -29,6 +32,13 @@ export class Controls {
   private readonly toggle: HTMLButtonElement;
   private readonly binders: Binder[] = [];
   private cameraSelect: HTMLSelectElement | null = null;
+  /**
+   * La lista de camaras la trae la aplicacion una sola vez, al arrancar. Sin
+   * recordarla aqui, reconstruir el panel al cambiar de idioma dejaba el
+   * selector de dispositivo vacio hasta la siguiente recarga.
+   */
+  private cameras: readonly CameraInfo[] = [];
+  private activeCameraId: string | null = null;
   private open = false;
 
   constructor(private readonly deps: ControlsDeps) {
@@ -47,6 +57,17 @@ export class Controls {
     this.deps.store.subscribe((settings) => {
       for (const bind of this.binders) bind(settings);
     });
+    // Cambiar de idioma reconstruye el panel entero. Es un puñado de nodos y
+    // ocurre una vez cada muchos minutos: no compensa mantener una referencia
+    // por etiqueta solo para reescribir su texto.
+    i18n.subscribe(() => {
+      this.binders.length = 0;
+      this.build();
+      this.setCameras(this.cameras, this.activeCameraId);
+      this.refresh();
+      this.toggle.textContent = this.open ? t().actions.close : t().actions.settings;
+      this.toggle.setAttribute('aria-label', t().actions.settings);
+    });
     this.refresh();
   }
 
@@ -58,16 +79,18 @@ export class Controls {
     this.open = open;
     this.panel.hidden = !open;
     this.toggle.setAttribute('aria-expanded', String(open));
-    this.toggle.textContent = open ? 'Cerrar' : 'Ajustes';
+    this.toggle.textContent = open ? t().actions.close : t().actions.settings;
     if (open) this.refresh();
   }
 
   setCameras(cameras: readonly CameraInfo[], activeId: string | null): void {
+    this.cameras = cameras;
+    this.activeCameraId = activeId;
     const select = this.cameraSelect;
     if (!select) return;
     select.replaceChildren();
     if (cameras.length === 0) {
-      select.append(new Option('Camara por defecto', ''));
+      select.append(new Option(t().settings.defaultCamera, ''));
       select.disabled = true;
       return;
     }
@@ -82,111 +105,128 @@ export class Controls {
   }
 
   private build(): void {
+    const s = t().settings;
     this.panel.replaceChildren();
 
-    this.section('Compartir');
+    this.select(
+      'language',
+      s.language,
+      [
+        { value: 'auto', label: s.languageAuto },
+        { value: 'es', label: 'Español' },
+        { value: 'en', label: 'English' },
+      ],
+      () => this.deps.localePreference(),
+      (value) => this.deps.onLocaleChange(value),
+    );
+
+    this.section(s.shareSection);
     const share = document.createElement('div');
     share.className = 'share-row';
     const copy = document.createElement('button');
     copy.type = 'button';
-    copy.textContent = 'Copiar enlace con esta configuracion';
+    copy.textContent = s.copyLink;
     copy.addEventListener('click', () => this.deps.onShareLink());
     share.append(copy);
     this.panel.append(share);
 
     this.select(
-      'Formato del clip',
+      'clip-format',
+      s.clipFormat,
       [
-        { value: 'vertical', label: 'Vertical 9:16' },
-        { value: 'landscape', label: 'Apaisado 16:9' },
+        { value: 'vertical', label: s.clipVertical },
+        { value: 'landscape', label: s.clipLandscape },
       ],
-      (s) => s.clipAspect,
+      (settings) => settings.clipAspect,
       (value) => this.deps.store.set({ clipAspect: value as ClipAspect }),
     );
-    this.hint('Vertical es lo que piden las aplicaciones donde estos videos se ven.');
+    this.hint(s.clipHint);
 
-    this.section('Instrumento');
+    this.section(s.instrumentSection);
 
     this.select(
-      'Escala',
-      SCALES.map((s) => ({ value: s.id, label: s.name })),
-      (s) => s.scale,
+      'scale',
+      s.scale,
+      SCALES.map((scale) => ({ value: scale.id, label: t().scales[scale.id] })),
+      (settings) => settings.scale,
       (value) => this.deps.store.set({ scale: value as ScaleId }),
     );
 
     const tonicSelect = this.select(
-      'Tonica',
-      NOTE_NAMES.map((name, index) => ({ value: String(index), label: name })),
-      (s) => String(s.tonicPc),
+      'tonic',
+      s.tonic,
+      t().notes.map((name, index) => ({ value: String(index), label: name })),
+      (settings) => String(settings.tonicPc),
       (value) => this.deps.store.set({ tonicPc: Number(value) }),
     );
     // En modo continuo no hay grados que anclar a una tonica.
-    this.binders.push((s) => {
-      tonicSelect.disabled = s.scale === 'continuous';
+    this.binders.push((settings) => {
+      tonicSelect.disabled = settings.scale === 'continuous';
     });
 
-    this.range('Octava mas grave', 1, 5, 1, (s) => s.baseOctave, (v) => this.deps.store.set({ baseOctave: v }), (v) => `${v}`);
-    this.range('Rango', 1, 4, 1, (s) => s.octaves, (v) => this.deps.store.set({ octaves: v }), (v) => `${v} oct`);
+    this.range('base-octave', s.baseOctave, 1, 5, 1, (x) => x.baseOctave, (v) => this.deps.store.set({ baseOctave: v }), (v) => `${v}`);
+    this.range('range', s.range, 1, 4, 1, (x) => x.octaves, (v) => this.deps.store.set({ octaves: v }), (v) => s.rangeUnit(v));
 
     this.select(
-      'Timbre',
-      PRESETS.map((p) => ({ value: p.id, label: `${p.fingers} · ${p.name}` })),
-      (s) => s.preset,
+      'preset',
+      s.preset,
+      PRESETS.map((preset) => ({ value: preset.id, label: `${preset.fingers} · ${t().presets[preset.id]}` })),
+      (settings) => settings.preset,
       (value) => this.deps.store.set({ preset: value as PresetId }),
     );
 
     this.range(
-      'Volumen base',
+      'base-volume',
+      s.baseVolume,
       0,
       1,
       0.01,
-      (s) => s.masterVolume,
+      (x) => x.masterVolume,
       (v) => this.deps.store.set({ masterVolume: v }),
       (v) => `${Math.round(v * 100)}%`,
     );
-    this.hint('La mano de expresion manda sobre este valor mientras esta a la vista.');
+    this.hint(s.baseVolumeHint);
 
-    this.section('Melodia guiada');
+    this.section(s.guideSection);
     this.select(
-      'Melodia',
-      [{ value: '', label: 'Ninguna (tocar libre)' }, ...MELODIES.map((m) => ({ value: m.id, label: m.name }))],
-      (s) => s.melodyId,
+      'melody',
+      s.melody,
+      [{ value: '', label: s.melodyNone }, ...MELODIES.map((m) => ({ value: m.id, label: t().melodies[m.id]?.name ?? m.id }))],
+      (settings) => settings.melodyId,
       (value) => this.deps.onMelodyChange(value),
     );
-    this.hint('Sin presion de tiempo: se sigue el orden de las notas, no el compas.');
+    this.hint(s.melodyHint);
 
-    this.section('Camara');
-    this.cameraSelect = this.select('Dispositivo', [], (s) => s.cameraId ?? '', (value) => {
+    this.section(s.cameraSection);
+    this.cameraSelect = this.select('camera', s.device, [], (x) => x.cameraId ?? '', (value) => {
       this.deps.onCameraChange(value || null);
     });
-    this.checkbox('Espejo horizontal', (s) => s.mirror, (v) => this.deps.store.set({ mirror: v }));
+    this.checkbox('mirror', s.mirror, (x) => x.mirror, (v) => this.deps.store.set({ mirror: v }));
 
-    this.section('Suavizado');
-    this.hint(
-      'minCutoff baja el temblor en reposo. beta devuelve respuesta al movimiento rapido. Se afina escuchando, no mirando.',
-    );
-    this.range('Tono · minCutoff', 0.2, 4, 0.05, (s) => s.pitchMinCutoff, (v) => this.deps.store.set({ pitchMinCutoff: v }), (v) => v.toFixed(2));
-    this.range('Tono · beta', 0, 0.2, 0.005, (s) => s.pitchBeta, (v) => this.deps.store.set({ pitchBeta: v }), (v) => v.toFixed(3));
-    this.range('Control · minCutoff', 0.2, 4, 0.05, (s) => s.controlMinCutoff, (v) => this.deps.store.set({ controlMinCutoff: v }), (v) => v.toFixed(2));
-    this.range('Control · beta', 0, 0.2, 0.005, (s) => s.controlBeta, (v) => this.deps.store.set({ controlBeta: v }), (v) => v.toFixed(3));
-    this.range('Overlay · minCutoff', 0.2, 6, 0.05, (s) => s.overlayMinCutoff, (v) => this.deps.store.set({ overlayMinCutoff: v }), (v) => v.toFixed(2));
-    this.range('Overlay · beta', 0, 0.3, 0.005, (s) => s.overlayBeta, (v) => this.deps.store.set({ overlayBeta: v }), (v) => v.toFixed(3));
+    this.section(s.smoothingSection);
+    this.hint(s.smoothingHint);
+    this.range('pitch-cutoff', s.pitchCutoff, 0.2, 4, 0.05, (x) => x.pitchMinCutoff, (v) => this.deps.store.set({ pitchMinCutoff: v }), (v) => v.toFixed(2));
+    this.range('pitch-beta', s.pitchBeta, 0, 0.2, 0.005, (x) => x.pitchBeta, (v) => this.deps.store.set({ pitchBeta: v }), (v) => v.toFixed(3));
+    this.range('control-cutoff', s.controlCutoff, 0.2, 4, 0.05, (x) => x.controlMinCutoff, (v) => this.deps.store.set({ controlMinCutoff: v }), (v) => v.toFixed(2));
+    this.range('control-beta', s.controlBeta, 0, 0.2, 0.005, (x) => x.controlBeta, (v) => this.deps.store.set({ controlBeta: v }), (v) => v.toFixed(3));
+    this.range('overlay-cutoff', s.overlayCutoff, 0.2, 6, 0.05, (x) => x.overlayMinCutoff, (v) => this.deps.store.set({ overlayMinCutoff: v }), (v) => v.toFixed(2));
+    this.range('overlay-beta', s.overlayBeta, 0, 0.3, 0.005, (x) => x.overlayBeta, (v) => this.deps.store.set({ overlayBeta: v }), (v) => v.toFixed(3));
 
-    this.section('HUD');
-    this.checkbox('Mostrar fps y latencia', (s) => s.showDiagnostics, (v) => this.deps.store.set({ showDiagnostics: v }));
-    this.checkbox('Superponer puntos sin filtrar', (s) => s.showRawTrace, (v) => this.deps.store.set({ showRawTrace: v }));
+    this.section(s.hudSection);
+    this.checkbox('diagnostics', s.showDiagnostics, (x) => x.showDiagnostics, (v) => this.deps.store.set({ showDiagnostics: v }));
+    this.checkbox('raw-trace', s.showRawTrace, (x) => x.showRawTrace, (v) => this.deps.store.set({ showRawTrace: v }));
 
     const actions = document.createElement('div');
     actions.className = 'panel-actions';
 
     const reset = document.createElement('button');
     reset.type = 'button';
-    reset.textContent = 'Restablecer';
+    reset.textContent = s.reset;
     reset.addEventListener('click', () => this.deps.store.reset());
 
     const close = document.createElement('button');
     close.type = 'button';
-    close.textContent = 'Cerrar';
+    close.textContent = t().actions.close;
     close.addEventListener('click', () => {
       this.setOpen(false);
       this.deps.onRequestClose();
@@ -210,6 +250,12 @@ export class Controls {
     this.panel.append(node);
   }
 
+  /**
+   * El identificador sale de una clave fija y no del texto de la etiqueta. Si
+   * dependiera del rotulo, cambiar de idioma renombraria todos los controles y
+   * cualquier referencia externa dejaria de encontrarlos; ademas las tildes lo
+   * convertian en cosas como "set-t-nica".
+   */
   private field(labelText: string): { wrapper: HTMLElement; label: HTMLLabelElement; value: HTMLSpanElement } {
     const wrapper = document.createElement('div');
     wrapper.className = 'field';
@@ -225,6 +271,7 @@ export class Controls {
   }
 
   private select(
+    key: string,
     labelText: string,
     options: ReadonlyArray<{ value: string; label: string }>,
     read: (s: Readonly<Settings>) => string,
@@ -232,7 +279,7 @@ export class Controls {
   ): HTMLSelectElement {
     const { wrapper, label } = this.field(labelText);
     const select = document.createElement('select');
-    const id = `set-${labelText.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+    const id = `set-${key}`;
     select.id = id;
     label.htmlFor = id;
     for (const option of options) select.append(new Option(option.label, option.value));
@@ -246,6 +293,7 @@ export class Controls {
   }
 
   private range(
+    key: string,
     labelText: string,
     min: number,
     max: number,
@@ -260,7 +308,7 @@ export class Controls {
     input.min = String(min);
     input.max = String(max);
     input.step = String(step);
-    const id = `set-${labelText.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+    const id = `set-${key}`;
     input.id = id;
     label.htmlFor = id;
     input.addEventListener('input', () => write(Number(input.value)));
@@ -272,7 +320,7 @@ export class Controls {
     });
   }
 
-  private checkbox(labelText: string, read: (s: Readonly<Settings>) => boolean, write: (value: boolean) => void): void {
+  private checkbox(key: string, labelText: string, read: (s: Readonly<Settings>) => boolean, write: (value: boolean) => void): void {
     const wrapper = document.createElement('div');
     wrapper.className = 'field checkbox';
     const label = document.createElement('label');
@@ -280,7 +328,7 @@ export class Controls {
     text.textContent = labelText;
     const input = document.createElement('input');
     input.type = 'checkbox';
-    const id = `set-${labelText.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+    const id = `set-${key}`;
     input.id = id;
     label.htmlFor = id;
     input.addEventListener('change', () => write(input.checked));
