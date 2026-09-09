@@ -46,13 +46,22 @@ const coachStart = await page.evaluate(() => ({
 }));
 
 // Sin manos delante de la camara ningun paso se cierra solo, que es justo lo
-// que debe pasar. Se recorre entera con el boton de saltar.
+// que debe pasar. Se recorre entera con el boton de saltar, anotando por el
+// camino que el paso de la segunda mano se anuncia como opcional.
 let skips = 0;
+const optionalSteps = [];
 while (await page.evaluate(() => !document.getElementById('coach')?.hidden)) {
+  const step = await page.evaluate(() => ({
+    title: document.getElementById('coach-title')?.textContent,
+    optional: !document.getElementById('coach-optional')?.hidden,
+    skipLabel: document.getElementById('coach-skip-step')?.textContent,
+  }));
+  if (step.optional) optionalSteps.push({ title: step.title, skipLabel: step.skipLabel });
   await page.click('#coach-skip-step');
   await page.waitForTimeout(120);
   if (++skips > 12) break;
 }
+console.log(JSON.stringify({ optionalSteps }, null, 2));
 // El store agrupa las escrituras a localStorage con 250 ms de retardo, asi que
 // leer la bandera justo despues del ultimo salto es una carrera: la prueba
 // fallaria con la aplicacion funcionando bien.
@@ -185,6 +194,10 @@ await browser.close();
 
 if (!coachStart.visible || coachStart.dots !== 5 || coachStart.current !== 1) {
   console.error('\nFALLO: la introduccion no aparece al llegar por primera vez');
+  process.exit(1);
+}
+if (optionalSteps.length !== 1 || !/una mano/.test(optionalSteps[0]?.skipLabel ?? '')) {
+  console.error('\nFALLO: el paso de la segunda mano no se anuncia como opcional');
   process.exit(1);
 }
 if (coachEnd.visible || coachEnd.onboarded !== true) {

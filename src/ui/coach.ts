@@ -17,13 +17,15 @@ function el<T extends HTMLElement>(id: string): T {
 export class CoachView {
   private readonly root = el('coach');
   private readonly title = el('coach-title');
+  private readonly badge = el('coach-optional');
+  private readonly skipStep = el<HTMLButtonElement>('coach-skip-step');
   private readonly body = el('coach-body');
   private readonly dots = el('coach-dots');
   private rendered = '';
   private dotCount = 0;
 
   constructor(deps: { onSkipStep: () => void; onSkipAll: () => void }) {
-    el('coach-skip-step').addEventListener('click', deps.onSkipStep);
+    this.skipStep.addEventListener('click', deps.onSkipStep);
     el('coach-skip-all').addEventListener('click', deps.onSkipAll);
   }
 
@@ -44,6 +46,11 @@ export class CoachView {
     this.root.hidden = false;
     this.title.textContent = step.title;
     this.body.textContent = step.body;
+
+    // En un paso opcional el boton deja de sonar a rendirse: no se esta saltando
+    // nada, se esta eligiendo tocar con una mano.
+    this.badge.hidden = !step.optional;
+    this.skipStep.textContent = step.optional ? 'Sigo con una mano' : 'Saltar este paso';
 
     if (this.dotCount !== total) {
       this.dotCount = total;

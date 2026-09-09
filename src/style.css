@@ -819,3 +819,20 @@ kbd {
   .help-table th { padding-bottom: 2px; border-bottom: none; }
   #coach { bottom: calc(84px + var(--safe-b)); }
 }
+
+/* Distintivo de paso opcional. */
+#coach-optional {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(6, 214, 160, 0.16);
+  border: 1px solid rgba(6, 214, 160, 0.45);
+  color: #06d6a0;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.help-table th em { color: rgba(6, 214, 160, 0.9); font-style: normal; font-weight: 500; }

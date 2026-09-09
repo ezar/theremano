@@ -46,6 +46,13 @@ export interface OnboardingStep {
   id: string;
   title: string;
   body: string;
+  /**
+   * Un paso opcional ensena algo que el instrumento no necesita para funcionar.
+   * Se marca como tal en el dato y no solo en el texto, porque quien no pueda o
+   * no quiera hacerlo tiene que verlo antes de intentarlo: un paso que se queda
+   * esperando sin decir que se puede saltar parece un paso roto.
+   */
+  optional?: boolean;
   /** Se cierra cuando esto devuelve true. */
   isDone: (progress: Readonly<StepProgress>, signals: CoachSignals) => boolean;
 }
@@ -57,7 +64,7 @@ export const STEPS: readonly OnboardingStep[] = [
   {
     id: 'hand',
     title: 'Ensena una mano',
-    body: 'Levantala delante de la camara, con la palma hacia ti.',
+    body: 'La que prefieras: da igual cual, y con una basta para tocar.',
     // Un instante suelto puede ser una deteccion falsa; medio segundo, no.
     isDone: (p) => p.held >= 0.5,
   },
@@ -83,8 +90,11 @@ export const STEPS: readonly OnboardingStep[] = [
   },
   {
     id: 'volume',
-    title: 'Levanta la otra mano y subela o bajala',
-    body: 'La segunda mano manda en el volumen. Arriba fuerte, abajo suave.',
+    title: 'Si te queda una mano libre, levantala',
+    body:
+      'La segunda mano sube y baja el volumen, y el numero de dedos elige el timbre. ' +
+      'Todo lo demas funciona con una sola mano: si prefieres seguir asi, el volumen y el timbre estan en Ajustes.',
+    optional: true,
     isDone: (p) => span(p) >= 0.3,
   },
 ];

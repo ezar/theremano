@@ -40,11 +40,19 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo.
 | Mano de melodía, posición horizontal | Altura de la nota, dos octavas de izquierda a derecha |
 | Pulgar contra índice | Llave: junta para que suene, separa para callar |
 | Mano de melodía, altura | Corte del filtro paso bajo: arriba brillante, abajo oscuro |
-| Mano de expresión, altura | Volumen maestro |
-| Mano de expresión, dedos extendidos (1 a 4) | Timbre |
+| Mano de expresión, altura *(opcional)* | Volumen maestro |
+| Mano de expresión, dedos extendidos (1 a 4) *(opcional)* | Timbre |
 
-Con una sola mano a la vista, esa mano es la de melodía. Perder una mano no
-silencia nada: su último estado se conserva 500 ms antes de darla por ausente.
+**La segunda mano es opcional, y no es «la izquierda».** El código no distingue
+manos físicas: asigna dos roles —melodía y expresión— por continuidad espacial
+entre fotogramas, nunca por la etiqueta de lateralidad de MediaPipe, que es
+inestable cuando la mano gira o se sale del encuadre. Con una sola mano a la
+vista, esa mano es la de melodía, sea cual sea.
+
+Con una mano se toca el instrumento entero. La segunda solo añade volumen y
+cambio de timbre, y las dos cosas están también en el panel de ajustes. Perder
+una mano no silencia nada: su último estado se conserva 500 ms antes de darla por
+ausente, y el volumen se queda donde estaba en lugar de caer a cero.
 
 Con teclado: **espacio** graba una capa de bucle, **C** graba un clip, **Z**
 quita la última capa, **H** abre la ayuda.
@@ -280,6 +288,8 @@ Los que se pueden comprobar de forma automática están en `tests/`:
   descarta en lugar de dejar una capa fantasma.
 - **Un enlace manipulado no impide arrancar**: se aplica lo que se reconoce y se
   descarta el resto, y un fragmento sin tónica no inventa una.
+- **Solo el paso de la segunda mano está marcado como opcional**, y la marca vive
+  en el dato para que la tarjeta pueda anunciarla antes de que nadie lo intente.
 - **Ningún paso de la introducción se cierra solo**: cada uno se prueba con la
   señal que le toca y con todo lo demás moviéndose menos esa señal.
 - **Una melodía guiada se puede completar en cualquier escala** que reparta el
