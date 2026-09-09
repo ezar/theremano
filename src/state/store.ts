@@ -33,6 +33,8 @@ export interface Settings {
   showRawTrace: boolean;
   /** Proporcion del clip que se graba para compartir. */
   clipAspect: ClipAspect;
+  /** Melodia guiada activa. Cadena vacia si no hay ninguna. */
+  melodyId: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -53,6 +55,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showDiagnostics: true,
   showRawTrace: false,
   clipAspect: 'vertical',
+  melodyId: '',
 };
 
 const STORAGE_KEY = 'theremano.settings.v1';

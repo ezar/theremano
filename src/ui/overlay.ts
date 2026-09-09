@@ -34,6 +34,8 @@ export interface OverlayFrame {
   gateOpen: boolean;
   volume: number;
   loops: LoopState;
+  /** Zona que la melodia guiada pide ahora, o null. */
+  targetZone: number | null;
   showRawTrace: boolean;
 }
 
@@ -183,6 +185,7 @@ export class Overlay {
       const semitone = frame.layout.degrees[i] ?? 0;
       const isTonic = semitone % 12 === 0;
       const isActive = i === activeIndex;
+      const isTarget = i === frame.targetZone;
 
       if (isActive) {
         // Columna de luz en la zona activa: el interprete ve donde esta antes de
@@ -198,6 +201,29 @@ export class Overlay {
         ctx.fillRect(x - halfWidth, top, halfWidth * 2, bottom - top);
       }
 
+      if (isTarget) {
+        // El objetivo se marca con un trazo continuo y un cabezal arriba: tiene
+        // que leerse de un vistazo y sin confundirse con la zona activa, porque
+        // durante media melodia son dos sitios distintos.
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+        ctx.lineWidth = 2 * target.unit;
+        ctx.setLineDash([6 * target.unit, 5 * target.unit]);
+        ctx.beginPath();
+        ctx.moveTo(x, top);
+        ctx.lineTo(x, bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.beginPath();
+        ctx.moveTo(x, top + 10 * target.unit);
+        ctx.lineTo(x - 7 * target.unit, top);
+        ctx.lineTo(x + 7 * target.unit, top);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
       const line = ctx.createLinearGradient(x, top, x, bottom);
       const strength = isActive ? 0.85 : isTonic ? 0.3 : 0.13;
       line.addColorStop(0, `rgba(255,255,255,0)`);
@@ -210,7 +236,7 @@ export class Overlay {
       ctx.lineTo(x, bottom);
       ctx.stroke();
 
-      if (isTonic || isActive) {
+      if (isTonic || isActive || isTarget) {
         const labelX = Math.min(Math.max(x, labelPad), target.width - labelPad);
         ctx.fillStyle = isActive ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.38)';
         ctx.fillText(midiToName(frame.layout.baseMidi + semitone), labelX, labelY);

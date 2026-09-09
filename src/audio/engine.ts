@@ -30,6 +30,7 @@ export class AudioEngine {
   private synth: Tone.Synth | null = null;
   private vibrato: Tone.Vibrato | null = null;
   private filter: Tone.Filter | null = null;
+  private delay: Tone.FeedbackDelay | null = null;
   private reverb: Tone.Freeverb | null = null;
   private master: Tone.Gain | null = null;
   private limiter: Tone.Limiter | null = null;
@@ -87,7 +88,13 @@ export class AudioEngine {
     this.reverb = new Tone.Freeverb({ roomSize: 0.7, dampening: 2600, wet: this.preset.reverbWet }).connect(
       this.master,
     );
-    this.filter = new Tone.Filter({ type: 'lowpass', frequency: 2000, Q: this.preset.filter.q }).connect(this.reverb);
+    this.delay = new Tone.FeedbackDelay({
+      delayTime: this.preset.delay.time,
+      feedback: this.preset.delay.feedback,
+      wet: this.preset.delay.wet,
+      maxDelay: 1,
+    }).connect(this.reverb);
+    this.filter = new Tone.Filter({ type: 'lowpass', frequency: 2000, Q: this.preset.filter.q }).connect(this.delay);
     this.vibrato = new Tone.Vibrato({
       frequency: this.preset.vibrato.frequency || 5,
       depth: this.preset.vibrato.depth,
@@ -145,6 +152,11 @@ export class AudioEngine {
       });
       this.filter?.Q.rampTo(preset.filter.q, 0.05);
       this.reverb?.wet.rampTo(preset.reverbWet, 0.05);
+      if (this.delay) {
+        this.delay.delayTime.rampTo(preset.delay.time, 0.08);
+        this.delay.feedback.rampTo(preset.delay.feedback, 0.05);
+        this.delay.wet.rampTo(preset.delay.wet, 0.05);
+      }
       if (this.vibrato) {
         this.vibrato.depth.rampTo(preset.vibrato.depth, 0.05);
         if (preset.vibrato.frequency > 0) this.vibrato.frequency.rampTo(preset.vibrato.frequency, 0.05);
@@ -222,12 +234,13 @@ export class AudioEngine {
 
   dispose(): void {
     this.panic();
-    for (const node of [this.synth, this.vibrato, this.filter, this.reverb, this.master, this.loopBus, this.limiter]) {
+    for (const node of [this.synth, this.vibrato, this.filter, this.delay, this.reverb, this.master, this.loopBus, this.limiter]) {
       node?.dispose();
     }
     this.synth = null;
     this.vibrato = null;
     this.filter = null;
+    this.delay = null;
     this.reverb = null;
     this.master = null;
     this.loopBus = null;

@@ -4,6 +4,7 @@ import { AudioEngine } from './audio/engine';
 import { Looper } from './audio/looper';
 import { getPreset } from './audio/presets';
 import { ClipRecorder, clipRecordingSupported, deliverClip } from './capture/recorder';
+import { GuideSession, getMelody } from './mapping/melodies';
 import { decodeSettings, hasShareableKeys, shareUrl } from './state/share';
 import { Camera, HIGH_RES, LOW_RES, attachStream, type CameraInfo } from './camera/stream';
 import { LandmarkFilter } from './filter/vectorFilter';
@@ -76,6 +77,7 @@ class Theremano {
   private starting = false;
   private lastEffectsTime = 0;
   private clipStopping = false;
+  private guide: GuideSession | null = null;
 
   constructor() {
     // Un enlace compartido trae escala, tonica y timbre. Se aplica antes de
@@ -98,11 +100,13 @@ class Theremano {
       },
       onRequestClose: () => undefined,
       onShareLink: () => void this.copyShareLink(),
+      onMelodyChange: (id) => this.store.set({ melodyId: id }),
     });
 
     this.store.subscribe((next, changed) => this.onSettingsChanged(next, changed));
     this.startButton.addEventListener('click', () => void this.start());
     this.bindActions();
+    this.syncGuide(settings.melodyId);
 
     window.addEventListener('resize', () => this.overlay.resize());
     window.addEventListener('orientationchange', () => this.overlay.resize());
@@ -199,6 +203,29 @@ class Theremano {
     } finally {
       this.clipStopping = false;
     }
+  }
+
+  private syncGuide(melodyId: string): void {
+    const melody = melodyId ? getMelody(melodyId) : null;
+    if (!melody) {
+      this.guide = null;
+      return;
+    }
+    this.guide = new GuideSession(melody, this.mapper.currentLayout);
+    // La escala sugerida es parte de la melodia: pedirla y no ponerla dejaria
+    // objetivos aproximados donde deberia haber notas exactas.
+    if (this.store.get().scale !== melody.suggestedScale) {
+      this.store.set({ scale: melody.suggestedScale });
+    }
+    if (runtime.running) this.hud.toast(`${melody.name}. ${melody.hint}`, 4200);
+  }
+
+  private scoreGuide(zoneIndex: number): void {
+    const guide = this.guide;
+    if (!guide || guide.finished || zoneIndex < 0) return;
+    if (guide.onAttack(zoneIndex) !== 'finished') return;
+    const accuracy = Math.round(guide.accuracy * 100);
+    this.hud.toast(`Melodia completada con un ${accuracy}% de acierto. Graba un clip y ensenalo.`, 5200);
   }
 
   private async copyShareLink(): Promise<void> {
@@ -391,6 +418,7 @@ class Theremano {
       gateOpen: output.gateOpen,
       volume: output.volume,
       loops,
+      targetZone: this.guide && !this.guide.finished ? this.guide.targetZone : null,
       showRawTrace: settings.showRawTrace,
     };
 
@@ -401,6 +429,7 @@ class Theremano {
     if (output.gateEvent === 'attack') {
       this.overlay.attack(frame);
       this.hud.dismissHint();
+      this.scoreGuide(output.zoneIndex);
     }
     this.overlay.update(frame, dt);
 
@@ -421,6 +450,16 @@ class Theremano {
     }
 
     this.hud.setLoops(loops);
+    this.hud.setGuide(
+      this.guide
+        ? {
+            name: this.guide.melody.name,
+            done: this.guide.done,
+            total: this.guide.total,
+            finished: this.guide.finished,
+          }
+        : null,
+    );
     this.hud.update(runtime, settings);
   }
 
@@ -546,6 +585,11 @@ class Theremano {
     ) {
       this.mapper.syncSettings(settings);
       this.hud.setSubtitle(settings);
+    }
+    if (changed.has('melodyId')) this.syncGuide(settings.melodyId);
+    // Cambiar de escala o de rango mueve las zonas bajo los pies de la guia.
+    if (this.guide && (changed.has('scale') || changed.has('tonicPc') || changed.has('octaves') || changed.has('baseOctave'))) {
+      this.guide.relayout(this.mapper.currentLayout);
     }
     if (changed.has('preset')) this.engine.setPreset(getPreset(settings.preset));
     if (changed.has('masterVolume')) this.mapper.setVolume(settings.masterVolume);

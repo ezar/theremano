@@ -38,6 +38,9 @@ export class Hud {
   private readonly hint = el('hint');
   private readonly toastNode = el('toast');
   private readonly stage = el('stage');
+  private readonly guideChip = el('guide-chip');
+  private readonly guideName = el('guide-name');
+  private readonly guideProgress = el('guide-progress');
 
   private toastHandle: number | null = null;
   private hintHidden = false;
@@ -59,6 +62,7 @@ export class Hud {
     hue: -1,
     loopLabel: '',
     clipLabel: '',
+    guide: '',
   };
 
   show(): void {
@@ -83,6 +87,9 @@ export class Hud {
   }
 
   toast(message: string, ms = 2600): void {
+    // Un aviso significa que ya se esta haciendo algo, asi que el consejo
+    // inicial sobra: si no, los dos se pelean por el mismo sitio.
+    this.dismissHint();
     this.toastNode.textContent = message;
     this.toastNode.hidden = false;
     if (this.toastHandle !== null) clearTimeout(this.toastHandle);
@@ -100,6 +107,17 @@ export class Hud {
       this.clipButton.querySelector('.label')!.textContent = label;
       this.last.clipLabel = label;
     }
+  }
+
+  setGuide(guide: { name: string; done: number; total: number; finished: boolean } | null): void {
+    const signature = guide ? `${guide.name}|${guide.done}/${guide.total}|${guide.finished}` : '';
+    if (signature === this.last.guide) return;
+    this.last.guide = signature;
+    this.guideChip.hidden = guide === null;
+    if (!guide) return;
+    this.guideName.textContent = guide.name;
+    this.guideProgress.textContent = guide.finished ? 'completada' : `${guide.done}/${guide.total}`;
+    this.guideChip.classList.toggle('done', guide.finished);
   }
 
   setLoops(loops: LoopState): void {

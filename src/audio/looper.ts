@@ -43,6 +43,7 @@ class LoopVoice {
   private readonly synth: Tone.Synth;
   private readonly vibrato: Tone.Vibrato;
   private readonly filter: Tone.Filter;
+  private readonly delay: Tone.FeedbackDelay;
   private readonly reverb: Tone.Freeverb;
   private readonly gain: Tone.Gain;
   private readonly preset: Preset;
@@ -54,7 +55,13 @@ class LoopVoice {
     // incluida. Sin ella, una capa de cuerdas se reproduce seca y suena a otro
     // instrumento distinto del que se acaba de grabar.
     this.reverb = new Tone.Freeverb({ roomSize: 0.7, dampening: 2600, wet: preset.reverbWet }).connect(this.gain);
-    this.filter = new Tone.Filter({ type: 'lowpass', frequency: 2000, Q: preset.filter.q }).connect(this.reverb);
+    this.delay = new Tone.FeedbackDelay({
+      delayTime: preset.delay.time,
+      feedback: preset.delay.feedback,
+      wet: preset.delay.wet,
+      maxDelay: 1,
+    }).connect(this.reverb);
+    this.filter = new Tone.Filter({ type: 'lowpass', frequency: 2000, Q: preset.filter.q }).connect(this.delay);
     this.vibrato = new Tone.Vibrato({
       frequency: preset.vibrato.frequency || 5,
       depth: preset.vibrato.depth,
@@ -111,6 +118,7 @@ class LoopVoice {
     this.synth.dispose();
     this.vibrato.dispose();
     this.filter.dispose();
+    this.delay.dispose();
     this.reverb.dispose();
     this.gain.dispose();
   }

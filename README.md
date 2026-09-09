@@ -24,8 +24,10 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo.
 - **Clip para compartir** — graba imagen y sonido en 9:16, con la nota y la
   marca sobreimpresas, y lo entrega por la hoja de compartir del móvil o como
   descarga.
+- **Melodías guiadas** — cinco secuencias que seguir, con el objetivo marcado
+  sobre la rejilla. Sin presión de tiempo: se sigue el orden, no el compás.
 - **Enlace con la configuración** — escala, tónica y timbre viajan en el
-  fragmento de la dirección.
+  fragmento de la dirección, y el enlace trae vista previa al compartirlo.
 
 ---
 
@@ -44,6 +46,25 @@ silencia nada: su último estado se conserva 500 ms antes de darla por ausente.
 
 Con teclado: **espacio** graba una capa de bucle, **C** graba un clip, **Z**
 quita la última capa.
+
+---
+
+## Sobre las melodías guiadas
+
+Sin ellas el instrumento solo permite divagar, y divagar cansa en dos minutos.
+Una secuencia que seguir da una razón para volver y convierte un clip en algo que
+se puede terminar en lugar de cortar.
+
+**No hay presión de tiempo, y es deliberado.** La latencia de la cámara ronda los
+60 ms y el gate necesita dos fotogramas para confirmar; exigir precisión rítmica
+encima de eso sería injusto. Se sigue el orden de las notas, no el compás. Fallar
+tampoco retrocede: castigar el error en un instrumento que se toca en el aire
+solo consigue que se abandone.
+
+Las melodías se declaran en semitonos sobre la tónica y se resuelven contra la
+escala activa buscando la zona más cercana, así que cualquiera se puede tocar en
+cualquier escala sin quedarse sin notas. Son patrones de escala escritos para
+esto: nada transcrito de ninguna parte.
 
 ---
 
@@ -99,6 +120,8 @@ npm run typecheck
 npm run build
 npm run preview
 npm run smoke   # arranque real en Chromium con cámara falsa (requiere playwright)
+npm run icons   # regenera los iconos de la PWA
+npm run og      # regenera la imagen de vista previa al compartir
 ```
 
 ---
@@ -228,7 +251,9 @@ Los que se pueden comprobar de forma automática están en `tests/`:
   ciclo, tampoco grabando a caballo entre dos vueltas; una toma sin notas se
   descarta en lugar de dejar una capa fantasma.
 - **Un enlace manipulado no impide arrancar**: se aplica lo que se reconoce y se
-  descarta el resto.
+  descarta el resto, y un fragmento sin tónica no inventa una.
+- **Una melodía guiada se puede completar en cualquier escala**, y cambiar de
+  escala a mitad no pierde el progreso.
 
 Los que exigen oído o un dispositivo real —25 fps en un móvil de gama media,
 ausencia de chasquidos— no se pueden afirmar desde aquí y quedan por verificar

@@ -8,6 +8,26 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+
+    <!--
+      Vista previa al compartir el enlace. Las rutas van relativas a proposito:
+      el mismo build se sirve en la raiz de un dominio y en la subcarpeta de
+      GitHub Pages, y una direccion absoluta seria incorrecta en uno de los dos.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="theremano" />
+    <meta property="og:title" content="theremano" />
+    <meta property="og:description" content="Un instrumento que se toca con las manos en el aire. Sin contacto, sin instalacion, en el navegador." />
+    <meta property="og:image" content="./og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="theremano: un instrumento que se toca con las manos en el aire." />
+    <meta property="og:locale" content="es_ES" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="theremano" />
+    <meta name="twitter:description" content="Un instrumento que se toca con las manos en el aire." />
+    <meta name="twitter:image" content="./og.png" />
+
     <title>theremano</title>
   </head>
   <body>
@@ -32,6 +52,11 @@
             <span class="hand-dot" id="dot-melody" title="Mano de melodia">M</span>
             <span class="hand-dot" id="dot-expression" title="Mano de expresion">E</span>
           </div>
+        </div>
+
+        <div id="guide-chip" hidden>
+          <span id="guide-name"></span>
+          <span id="guide-progress"></span>
         </div>
 
         <div id="loop-lanes"></div>
