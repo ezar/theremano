@@ -16,7 +16,7 @@ const FPS = 30;
 const STEP_MS = 1000 / FPS;
 
 function hand(cx: number, cy: number, options: Parameters<typeof makeHand>[2] = {}): HandFrame {
-  return { landmarks: [], raw: makeHand(cx, cy, options), label: 'Unknown', score: 0.9 };
+  return { landmarks: [], raw: makeHand(cx, cy, options) };
 }
 
 class Rig {

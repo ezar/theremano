@@ -44,10 +44,17 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo.
 | Mano de expresión, dedos extendidos (1 a 4) *(opcional)* | Timbre |
 
 **La segunda mano es opcional, y no es «la izquierda».** El código no distingue
-manos físicas: asigna dos roles —melodía y expresión— por continuidad espacial
-entre fotogramas, nunca por la etiqueta de lateralidad de MediaPipe, que es
-inestable cuando la mano gira o se sale del encuadre. Con una sola mano a la
-vista, esa mano es la de melodía, sea cual sea.
+manos físicas: asigna dos roles —melodía y expresión— por posición y continuidad
+espacial entre fotogramas. La etiqueta de lateralidad de MediaPipe no se usa en
+ningún momento: es inestable cuando la mano gira o se sale del encuadre, y
+además describe anatomía, así que un zurdo recibiría un reparto que no puede
+cambiar.
+
+Con una sola mano a la vista, esa mano es la de melodía, sea cual sea. Con dos a
+la vez desde el principio, toca la melodía la que esté más a la derecha del
+encuadre —la derecha del intérprete, porque el vídeo va en espejo— y a partir de
+ahí cada mano conserva su rol por continuidad. El reparto se corrige cruzando
+las manos, que es algo que el intérprete controla.
 
 Con una mano se toca el instrumento entero. La segunda solo añade volumen y
 cambio de timbre, y las dos cosas están también en el panel de ajustes. Perder
