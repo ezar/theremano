@@ -1,9 +1,11 @@
 import * as Tone from 'tone';
 import { getPreset, type Preset, type PresetId } from './presets';
 import { LoopTake, MAX_TRACKS, type LiveSnapshot, type LoopEvent } from './loopTake';
+import { beatsLeft, isAccent, isDue, isMissed, planCountIn, type CountInPlan } from './countIn';
 
 export type { LoopEvent } from './loopTake';
 export { MAX_CYCLE_SECONDS, MAX_TRACKS, MIN_CYCLE_SECONDS } from './loopTake';
+export { COUNT_IN_BEATS } from './countIn';
 
 /**
  * Estacion de bucles.
@@ -122,6 +124,42 @@ class LoopVoice {
   }
 }
 
+/**
+ * La voz de la claqueta.
+ *
+ * Se crea al empezar la cuenta y se destruye al terminarla o al cancelarla.
+ * Destruir el nodo es la forma limpia de cancelar pulsos ya programados: no hay
+ * que perseguir envolventes agendadas en el futuro. Antes de destruirlo se baja
+ * la ganancia, porque cortar en seco un nodo que esta sonando es una
+ * discontinuidad, y eso se oye como un chasquido.
+ */
+class ClickVoice {
+  private readonly synth: Tone.Synth;
+  private readonly gain: Tone.Gain;
+
+  constructor(output: Tone.InputNode) {
+    this.gain = new Tone.Gain(0.5).connect(output);
+    this.synth = new Tone.Synth({
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.001, decay: 0.06, sustain: 0, release: 0.02 },
+    }).connect(this.gain);
+  }
+
+  /** @param accent el pulso que marca donde cae el uno, mas agudo. */
+  at(time: number, accent: boolean): void {
+    this.synth.triggerAttackRelease(accent ? 1600 : 1050, 0.03, time);
+  }
+
+  dispose(): void {
+    this.gain.gain.cancelScheduledValues(Tone.now());
+    this.gain.gain.rampTo(0, 0.02);
+    window.setTimeout(() => {
+      this.synth.dispose();
+      this.gain.dispose();
+    }, 80);
+  }
+}
+
 interface Recording {
   take: LoopTake;
   /** Tiempo del contexto de audio al pulsar grabar. */
@@ -130,6 +168,8 @@ interface Recording {
 
 export interface LoopState {
   recording: boolean;
+  /** Pulsos que quedan de claqueta, o 0 si no hay ninguna en marcha. */
+  countInBeats: number;
   /** Segundos grabados en la toma actual. */
   recordedSeconds: number;
   cycleSeconds: number;
@@ -147,6 +187,8 @@ export class Looper {
   private cycleSeconds = 0;
   private repeatId: number | null = null;
   private nextId = 1;
+  private countIn: { plan: CountInPlan; presetId: PresetId } | null = null;
+  private click: ClickVoice | null = null;
 
   attach(output: Tone.InputNode): void {
     this.output = output;
@@ -165,6 +207,7 @@ export class Looper {
     const position = transport ? (transport.seconds % this.cycleSeconds) / this.cycleSeconds : -1;
     return {
       recording: this.recordingTake !== null,
+      countInBeats: this.countIn ? beatsLeft(this.countIn.plan, Tone.now()) : 0,
       recordedSeconds: this.recordingTake ? Math.max(0, Tone.now() - this.recordingTake.startedAt) : 0,
       cycleSeconds: this.cycleSeconds,
       playhead: position,
@@ -180,19 +223,51 @@ export class Looper {
    * vacia: son cosas distintas y decirle al interprete que ha grabado algo
    * cuando no hay nada es peor que no decir nada.
    */
-  toggle(presetId: PresetId): 'started' | 'saved' | 'discarded' | 'rejected' {
+  toggle(presetId: PresetId): 'started' | 'counting' | 'cancelled' | 'saved' | 'discarded' | 'rejected' {
     if (this.recordingTake) {
       return this.finish() ? 'saved' : 'discarded';
     }
+    // Volver a pulsar durante la cuenta la cancela. Sin esto, quien se arrepiente
+    // o pulsa sin querer se queda esperando a que termine para poder deshacerlo.
+    if (this.countIn) {
+      this.stopCountIn();
+      return 'cancelled';
+    }
     if (!this.output || this.tracks.length >= MAX_TRACKS) return 'rejected';
 
+    // Solo la primera capa lleva claqueta: es la que define el compas partiendo
+    // de la nada. En una sobregrabacion el ciclo ya existe y la toma entra donde
+    // este el cabezal, asi que contar por delante solo desplazaria la capa.
+    if (this.cycleSeconds <= 0) {
+      this.startCountIn(presetId);
+      return 'counting';
+    }
+
+    this.startTake(presetId, Tone.now());
+    return 'started';
+  }
+
+  private startCountIn(presetId: PresetId): void {
+    if (!this.output) return;
+    const plan = planCountIn(Tone.now());
+    this.countIn = { plan, presetId };
+    this.click = new ClickVoice(this.output);
+    for (let i = 0; i < plan.clicks.length; i += 1) this.click.at(plan.clicks[i]!, isAccent(i));
+  }
+
+  private startTake(presetId: PresetId, startedAt: number): void {
     const transport = Tone.getTransport();
     // La primera capa arranca en cero y define el ciclo. Las siguientes se
     // colocan donde este el cabezal, para poder grabar encima sin esperar a que
     // la vuelta termine.
     const offset = this.cycleSeconds > 0 ? transport.seconds % this.cycleSeconds : 0;
-    this.recordingTake = { take: new LoopTake(presetId, offset, this.cycleSeconds), startedAt: Tone.now() };
-    return 'started';
+    this.recordingTake = { take: new LoopTake(presetId, offset, this.cycleSeconds), startedAt };
+  }
+
+  private stopCountIn(): void {
+    this.countIn = null;
+    this.click?.dispose();
+    this.click = null;
   }
 
   /**
@@ -200,10 +275,34 @@ export class Looper {
    * una toma abierta.
    */
   capture(live: LiveSnapshot): void {
+    /*
+     * La claqueta termina aqui, en el bucle de fotogramas, y no en un
+     * temporizador. Un temporizador seria una pieza mas que cancelar, que
+     * limpiar y que podria dispararse sobre una estacion ya vaciada; y no daria
+     * mas precision, porque el instante que cuenta no es cuando se ejecuta el
+     * codigo sino el que se guarda en startedAt, que es el del pulso.
+     */
+    if (this.countIn && isDue(this.countIn.plan, Tone.now())) {
+      const { plan, presetId } = this.countIn;
+      this.stopCountIn();
+      /*
+       * Si el pulso de entrada quedo muy atras, la entrada se perdio y no hay
+       * nada que empezar. Pasa cuando el bucle de fotogramas se para en mitad de
+       * la cuenta: la pestana se va al fondo, el movil se bloquea. Arrancar ahi
+       * la toma con un inicio que ya paso la llenaria de silencio por delante, y
+       * con veinte segundos de ausencia se descartaria sola nada mas nacer.
+       */
+      if (!isMissed(plan, Tone.now())) this.startTake(presetId, plan.downbeat);
+    }
+
     const recording = this.recordingTake;
     if (!recording) return;
 
     const elapsed = Tone.now() - recording.startedAt;
+    // Con claqueta, la toma se crea en el pulso, y el fotograma que la ve nacer
+    // puede llegar unos milisegundos antes de ese instante. Un tiempo negativo
+    // colocaria el evento al final de la vuelta en lugar de al principio.
+    if (elapsed < 0) return;
     // La primera capa define el ciclo, asi que no puede crecer sin limite.
     if (recording.take.overflowed(elapsed)) {
       this.finish();
@@ -260,7 +359,19 @@ export class Looper {
     return true;
   }
 
+  /**
+   * Cancela una claqueta en marcha sin tocar lo demas.
+   *
+   * La llama la aplicacion al suspenderse. Irse de la pestana en mitad de la
+   * cuenta es abandonarla: al volver, los pulsos ya no suenan y el momento de
+   * entrar paso hace rato.
+   */
+  abortCountIn(): void {
+    this.stopCountIn();
+  }
+
   clear(): void {
+    this.stopCountIn();
     this.recordingTake = null;
     for (const voice of this.voices.values()) {
       voice.silence();

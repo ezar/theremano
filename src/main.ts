@@ -240,6 +240,12 @@ class Theremano {
       case 'started':
         this.hud.toast(hadCycle ? t().toast.layerRecording : t().toast.layerRecordingFirst);
         return;
+      case 'counting':
+        this.hud.toast(t().toast.countIn);
+        return;
+      case 'cancelled':
+        this.hud.toast(t().toast.countInCancelled);
+        return;
       case 'saved':
         this.hud.toast(t().toast.layerSaved(this.looper.state.tracks.length));
         return;
@@ -894,6 +900,9 @@ class Theremano {
     if (!runtime.running) return;
     const event = this.mapper.silence();
     if (event === 'release') this.engine.release();
+    // Una claqueta a medias no sobrevive a irse de la pestana: los pulsos ya no
+    // se oyen y el momento de entrar habra pasado para cuando se vuelva.
+    this.looper.abortCountIn();
     this.engine.setMuted(true);
     this.cancelFrame();
     this.overlay.resetEffects();

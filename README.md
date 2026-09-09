@@ -20,8 +20,9 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
 
 - **Instrumento** — una voz monofónica controlada con las dos manos, con
   cuantización a escala para que suene bien desde el primer minuto.
-- **Estación de bucles** — hasta cuatro capas superpuestas. La primera marca el
-  compás; las siguientes se graban encima sin esperar a que la vuelta termine.
+- **Estación de bucles** — hasta cuatro capas superpuestas, con cuatro pulsos de
+  claqueta por delante de la primera. Esa marca el compás; las siguientes se
+  graban encima sin esperar a que la vuelta termine.
 - **Clip para compartir** — graba imagen y sonido en 9:16, hasta un minuto, con
   la nota y la marca sobreimpresas, y lo entrega por la hoja de compartir del
   móvil o como descarga.
@@ -225,6 +226,39 @@ Hay un enlace de la versión 1 guardado en las pruebas. No comprueba que el
 codificador siga produciendo esos mismos bytes —cambiar el remuestreo por dentro
 es legítimo— sino que se sigue pudiendo leer: romper los enlaces que ya están
 circulando por ahí, no.
+
+---
+
+## Sobre la claqueta
+
+La primera capa define el compás de todo lo que venga después, y ese compás
+empezaba en el instante del pulsado. Con las manos en el aire eso es una carrera:
+hay que estar ya colocado, con la pinza donde toca y la nota pensada, antes de
+tocar el botón. Cuatro pulsos por delante convierten esa carrera en una entrada.
+
+Solo la primera. En una sobregrabación el ciclo ya existe y la toma entra donde
+esté el cabezal; contar por delante ahí solo desplazaría la capa.
+
+El tempo lo pone la aplicación —90 por minuto— porque no hay ninguno todavía:
+nadie ha marcado un compás aún. Es lento a propósito, y hay una prueba que lo
+defiende: por debajo de medio segundo por pulso no da tiempo a levantar la mano y
+encontrar la nota, que es justo para lo que existe esto.
+
+Volver a pulsar durante la cuenta la cancela. Sin eso, quien se arrepiente o
+pulsa sin querer se queda esperando a que termine para poder deshacerlo.
+
+Dos detalles que costaron encontrarse:
+
+- **El primer pulso no se puede programar en el instante del pulsado.** Para
+  cuando el hilo de audio llega a atenderlo, ese instante ya pasó, y un evento en
+  el pasado se descarta sin avisar. Va veinte milisegundos por delante, que no se
+  oyen.
+- **La cuenta termina en el bucle de fotogramas, no en un temporizador.** El
+  instante que cuenta no es cuándo se ejecuta el código sino el que se guarda
+  como inicio de la toma, que es el del pulso; así, si el navegador reparte mal
+  sus avisos, la capa sigue empezando donde debe. Y un temporizador sería una
+  pieza más que cancelar, que limpiar y que podría dispararse sobre una estación
+  ya vaciada.
 
 ---
 

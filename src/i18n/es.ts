@@ -52,6 +52,7 @@ export const es: Strings = {
 
   actions: {
     loop: 'Bucle',
+    loopCounting: (beats: number) => `${beats}...`,
     loopStop: 'Parar',
     loopFull: 'Capas llenas',
     loopTitle: 'Grabar una capa de bucle (espacio)',
@@ -200,6 +201,8 @@ export const es: Strings = {
   },
 
   toast: {
+    countIn: 'Cuatro pulsos y empieza a grabar. Pulsa otra vez para cancelar',
+    countInCancelled: 'Claqueta cancelada',
     layerRecording: 'Grabando capa sobre el bucle',
     layerRecordingFirst: 'Grabando. Lo que toques ahora marca el compás.',
     layerSaved: (count) => `Capa ${count} añadida`,
