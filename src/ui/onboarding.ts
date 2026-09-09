@@ -29,6 +29,8 @@ export interface CoachSignals {
   pitchX: number;
   /** Volumen que dicta la mano de expresion, de 0 a 1. */
   volume: number;
+  /** true solo en el fotograma en que se confirma un cambio de timbre. */
+  presetChanged: boolean;
   /** Segundos transcurridos desde el fotograma anterior. */
   dt: number;
 }
@@ -40,6 +42,7 @@ interface StepProgress {
   min: number;
   max: number;
   attacks: number;
+  changes: number;
 }
 
 export interface OnboardingStep {
@@ -80,6 +83,17 @@ export const STEPS: readonly OnboardingStep[] = [
     id: 'volume',
     optional: true,
     isDone: (p) => span(p) >= 0.3,
+  },
+  /*
+   * El cambio de timbre existia desde el principio y no lo encontraba nadie.
+   * Un paso que se cierra al conseguirlo es la unica forma de que se descubra
+   * sin leer la ayuda, y va el ultimo y opcional porque el instrumento entero
+   * funciona sin el.
+   */
+  {
+    id: 'timbre',
+    optional: true,
+    isDone: (p) => p.changes >= 1,
   },
 ];
 
@@ -129,6 +143,7 @@ export class Onboarding {
     const p = this.progress;
     p.elapsed += signals.dt;
     if (signals.attack) p.attacks += 1;
+    if (signals.presetChanged) p.changes += 1;
 
     // Cada paso mide lo suyo. Meter todas las medidas en el mismo acumulador
     // haria que el recorrido de la mano contase para el paso del volumen.
@@ -174,7 +189,7 @@ function seesMelody(signals: CoachSignals): boolean {
 }
 
 function blank(): StepProgress {
-  return { elapsed: 0, held: 0, min: Infinity, max: -Infinity, attacks: 0 };
+  return { elapsed: 0, held: 0, min: Infinity, max: -Infinity, attacks: 0, changes: 0 };
 }
 
 function track(p: StepProgress, value: number): void {

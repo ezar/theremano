@@ -172,6 +172,26 @@ html, body {
 }
 #preset-fingers { color: var(--muted); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
 
+/*
+ * El timbre al que apuntan los dedos, mientras se confirma. La flecha va en CSS
+ * porque es puntuacion, no texto: no hay que traducirla ni mantenerla en dos
+ * diccionarios.
+ */
+#preset-next { color: var(--accent); font-size: 0.85rem; }
+#preset-next::before { content: '→ '; color: var(--muted); }
+
+/*
+ * La barra que se llena mientras el recuento de dedos se sostiene. Sin ella el
+ * nombre nuevo aparece y desaparece sin explicar que hay que mantener la mano
+ * quieta un momento.
+ */
+#preset-chip.arming {
+  border-color: rgba(255, 209, 102, 0.5);
+  background:
+    linear-gradient(to right, rgba(255, 209, 102, 0.22) var(--preset-progress, 0%), transparent var(--preset-progress, 0%)),
+    var(--panel);
+}
+
 #hands-chip { display: flex; gap: 6px; }
 
 .hand-dot {

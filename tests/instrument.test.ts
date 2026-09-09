@@ -141,6 +141,39 @@ describe('el instrumento de punta a punta', () => {
     expect(rig.presetChanges).toEqual(['flute']);
   });
 
+  /**
+   * El candidato es lo unico que hace visible un gesto que nadie encontraba.
+   * Tiene que aparecer en cuanto los dedos apuntan a otro timbre, crecer
+   * mientras se sostiene, y desaparecer en el mismo momento en que se confirma:
+   * un "va a cambiar" que sigue puesto despues de cambiar seria mentira.
+   */
+  it('anuncia el timbre al que apuntan los dedos antes de confirmarlo', () => {
+    const rig = new Rig();
+    rig.step([pinched(0.75), hand(0.25, 0.5, { fingers: 1 })], 12);
+
+    const first = rig.step([pinched(0.75), hand(0.25, 0.5, { fingers: 3 })], 1);
+    expect(first.presetCandidate, 'el nombre tiene que asomar al primer fotograma').toBe('flute');
+    expect(first.presetProgress).toBeGreaterThan(0);
+    expect(first.presetProgress).toBeLessThan(1);
+
+    const halfway = rig.step([pinched(0.75), hand(0.25, 0.5, { fingers: 3 })], 3);
+    expect(halfway.presetCandidate).toBe('flute');
+    expect(halfway.presetProgress).toBeGreaterThan(first.presetProgress);
+
+    const confirmed = rig.step([pinched(0.75), hand(0.25, 0.5, { fingers: 3 })], 4);
+    expect(rig.presetChanges).toContain('flute');
+    expect(confirmed.presetCandidate, 'ya no es candidato: es el timbre actual').toBe(null);
+    expect(confirmed.presetProgress).toBe(0);
+  });
+
+  it('sin mano de expresion no hay candidato que ensenar', () => {
+    const rig = new Rig();
+    rig.step([pinched(0.75), hand(0.25, 0.5, { fingers: 3 })], 2);
+    const alone = rig.step([pinched(0.75)], 2);
+    expect(alone.presetCandidate).toBe(null);
+    expect(alone.presetProgress).toBe(0);
+  });
+
   it('no cambia de timbre por un parpadeo del recuento de dedos', () => {
     const rig = new Rig();
     rig.step([pinched(0.75), hand(0.25, 0.5, { fingers: 1 })], 12);

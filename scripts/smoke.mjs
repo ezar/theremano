@@ -409,7 +409,7 @@ console.log('--- consola ---');
 console.log(logs.slice(-25).join('\n'));
 await browser.close();
 
-if (!coachStart.visible || coachStart.dots !== 5 || coachStart.current !== 1) {
+if (!coachStart.visible || coachStart.dots !== 6 || coachStart.current !== 1) {
   console.error('\nFALLO: la introduccion no aparece al llegar por primera vez');
   process.exit(1);
 }
@@ -429,8 +429,8 @@ if (spanish.lang !== 'es' || !/índice/.test(spanish.hint ?? '') || spanish.note
 // dos idiomas. Lo que importa es que haya exactamente un paso opcional y que su
 // boton diga algo distinto que el de los demas.
 const plainLabels = new Set(allSteps.filter((s) => !s.optional).map((s) => s.skipLabel));
-if (optionalSteps.length !== 1 || plainLabels.has(optionalSteps[0]?.skipLabel)) {
-  console.error('\nFALLO: el paso de la segunda mano no se anuncia como opcional');
+if (optionalSteps.length !== 2 || optionalSteps.some((s) => plainLabels.has(s.skipLabel))) {
+  console.error('\nFALLO: los pasos de la segunda mano no se anuncian como opcionales');
   process.exit(1);
 }
 if (coachEnd.visible || coachEnd.onboarded !== true) {

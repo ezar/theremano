@@ -89,8 +89,14 @@ export const es: Strings = {
       volume: {
         title: 'Si te queda una mano libre, levántala',
         body:
-          'La segunda mano sube y baja el volumen, y el número de dedos elige el timbre. ' +
-          'Todo lo demás funciona con una sola mano: si prefieres seguir así, el volumen y el timbre están en Ajustes.',
+          'La segunda mano sube y baja el volumen. Todo lo demás funciona con una sola: ' +
+          'si prefieres seguir así, el volumen también está en Ajustes.',
+      },
+      timbre: {
+        title: 'Cambia el instrumento con los dedos de esa mano',
+        body:
+          'Uno, dos, tres o cuatro dedos estirados: cada número es un timbre. Mantén la mano quieta un momento ' +
+          'y verás el nombre asomar abajo a la izquierda. También se cambia en Ajustes.',
       },
     },
   },

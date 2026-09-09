@@ -169,6 +169,10 @@ export interface Runtime {
   pinchRatio: number;
   /** MIDI de la nota actual. El HUD lo usa para colorear. */
   midi: number;
+  /** Timbre al que apuntan los dedos, aun sin confirmar. */
+  presetCandidate: string | null;
+  /** Lo que le falta a ese candidato para confirmarse, de 0 a 1. */
+  presetProgress: number;
   notice: string | null;
 }
 
@@ -191,5 +195,7 @@ export const runtime: Runtime = {
   inferenceMs: 0,
   pinchRatio: 1,
   midi: 69,
+  presetCandidate: null,
+  presetProgress: 0,
   notice: null,
 };

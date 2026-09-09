@@ -609,6 +609,8 @@ class Theremano {
     runtime.volume = output.volume;
     runtime.pinchRatio = output.pinch;
     runtime.fingerCount = output.fingerCount;
+    runtime.presetCandidate = output.presetCandidate;
+    runtime.presetProgress = output.presetProgress;
     runtime.melodyVisible = assignment.melody !== null;
     runtime.melodyHeld = assignment.melody?.held ?? false;
     runtime.expressionVisible = assignment.expression !== null;
@@ -677,6 +679,7 @@ class Theremano {
           expressionHeld: runtime.expressionHeld,
           gateOpen: output.gateOpen,
           attack: output.gateEvent === 'attack',
+          presetChanged: output.preset !== null,
           pitchX: output.pitchX,
           volume: output.volume,
           dt,
