@@ -140,7 +140,14 @@ export class Hud {
     this.guideChip.classList.toggle('done', guide.finished);
   }
 
-  setLoops(loops: LoopState): void {
+  /** @param gestureProgress lo sostenido que va el gesto de grabar, de 0 a 1. */
+  setLoops(loops: LoopState, gestureProgress = 0): void {
+    // Se pinta el gesto en el propio boton que hace lo mismo: es lo que ensena
+    // que existe, igual que el timbre candidato en su chip.
+    this.loopButton.classList.toggle('arming', gestureProgress > 0 && gestureProgress < 1);
+    if (gestureProgress > 0) {
+      this.loopButton.style.setProperty('--hold-progress', `${Math.round(gestureProgress * 100)}%`);
+    }
     const counting = loops.countInBeats > 0;
     // Durante la claqueta el boton parpadea como si ya estuviera grabando: lo
     // esta, a efectos de quien lo mira, y hay que poder volver a pulsarlo para

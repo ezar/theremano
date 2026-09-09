@@ -42,6 +42,80 @@ export function pinchRatio(landmarks: readonly Landmark[]): number {
   return distance(point(landmarks, LM.THUMB_TIP), point(landmarks, LM.INDEX_TIP)) / handSpan(landmarks);
 }
 
+/**
+ * Distancia pulgar-corazon normalizada. Es la senal del gesto de grabar.
+ *
+ * Se usa el corazon y no otro dedo porque es el unico que se junta con el
+ * pulgar sin arrastrar al indice: con el anular o el menique, la mano entera
+ * se cierra y el gesto se confunde con un puno.
+ */
+export function middlePinchRatio(landmarks: readonly Landmark[]): number {
+  return distance(point(landmarks, LM.THUMB_TIP), point(landmarks, LM.MIDDLE_TIP)) / handSpan(landmarks);
+}
+
+/**
+ * Tamano aparente de la mano, invariante a como este girada.
+ *
+ * Es la raiz del area del triangulo de la palma —muneca, base del indice, base
+ * del menique— y no una distancia, y ahi esta el motivo. Los puntos vienen
+ * normalizados por ancho en x y por alto en y, que en un encuadre 16:9 no son
+ * la misma unidad: una distancia entre dos puntos cambia al girar la mano
+ * aunque la mano no se haya movido. Girar la muneca noventa grados bastaba para
+ * recorrer el rango entero de la profundidad.
+ *
+ * Un area no tiene ese problema. Esa normalizacion es una transformacion lineal
+ * de determinante constante, asi que multiplica todas las areas por el mismo
+ * factor sea cual sea la orientacion de lo que se mide.
+ *
+ * En la pinza el problema no existia: alli se dividen dos distancias medidas en
+ * el mismo espacio y la deformacion se cancela sola.
+ */
+export function palmSize(landmarks: readonly Landmark[]): number {
+  const a = point(landmarks, LM.WRIST);
+  const b = point(landmarks, LM.INDEX_MCP);
+  const c = point(landmarks, LM.PINKY_MCP);
+  const area = Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) / 2;
+  return Math.sqrt(area);
+}
+
+/**
+ * Cerca o lejos de la camara, de 0 a 1.
+ *
+ * Acercarse agranda la mano en el encuadre. No es una medida de profundidad de
+ * verdad —el modelo da una z, pero es relativa a la propia mano y no sirve para
+ * esto—, es la unica senal de distancia estable que hay aqui.
+ *
+ * Los extremos estan puestos alrededor de una mano a distancia de trabajo, que
+ * da un tamano de palma de unos 0,10. Queda sitio para acercarse y para alejarse
+ * sin saturar en ninguno de los dos lados.
+ */
+const SIZE_FAR = 0.06;
+const SIZE_NEAR = 0.17;
+
+export function depthFromSize(size: number): number {
+  return clamp01((size - SIZE_FAR) / (SIZE_NEAR - SIZE_FAR));
+}
+
+/**
+ * Fuerza del ataque a partir de lo rapido que se cierra la pinza.
+ *
+ * Hasta ahora la dinamica venia entera de la otra mano, que es una mano que
+ * puede no estar. Con esto, la mano que toca decide tambien cuanto entra la
+ * nota, que es como se comporta cualquier instrumento: no es lo mismo posar los
+ * dedos que dejarlos caer.
+ *
+ * El suelo no es cero a proposito. Una nota que no suena porque se cerro despacio
+ * se lee como un fallo del instrumento, no como un matiz.
+ */
+const SLOW_CLOSE = 0.8;
+const FAST_CLOSE = 6;
+const SOFTEST = 0.62;
+
+export function attackVelocity(closingSpeed: number): number {
+  const t = clamp01((closingSpeed - SLOW_CLOSE) / (FAST_CLOSE - SLOW_CLOSE));
+  return SOFTEST + (1 - SOFTEST) * t;
+}
+
 const FINGERS: ReadonlyArray<{ tip: number; pip: number }> = [
   { tip: LM.INDEX_TIP, pip: LM.INDEX_PIP },
   { tip: LM.MIDDLE_TIP, pip: LM.MIDDLE_PIP },

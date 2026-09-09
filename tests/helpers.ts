@@ -72,6 +72,32 @@ export function makeHand(cx: number, cy: number, options: { pinch?: number; fing
   ] as Landmark[];
 }
 
+/**
+ * Acerca la punta del pulgar a la del corazon, que es la senal del gesto de
+ * grabar. `makeHand` solo modela la pinza pulgar-indice, y este gesto va por
+ * otro lado: sin esto habria que escribir veintiun puntos a mano.
+ *
+ * @param ratio distancia pedida, normalizada por el tamano de la mano.
+ */
+export function withMiddlePinch(hand: readonly Landmark[], ratio: number): Landmark[] {
+  const out = hand.map((p) => ({ ...p }));
+  const wrist = hand[0]!;
+  const middleMcp = hand[9]!;
+  const middleTip = hand[12]!;
+  const span = Math.hypot(middleMcp.x - wrist.x, middleMcp.y - wrist.y);
+  // Se acerca por debajo de la punta, que es por donde el pulgar llega de
+  // verdad: hacia la muneca.
+  const dx = wrist.x - middleTip.x;
+  const dy = wrist.y - middleTip.y;
+  const length = Math.hypot(dx, dy) || 1;
+  out[4] = {
+    x: middleTip.x + (dx / length) * ratio * span,
+    y: middleTip.y + (dy / length) * ratio * span,
+    z: 0,
+  };
+  return out as Landmark[];
+}
+
 /** Anade ruido independiente a cada punto, como hace el detector real. */
 export function jitter(hand: readonly Landmark[], sigma: number, rand: () => number): Landmark[] {
   return hand.map((p) => ({ x: p.x + gaussian(rand) * sigma, y: p.y + gaussian(rand) * sigma, z: p.z }));

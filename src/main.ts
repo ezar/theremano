@@ -604,7 +604,15 @@ class Theremano {
 
     this.engine.setFrequency(output.freq, output.glide);
     this.engine.setCutoffNorm(output.cutoffNorm);
-    this.engine.setVolume(output.volume);
+    // Al motor va la ganancia, que lleva dentro la fuerza del ataque; al HUD, el
+    // volumen de la mano. El riel tiene que seguir a la mano y no saltar por
+    // cada nota.
+    this.engine.setVolume(output.gain);
+    this.engine.setSpace(output.space);
+    // El gesto de grabar hace exactamente lo mismo que el boton, y por el mismo
+    // camino: es la unica forma de que no haya dos maneras distintas de grabar
+    // que puedan discrepar.
+    if (output.loopGesture) this.toggleLoop();
     if (output.preset) this.store.set({ preset: output.preset.id });
 
     runtime.gateOpen = output.gateOpen;
@@ -630,7 +638,7 @@ class Theremano {
       gateOpen: output.gateOpen,
       freq: output.freq,
       cutoffNorm: output.cutoffNorm,
-      gain: output.volume,
+      gain: output.gain,
     });
 
     const loops = this.looper.state;
@@ -694,7 +702,7 @@ class Theremano {
     }
     this.coach.render(this.onboarding.step, this.onboarding.index, this.onboarding.total);
 
-    this.hud.setLoops(loops);
+    this.hud.setLoops(loops, output.loopGestureProgress);
     this.hud.setGuide(
       this.guide
         ? {
