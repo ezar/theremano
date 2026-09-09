@@ -1,5 +1,6 @@
 import { OneEuroFilter, DEFAULT_D_CUTOFF } from '../filter/oneEuro';
-import { expressionFeatures, melodyFeatures } from './features';
+import { attackVelocity, depthFromSpan, expressionFeatures, handSpan, melodyFeatures, middlePinchRatio } from './features';
+import { HoldGesture } from './holdGesture';
 import { PinchGate, type GateEvent } from './gate';
 import { createLayout, isContinuous, pitchAt, type PitchLayout } from './scales';
 import { getPreset, presetForFingerCount, type Preset, type PresetId } from '../audio/presets';
@@ -62,6 +63,21 @@ export interface MappingOutput {
   presetCandidate: PresetId | null;
   /** Cuanto le falta a ese candidato para confirmarse, de 0 a 1. */
   presetProgress: number;
+  /**
+   * Volumen que manda la mano de expresion, de 0 a 1. Es lo que se ensena.
+   *
+   * Para el audio esta `gain`, que es este multiplicado por la fuerza del
+   * ataque. Se separan porque el riel del HUD tiene que seguir a la mano: si
+   * mostrara la ganancia real, saltaria en cada nota sin que nadie haya movido
+   * nada.
+   */
+  gain: number;
+  /** Cerca o lejos de la camara, de 0 a 1. Manda el espacio del sonido. */
+  space: number;
+  /** true en el fotograma en que el gesto de grabar se completa. */
+  loopGesture: boolean;
+  /** Lo sostenido que va ese gesto, de 0 a 1. */
+  loopGestureProgress: number;
   pitchX: number;
   pitchXRaw: number;
   pinch: number;
@@ -81,6 +97,13 @@ export class Mapper {
   private currentPreset: Preset;
   private candidateFingers = 0;
   private candidateStreak = 0;
+  private readonly loopHold = new HoldGesture();
+  private readonly spaceFilter: OneEuroFilter;
+  private space = 0.5;
+  private lastPinch = 1;
+  private lastTimestamp = -1;
+  /** Fuerza de la nota que suena ahora, fijada en su ataque. */
+  private velocity = 1;
   private lastFreq = 440;
   private lastMidi = 69;
   private lastZone = -1;
@@ -96,6 +119,9 @@ export class Mapper {
     this.cutoffFilter = new OneEuroFilter({ ...control });
     this.volumeFilter = new OneEuroFilter({ ...control });
     this.pinchFilter = new OneEuroFilter({ minCutoff: GATE_MIN_CUTOFF, beta: GATE_BETA, dCutoff: DEFAULT_D_CUTOFF });
+    // La distancia se mueve despacio y no dispara nada: puede ir mas suavizada
+    // que el resto sin que se note un retraso.
+    this.spaceFilter = new OneEuroFilter({ ...control, minCutoff: control.minCutoff * 0.6 });
     this.volume = settings.masterVolume;
     this.currentPreset = getPreset(settings.preset);
   }
@@ -134,6 +160,8 @@ export class Mapper {
     let cutoffNorm = 0.5;
     let pinch = 1;
     let gateEvent: GateEvent = null;
+    let space = this.space;
+    let loopGesture = false;
 
     if (melody) {
       const f = melodyFeatures(melody.hand.raw);
@@ -142,7 +170,24 @@ export class Mapper {
       // El corte va invertido respecto a la Y de la imagen: arriba es brillante.
       cutoffNorm = 1 - this.cutoffFilter.filter(f.y, timestamp);
       pinch = this.pinchFilter.filter(f.pinch, timestamp);
+
+      /*
+       * Velocidad de cierre, en unidades de pinza por segundo.
+       *
+       * Se mide sobre la senal ya filtrada, que es la misma que decide el gate:
+       * si se midiera sobre la cruda, el ruido del detector se colaria como
+       * fuerza y dos notas iguales sonarian distinto sin motivo.
+       */
+      const dt = this.lastTimestamp >= 0 ? timestamp - this.lastTimestamp : 0;
+      const closing = dt > 0 ? (this.lastPinch - pinch) / dt : 0;
+      this.lastPinch = pinch;
+
       gateEvent = this.gate.update(pinch);
+      // La fuerza se fija en el ataque y dura toda la nota. Recalcularla por
+      // fotograma convertiria un matiz de entrada en un temblor de volumen.
+      if (gateEvent === 'attack') this.velocity = attackVelocity(closing);
+
+      space = this.spaceFilter.filter(depthFromSpan(handSpan(melody.hand.raw)), timestamp);
 
       const pitch = pitchAt(this.layout, pitchX);
       this.lastFreq = pitch.freq;
@@ -155,7 +200,10 @@ export class Mapper {
       this.pitchFilter.reset();
       this.cutoffFilter.reset();
       this.pinchFilter.reset();
+      this.spaceFilter.reset();
+      this.lastTimestamp = -1;
     }
+    this.space = space;
 
     let preset: Preset | null = null;
     let fingerCount = 0;
@@ -164,13 +212,30 @@ export class Mapper {
       const f = expressionFeatures(expression.hand.raw);
       fingerCount = f.fingers;
       this.volume = 1 - this.volumeFilter.filter(f.y, timestamp);
-      preset = this.confirmPreset(f.fingers, expression.held);
+
+      // El gesto de grabar no se acepta sobre una mano que solo se esta
+      // sosteniendo: medio segundo de mano recordada bastaria para dispararlo.
+      const dt = this.lastTimestamp >= 0 ? Math.max(0, timestamp - this.lastTimestamp) : 0;
+      if (expression.held) this.loopHold.reset();
+      else loopGesture = this.loopHold.update(middlePinchRatio(expression.hand.raw), dt);
+
+      /*
+       * Mientras el gesto esta en marcha no se cambia de timbre.
+       *
+       * Al juntar pulgar y corazon, el corazon se dobla y el recuento de dedos
+       * extendidos baja uno. Sin esto, pedir un bucle cambiaria el instrumento
+       * de paso, que es de las cosas mas desconcertantes que puede hacer.
+       */
+      preset = this.loopHold.engaged ? null : this.confirmPreset(f.fingers, expression.held);
+      if (this.loopHold.engaged) this.candidateStreak = 0;
     } else {
       // Sin mano de expresion se conservan volumen y timbre. Perder una mano
       // nunca debe silenciar el instrumento.
       this.volumeFilter.reset();
       this.candidateStreak = 0;
+      this.loopHold.reset();
     }
+    this.lastTimestamp = timestamp;
 
     return {
       gateEvent,
@@ -181,6 +246,10 @@ export class Mapper {
       glide: isContinuous(this.layout.scaleId) ? CONTINUOUS_GLIDE : QUANTIZED_GLIDE,
       cutoffNorm,
       volume: this.volume,
+      gain: this.volume * this.velocity,
+      space,
+      loopGesture,
+      loopGestureProgress: this.loopHold.progress,
       preset,
       // Al confirmarse deja de haber candidato: el destino ya es el actual.
       presetCandidate: preset || this.candidateStreak === 0 ? null : (presetForFingerCount(this.candidateFingers)?.id ?? null),

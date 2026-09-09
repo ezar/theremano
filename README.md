@@ -48,8 +48,11 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
 | Mano de melodía, posición horizontal | Altura de la nota, dos octavas de izquierda a derecha |
 | Pulgar contra índice | Llave: junta para que suene, separa para callar |
 | Mano de melodía, altura | Corte del filtro paso bajo: arriba brillante, abajo oscuro |
+| Mano de melodía, distancia a la cámara | Espacio: cerca seco, lejos abierto |
+| Velocidad al cerrar la pinza | Fuerza con la que entra la nota |
 | Mano de expresión, altura *(opcional)* | Volumen maestro |
 | Mano de expresión, dedos extendidos (1 a 4) *(opcional)* | Timbre |
+| Mano de expresión, pulgar contra corazón medio segundo *(opcional)* | Graba una capa de bucle |
 
 **La segunda mano es opcional, y no es «la izquierda».** El código no distingue
 manos físicas: asigna dos roles —melodía y expresión— por posición y continuidad
@@ -68,6 +71,64 @@ Con una mano se toca el instrumento entero. La segunda solo añade volumen y
 cambio de timbre, y las dos cosas están también en el panel de ajustes. Perder
 una mano no silencia nada: su último estado se conserva 500 ms antes de darla por
 ausente, y el volumen se queda donde estaba en lugar de caer a cero.
+
+### Grabar sin tocar nada
+
+Hasta aquí, la única acción musical que seguía exigiendo contacto era grabar una
+capa: había que buscar el teclado o el botón. Un instrumento que presume de no
+necesitar contacto y te obliga a eso no cumple lo que promete.
+
+Ahora, **pulgar contra corazón en la mano de expresión, medio segundo**, pide un
+bucle. Se usa el corazón y no otro dedo porque es el único que se junta con el
+pulgar sin arrastrar al índice: con el anular o el meñique la mano entera se
+cierra y el gesto se confunde con un puño.
+
+Tres reglas, y las tres están porque aquí un falso positivo no es un píxel mal
+puesto, es una grabación que arranca sola en mitad de lo que estabas tocando:
+histéresis como en la pinza que suena; hay que mantenerlo medio segundo, porque
+un roce al pasar entre dos dedos no es una decisión; y una vez disparado se queda
+trabado hasta que la mano se abre, o seguir con los dedos juntos encadenaría
+bucles cada medio segundo. Lo sostenido tampoco sobrevive a perder la mano de
+vista: si sobreviviera, bastaría un parpadeo del detector —con el gesto ya
+hecho— para completar algo que nadie mantuvo.
+
+Mientras el gesto está en marcha, el timbre no cambia. Al juntar pulgar y corazón
+el corazón se dobla y el recuento de dedos extendidos baja uno; sin esa
+salvaguarda, pedir un bucle cambiaría el instrumento de paso.
+
+Y encaja con la claqueta: gesto, cuatro pulsos para colocarse, y a grabar. Un
+bucle entero sin tocar nada.
+
+### La distancia a la cámara es el espacio
+
+Sale del tamaño aparente de la mano, que ya se calcula para normalizar la pinza:
+acercarse la agranda en el encuadre. No es profundidad de verdad —el modelo da
+una z, pero es relativa a la propia mano y no sirve para esto— y es la única
+señal de distancia estable que hay aquí.
+
+Mueve la reverberación y el eco a la vez, porque lo que se busca no es «más
+reverb» sino la sensación de alejarse: una sala grande tiene las dos cosas. El
+timbre manda: cada preset trae su cantidad de espacio y el gesto la recorre
+alrededor, en vez de imponer la suya y borrar la diferencia entre un theremín y
+un bajo. Y la rampa es mucho más lenta que la de los demás parámetros: una
+reverberación que cambia en treinta milisegundos no suena a moverse por una sala,
+suena a un mando que alguien está girando.
+
+### La nota entra con la fuerza con que la cierras
+
+La dinámica venía entera de la otra mano, que es una mano que puede no estar.
+Ahora la mano que toca decide también cuánto entra la nota, que es como se
+comporta cualquier instrumento: no es lo mismo posar los dedos que dejarlos caer.
+
+Se mide sobre la señal ya filtrada, la misma que decide la puerta: sobre la
+cruda, el ruido del detector se colaría como fuerza y dos notas iguales sonarían
+distinto sin motivo. Se fija en el ataque y dura toda la nota, porque
+recalcularla por fotograma convertiría un matiz de entrada en un temblor de
+volumen. Y el suelo no es cero: una nota que no suena porque se cerró despacio se
+lee como un fallo del instrumento, no como un matiz.
+
+El riel de volumen del HUD sigue mostrando la mano, no la ganancia real. Si
+mostrara la ganancia, saltaría en cada nota sin que nadie haya movido nada.
 
 ### El cambio de timbre se ve venir
 

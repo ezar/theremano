@@ -20,11 +20,18 @@ const LOOK_AHEAD = 0.01;
 /** Rampas de los parametros continuos, en segundos. */
 const VOLUME_RAMP = 0.05;
 const CUTOFF_RAMP = 0.03;
+/*
+ * El espacio va mucho mas lento que los demas. Una reverberacion que cambia en
+ * treinta milisegundos no suena a moverse por una sala, suena a un mando que
+ * alguien esta girando.
+ */
+const SPACE_RAMP = 0.25;
 
 /** Zonas muertas: por debajo de esto no se reprograma nada. */
 const FREQ_EPSILON_CENTS = 0.5;
 const GAIN_EPSILON = 0.002;
 const CUTOFF_EPSILON_RATIO = 0.01;
+const SPACE_EPSILON = 0.01;
 
 export class AudioEngine {
   private synth: Tone.Synth | null = null;
@@ -40,6 +47,7 @@ export class AudioEngine {
   private preset: Preset = getPreset('theremin');
   private lastFreq = 0;
   private lastCutoff = 0;
+  private lastSpace = -1;
   private lastGain = 0;
   private targetVolume = 0.75;
   private muted = false;
@@ -106,6 +114,7 @@ export class AudioEngine {
     }).connect(this.vibrato);
 
     this.lastCutoff = 2000;
+    this.lastSpace = -1;
     this.lastGain = 0;
     this.started = true;
   }
@@ -188,6 +197,26 @@ export class AudioEngine {
     if (this.lastCutoff > 0 && Math.abs(hz - this.lastCutoff) / this.lastCutoff < CUTOFF_EPSILON_RATIO) return;
     this.lastCutoff = hz;
     this.filter.frequency.rampTo(hz, CUTOFF_RAMP);
+  }
+
+  /**
+   * Espacio, de 0 (cerca y seco) a 1 (lejos y grande).
+   *
+   * Mueve la reverberacion y el eco a la vez, porque lo que se busca no es "mas
+   * reverb" sino la sensacion de alejarse: una sala grande tiene las dos cosas.
+   * El minimo no queda seco del todo —una voz sola completamente seca suena a
+   * ejercicio— y el maximo se queda por debajo de lo que emborrona la afinacion.
+   *
+   * El timbre manda: cada preset trae su cantidad de espacio y el gesto la
+   * recorre alrededor, en vez de imponer la suya y borrar la diferencia entre
+   * un theremin y un bajo.
+   */
+  setSpace(norm: number): void {
+    const clamped = Math.min(1, Math.max(0, norm));
+    if (Math.abs(clamped - this.lastSpace) < SPACE_EPSILON) return;
+    this.lastSpace = clamped;
+    this.reverb?.wet.rampTo(Math.min(0.95, this.preset.reverbWet * (0.45 + 1.15 * clamped)), SPACE_RAMP);
+    this.delay?.wet.rampTo(Math.min(0.9, this.preset.delay.wet * (0.4 + 1.2 * clamped)), SPACE_RAMP);
   }
 
   /** @param volume 0..1 de la mano de expresion. */

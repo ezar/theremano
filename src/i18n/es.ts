@@ -113,9 +113,16 @@ export const es: Strings = {
       { what: 'Mano de melodía, a izquierda y derecha', does: 'Elige la nota. Grave a la izquierda, aguda a la derecha.' },
       { what: 'Pulgar contra índice', does: 'La llave. Juntos suena, separados calla.' },
       { what: 'Esa misma mano, arriba y abajo', does: 'Brillo del sonido. Arriba claro, abajo oscuro.' },
+      { what: 'Esa misma mano, cerca o lejos de la cámara', does: 'Espacio: cerca suena seco y pegado, lejos se abre como una sala.' },
+      { what: 'Lo rápido que cierras la pinza', does: 'Fuerza de la nota: dejar caer los dedos entra más fuerte que posarlos.' },
       {
         what: 'Segunda mano, arriba y abajo',
         does: 'Volumen. Sin ella se mantiene el último valor y se ajusta en Ajustes; perderla nunca silencia.',
+        optional: true,
+      },
+      {
+        what: 'Segunda mano: pulgar contra corazón, medio segundo',
+        does: 'Graba una capa de bucle sin tocar nada. El botón se va llenando mientras lo mantienes, y se cancela abriendo la mano.',
         optional: true,
       },
       {

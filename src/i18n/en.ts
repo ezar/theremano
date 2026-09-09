@@ -113,9 +113,16 @@ export const en: Strings = {
       { what: 'Melody hand, left and right', does: 'Picks the note. Low on the left, high on the right.' },
       { what: 'Thumb against index finger', does: 'The key. Together it sounds, apart it stops.' },
       { what: 'That same hand, up and down', does: 'Brightness of the sound. Up is bright, down is dark.' },
+      { what: 'That same hand, near or far from the camera', does: 'Space: close is dry and near, far opens up like a room.' },
+      { what: 'How fast you close the pinch', does: 'How hard the note lands: dropping your fingers hits harder than resting them.' },
       {
         what: 'Second hand, up and down',
         does: 'Volume. Without it the last value stays and you set it in Settings; losing it never mutes.',
+        optional: true,
+      },
+      {
+        what: 'Second hand: thumb against middle finger, half a second',
+        does: 'Records a loop layer without touching anything. The button fills while you hold it, and opening your hand cancels.',
         optional: true,
       },
       {

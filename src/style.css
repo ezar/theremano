@@ -531,6 +531,19 @@ html, body {
 .action:active:not(:disabled) { transform: scale(0.97); }
 .action:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/*
+ * El boton llenandose mientras se sostiene el gesto de grabar. Es lo mismo que
+ * hace el chip del timbre: ensenar que hay un gesto en marcha y cuanto le falta,
+ * porque un gesto que hay que mantener sin ninguna senal de que va bien se
+ * abandona a los dos intentos.
+ */
+.action.arming {
+  border-color: rgba(255, 209, 102, 0.55);
+  background:
+    linear-gradient(to right, rgba(255, 209, 102, 0.26) var(--hold-progress, 0%), transparent var(--hold-progress, 0%)),
+    var(--panel);
+}
+
 .action .dot {
   width: 9px;
   height: 9px;

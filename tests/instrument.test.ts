@@ -4,7 +4,7 @@ import { Mapper } from '../src/mapping/mapper';
 import { RoleTracker } from '../src/tracking/handedness';
 import { DEFAULT_SETTINGS, type Settings } from '../src/state/store';
 import type { HandFrame } from '../src/tracking/types';
-import { makeHand } from './helpers';
+import { makeHand, withMiddlePinch } from './helpers';
 
 /**
  * Recorrido completo: manos detectadas, asignacion de rol, mapeo y eventos de
@@ -182,6 +182,112 @@ describe('el instrumento de punta a punta', () => {
     rig.step([pinched(0.75), hand(0.25, 0.5, { fingers: 3 })], 2);
     rig.step([pinched(0.75), hand(0.25, 0.5, { fingers: 1 })], 4);
     expect(rig.presetChanges).toEqual(settled);
+  });
+
+  /**
+   * El gesto que completa la promesa de "sin contacto": grabar una capa sin
+   * tocar nada. Lo que se comprueba de punta a punta es lo que no puede fallar:
+   * que no dispare por rozar, que dispare una sola vez, y que no cambie el
+   * timbre de paso.
+   */
+  describe('grabar con la mano', () => {
+    const pinched = (x: number) => hand(x, 0.5, { pinch: 0.15 });
+    const expression = (options: Parameters<typeof makeHand>[2] = {}) => hand(0.25, 0.5, options);
+    const requesting = (options: Parameters<typeof makeHand>[2] = {}): HandFrame => ({
+      landmarks: [],
+      raw: withMiddlePinch(makeHand(0.25, 0.5, options), 0.12),
+    });
+
+    it('pide el bucle una sola vez, y solo si se mantiene', () => {
+      const rig = new Rig();
+      // Un roce corto: por debajo del tiempo que hay que aguantar.
+      let fires = 0;
+      for (let i = 0; i < 8; i += 1) {
+        if (rig.step([pinched(0.75), requesting()], 1).loopGesture) fires += 1;
+      }
+      expect(fires, 'ocho fotogramas son un roce, no una peticion').toBe(0);
+
+      for (let i = 0; i < 40; i += 1) {
+        if (rig.step([pinched(0.75), requesting()], 1).loopGesture) fires += 1;
+      }
+      expect(fires, 'sostenido si').toBe(1);
+
+      // Seguir aguantando no encadena bucles.
+      for (let i = 0; i < 60; i += 1) {
+        if (rig.step([pinched(0.75), requesting()], 1).loopGesture) fires += 1;
+      }
+      expect(fires).toBe(1);
+    });
+
+    it('no cambia de timbre mientras se pide un bucle', () => {
+      // Al juntar pulgar y corazon el corazon se dobla, y el recuento de dedos
+      // extendidos baja uno: sin la salvaguarda, pedir un bucle cambiaria el
+      // instrumento de paso.
+      const rig = new Rig();
+      rig.step([pinched(0.75), expression({ fingers: 4 })], 12);
+      const settled = [...rig.presetChanges];
+      for (let i = 0; i < 40; i += 1) rig.step([pinched(0.75), requesting({ fingers: 3 })], 1);
+      expect(rig.presetChanges).toEqual(settled);
+    });
+
+    /**
+     * Un parpadeo del detector no puede completar un gesto que nadie sostuvo.
+     *
+     * Si lo acumulado sobreviviera a la ausencia, bastaria con que la mano
+     * desapareciera y volviera —cosa que hace sola, y con el gesto ya hecho—
+     * para que el bucle arrancara sin que se haya mantenido nada.
+     */
+    it('lo sostenido no sobrevive a perder la mano de vista', () => {
+      const rig = new Rig();
+      // Casi completo, pero no del todo.
+      for (let i = 0; i < 12; i += 1) rig.step([pinched(0.75), requesting()], 1);
+
+      // Parpadea, sin llegar a agotar el margen de gracia: durante esos
+      // fotogramas la mano sigue "vista", pero sostenida, y sostenida no vale.
+      let fires = 0;
+      for (let i = 0; i < 10; i += 1) {
+        if (rig.step([pinched(0.75)], 1).loopGesture) fires += 1;
+      }
+      expect(fires).toBe(0);
+
+      // Y al volver, con el gesto ya hecho, la cuenta empieza de cero: unos
+      // pocos fotogramas no pueden bastar.
+      for (let i = 0; i < 6; i += 1) {
+        if (rig.step([pinched(0.75), requesting()], 1).loopGesture) fires += 1;
+      }
+      expect(fires, 'volver con los dedos juntos no es haberlos mantenido').toBe(0);
+    });
+  });
+
+  it('el ataque rapido entra mas fuerte que el lento', () => {
+    const fast = new Rig();
+    fast.step([hand(0.5, 0.5, { pinch: 0.9 })], 6);
+    // De abierta a cerrada en un solo fotograma.
+    const loud = fast.step([hand(0.5, 0.5, { pinch: 0.05 })], 6);
+
+    const slow = new Rig();
+    slow.step([hand(0.5, 0.5, { pinch: 0.9 })], 6);
+    // La misma distancia, recorrida despacio.
+    for (let i = 0; i < 20; i += 1) {
+      slow.step([hand(0.5, 0.5, { pinch: 0.9 - i * 0.0425 })], 1);
+    }
+    const soft = slow.step([hand(0.5, 0.5, { pinch: 0.05 })], 3);
+
+    expect(loud.gateOpen && soft.gateOpen, 'las dos tienen que sonar').toBe(true);
+    expect(soft.gain).toBeLessThan(loud.gain);
+    // Y la suave no puede quedarse en nada: eso se lee como un fallo.
+    expect(soft.gain).toBeGreaterThan(loud.gain * 0.5);
+    // El volumen que se ensena no lo toca: ese sigue a la mano de expresion.
+    expect(soft.volume).toBeCloseTo(loud.volume, 5);
+  });
+
+  it('acercar la mano a la camara abre el espacio', () => {
+    const rig = new Rig();
+    const far = rig.step([hand(0.5, 0.5, { pinch: 0.15, scale: 0.13 })], 40);
+    const near = rig.step([hand(0.5, 0.5, { pinch: 0.15, scale: 0.34 })], 40);
+    expect(near.space).toBeGreaterThan(far.space);
+    expect(far.space).toBeGreaterThanOrEqual(0);
+    expect(near.space).toBeLessThanOrEqual(1);
   });
 
   it('en modo continuo el portamento es mas largo que cuantizado', () => {
