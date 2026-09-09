@@ -1,0 +1,30 @@
+{
+  "name": "theremano",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Instrumento musical controlado con las manos a traves de la camara del navegador.",
+  "scripts": {
+    "postinstall": "node scripts/fetch-assets.mjs",
+    "dev": "vite",
+    "build": "node scripts/fetch-assets.mjs && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "icons": "node scripts/make-icons.mjs",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
+    "tone": "^15.1.22"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.0",
+    "playwright": "^1.63.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^5.0.0"
+  }
+}

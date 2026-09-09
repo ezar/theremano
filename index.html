@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#05070c" />
+    <meta name="description" content="Instrumento musical controlado con las manos a traves de la camara del navegador. Sin contacto, sin instalacion, sin servidor." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <title>theremano</title>
+  </head>
+  <body>
+    <main id="stage">
+      <video id="video" playsinline muted disablepictureinpicture></video>
+      <canvas id="overlay"></canvas>
+
+      <div id="hud" class="hidden">
+        <div id="note-panel">
+          <div id="note">--</div>
+          <div id="note-sub"></div>
+        </div>
+
+        <div id="volume-rail" title="Volumen (mano de expresion)">
+          <div id="volume-track"><div id="volume-fill"></div></div>
+          <span id="volume-value">0</span>
+        </div>
+
+        <div id="bottom-left">
+          <div id="preset-chip"><span id="preset-name">Theremin</span><span id="preset-fingers"></span></div>
+          <div id="hands-chip">
+            <span class="hand-dot" id="dot-melody" title="Mano de melodia">M</span>
+            <span class="hand-dot" id="dot-expression" title="Mano de expresion">E</span>
+          </div>
+        </div>
+
+        <div id="diagnostics"></div>
+        <div id="notice" hidden></div>
+      </div>
+
+      <button id="settings-toggle" class="hidden" aria-label="Ajustes" aria-expanded="false">Ajustes</button>
+      <aside id="settings-panel" hidden aria-label="Panel de ajustes"></aside>
+
+      <section id="splash">
+        <div id="splash-inner">
+          <h1>theremano</h1>
+          <p class="tagline">Un instrumento que se toca con las manos en el aire.</p>
+          <ul class="howto">
+            <li><b>Mano derecha</b> &mdash; muevela para elegir la nota. <b>Junta pulgar e indice</b> para que suene.</li>
+            <li><b>Altura de esa mano</b> &mdash; abre o cierra el brillo del sonido.</li>
+            <li><b>Mano izquierda</b> &mdash; sube o baja para el volumen. <b>Numero de dedos</b> (1 a 4) elige el timbre.</li>
+          </ul>
+          <button id="start-button">Empezar</button>
+          <p id="splash-status">Necesita permiso de camara. El audio no sale de tu dispositivo.</p>
+          <p id="splash-error" hidden></p>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
