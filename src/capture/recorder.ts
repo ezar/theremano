@@ -22,6 +22,17 @@ const SIZES: Record<ClipAspect, { width: number; height: number }> = {
 const FPS = 30;
 
 /**
+ * Tasa de video del clip.
+ *
+ * Bajo de 6 a 4 Mbit/s al subir el tope de duracion a un minuto: a 6 el clip
+ * largo se acercaba a los limites de subida de las aplicaciones donde estos
+ * videos circulan, y lo que se graba —una figura de lineas sobre una imagen
+ * quieta— no tiene el detalle que justificaria esa tasa. El codificador ademas
+ * suele quedarse muy por debajo del techo que se le pide.
+ */
+const VIDEO_BITRATE = 4_000_000;
+
+/**
  * Orden de preferencia de formato. MP4 primero porque es lo unico que Safari
  * en iOS acepta compartir a otras aplicaciones; un webm alli se queda en el
  * carrete sin poder subirse a ningun sitio.
@@ -102,7 +113,7 @@ export class ClipRecorder {
     for (const track of audio?.getAudioTracks() ?? []) stream.addTrack(track);
 
     try {
-      this.recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6_000_000 });
+      this.recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: VIDEO_BITRATE });
     } catch {
       return false;
     }

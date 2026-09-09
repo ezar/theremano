@@ -14,6 +14,16 @@ import { chromium } from 'playwright';
 
 const url = process.argv[2] ?? 'http://localhost:4173/';
 const screenshot = process.argv[3] ?? 'smoke.png';
+/**
+ * Suelo de tamano para dar un clip por bueno.
+ *
+ * No mide calidad: un par de segundos del patron de la camara falsa, o del
+ * degradado del modo de solo manos, se comprimen hasta muy poco y varian entre
+ * ejecuciones. Lo que descarta es el caso que importa, que es un fichero vacio o
+ * sin una sola muestra dentro.
+ */
+const MIN_CLIP_BYTES = 6000;
+
 const logs = [];
 const browser = await chromium.launch({
   ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
@@ -190,6 +200,38 @@ console.log(JSON.stringify({ loops }, null, 2));
 await page.click('#settings-toggle');
 await page.waitForTimeout(400);
 const fields = await page.evaluate(() => document.querySelectorAll('#settings-panel .field').length);
+
+// --- Legibilidad del desplegable. La lista que abre un select la pinta el
+// navegador con el fondo del propio select: si es translucido, sale casi blanca
+// y el texto claro encima no se lee. Ese fondo tiene que ser opaco y contrastar.
+const combo = await page.evaluate(() => {
+  const parse = (value) => {
+    const n = value.match(/[\d.]+/g)?.map(Number) ?? [];
+    return { r: n[0] ?? 0, g: n[1] ?? 0, b: n[2] ?? 0, a: n[3] ?? 1 };
+  };
+  const lum = (c) => {
+    const f = (v) => {
+      const x = v / 255;
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+  };
+  const select = document.getElementById('set-melody');
+  const option = select.querySelector('option');
+  const bg = parse(getComputedStyle(select).backgroundColor);
+  const optionBg = parse(getComputedStyle(option).backgroundColor);
+  const fg = parse(getComputedStyle(option).color);
+  const ratio = (a, b) => {
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  return {
+    alfaDelSelect: bg.a,
+    alfaDeLaOpcion: optionBg.a,
+    contraste: Number(ratio(fg, optionBg).toFixed(2)),
+  };
+});
+console.log(JSON.stringify({ combo }, null, 2));
 await page.selectOption('#set-scale', 'blues');
 await page.selectOption('#set-tonic', '2');
 await page.waitForTimeout(600);
@@ -339,7 +381,10 @@ if (!guide.visible || guide.progress !== '0/9' || guide.scale !== 'blues') {
   console.error('\nFALLO: la melodia guiada no se ha activado como deberia');
   process.exit(1);
 }
-if (!clip || clip.bytes < 20000) {
+// El umbral comprueba que hay fichero y que no esta vacio, no la tasa de video:
+// el patron de la camara falsa se comprime distinto en cada ejecucion, y bajar
+// la tasa de 6 a 4 Mbit/s dejo un clip corto por debajo del umbral anterior.
+if (!clip || clip.bytes < MIN_CLIP_BYTES) {
   console.error('\nFALLO: la grabacion del clip no ha producido un fichero utilizable');
   process.exit(1);
 }
@@ -355,16 +400,22 @@ if (handsOnly.centerAlpha !== 255) {
   console.error(`\nFALLO: el fondo de solo manos no es opaco (alfa ${handsOnly.centerAlpha})`);
   process.exit(1);
 }
-// El umbral es mas bajo que el del clip con camara a proposito: sin fotograma de
-// video, lo que se graba es un degradado casi estatico y el codificador lo
-// comprime hasta una fraccion. Lo que se comprueba aqui es que hay fichero y que
-// no esta vacio; que el fondo es opaco de verdad lo dice centerAlpha.
-if (!handsClip || handsClip.bytes < 8000) {
+// Que el fondo del modo de solo manos es opaco de verdad lo dice centerAlpha,
+// no el tamano de este fichero.
+if (!handsClip || handsClip.bytes < MIN_CLIP_BYTES) {
   console.error('\nFALLO: no se ha podido grabar un clip en modo de solo manos');
   process.exit(1);
 }
 if (backToCamera.cameraHidden !== false || backToCamera.stageMode !== 'camera') {
   console.error('\nFALLO: el atajo no devuelve la imagen de la camara');
+  process.exit(1);
+}
+if (combo.alfaDelSelect !== 1 || combo.alfaDeLaOpcion !== 1) {
+  console.error('\nFALLO: el fondo del desplegable es translucido y su lista saldra ilegible');
+  process.exit(1);
+}
+if (combo.contraste < 4.5) {
+  console.error(`\nFALLO: el texto del desplegable no contrasta con su fondo (${combo.contraste}:1)`);
   process.exit(1);
 }
 if (loops.lanes !== 0 || loops.undoHidden !== true) {
