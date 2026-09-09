@@ -1,6 +1,8 @@
 import { getPreset } from '../audio/presets';
 import { getScale, NOTE_NAMES } from '../mapping/scales';
+import type { LoopState } from '../audio/looper';
 import type { Runtime, Settings } from '../state/store';
+import { pitchHue } from './target';
 
 /**
  * HUD: nota, volumen, timbre, manos y diagnostico.
@@ -28,6 +30,19 @@ export class Hud {
   private readonly dotExpression = el('dot-expression');
   private readonly diagnostics = el('diagnostics');
   private readonly notice = el('notice');
+  private readonly actions = el('actions');
+  private readonly loopButton = el<HTMLButtonElement>('loop-button');
+  private readonly clipButton = el<HTMLButtonElement>('clip-button');
+  private readonly undoButton = el<HTMLButtonElement>('undo-button');
+  private readonly lanes = el('loop-lanes');
+  private readonly hint = el('hint');
+  private readonly toastNode = el('toast');
+  private readonly stage = el('stage');
+
+  private toastHandle: number | null = null;
+  private hintHidden = false;
+  private laneSignature = '';
+  private onLaneToggle: ((id: number) => void) | null = null;
 
   private last = {
     note: '',
@@ -41,10 +56,84 @@ export class Hud {
     diagnostics: '',
     notice: '',
     diagnosticsVisible: true,
+    hue: -1,
+    loopLabel: '',
+    clipLabel: '',
   };
 
   show(): void {
     this.root.classList.remove('hidden');
+    this.actions.classList.remove('hidden');
+  }
+
+  /** El aviso inicial desaparece en cuanto se toca la primera nota. */
+  dismissHint(): void {
+    if (this.hintHidden) return;
+    this.hintHidden = true;
+    this.hint.classList.add('gone');
+  }
+
+  onLaneClick(handler: (id: number) => void): void {
+    this.onLaneToggle = handler;
+    this.lanes.addEventListener('click', (event) => {
+      const lane = (event.target as HTMLElement).closest<HTMLElement>('.loop-lane');
+      const id = lane?.dataset['id'];
+      if (id) this.onLaneToggle?.(Number(id));
+    });
+  }
+
+  toast(message: string, ms = 2600): void {
+    this.toastNode.textContent = message;
+    this.toastNode.hidden = false;
+    if (this.toastHandle !== null) clearTimeout(this.toastHandle);
+    this.toastHandle = window.setTimeout(() => {
+      this.toastNode.hidden = true;
+      this.toastHandle = null;
+    }, ms);
+  }
+
+  setClipRecording(recording: boolean, seconds: number, maxSeconds: number): void {
+    this.stage.classList.toggle('recording', recording);
+    this.clipButton.classList.toggle('armed', recording);
+    const label = recording ? `${Math.max(0, maxSeconds - seconds).toFixed(0)} s` : 'Grabar clip';
+    if (label !== this.last.clipLabel) {
+      this.clipButton.querySelector('.label')!.textContent = label;
+      this.last.clipLabel = label;
+    }
+  }
+
+  setLoops(loops: LoopState): void {
+    this.loopButton.classList.toggle('armed', loops.recording);
+    this.loopButton.disabled = !loops.recording && loops.full;
+    const label = loops.recording ? 'Parar' : loops.full ? 'Capas llenas' : 'Bucle';
+    if (label !== this.last.loopLabel) {
+      this.loopButton.querySelector('.label')!.textContent = label;
+      this.last.loopLabel = label;
+    }
+    this.undoButton.hidden = loops.tracks.length === 0;
+
+    // Solo se reconstruyen las capas cuando cambian de verdad: hacerlo por
+    // fotograma reiniciaria su animacion de entrada sesenta veces por segundo.
+    const signature = loops.tracks.map((t) => `${t.id}:${t.muted ? 'm' : 'a'}`).join('|');
+    if (signature === this.laneSignature) return;
+    this.laneSignature = signature;
+
+    this.lanes.replaceChildren();
+    for (let i = 0; i < loops.tracks.length; i += 1) {
+      const track = loops.tracks[i]!;
+      const lane = document.createElement('div');
+      lane.className = `loop-lane${track.muted ? ' muted' : ''}`;
+      lane.dataset['id'] = String(track.id);
+      lane.title = track.muted ? 'Capa silenciada. Pulsa para activarla.' : 'Pulsa para silenciar esta capa.';
+      const swatch = document.createElement('span');
+      swatch.className = 'swatch';
+      swatch.style.background = `hsl(${track.hue}, 90%, 62%)`;
+      swatch.style.color = `hsl(${track.hue}, 90%, 62%)`;
+      const text = document.createElement('span');
+      text.textContent = `Capa ${i + 1}`;
+      lane.append(swatch, text);
+      this.lanes.append(lane);
+    }
   }
 
   setSubtitle(settings: Readonly<Settings>): void {
@@ -65,6 +154,11 @@ export class Hud {
     if (runtime.gateOpen !== this.last.sounding) {
       this.note.classList.toggle('sounding', runtime.gateOpen);
       this.last.sounding = runtime.gateOpen;
+    }
+    const hue = Math.round(pitchHue(runtime.midi));
+    if (hue !== this.last.hue) {
+      document.documentElement.style.setProperty('--note-hue', String(hue));
+      this.last.hue = hue;
     }
 
     const volumePct = Math.round(runtime.volume * 100);

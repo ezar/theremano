@@ -43,6 +43,7 @@ export interface MappingOutput {
   gateEvent: GateEvent;
   gateOpen: boolean;
   freq: number;
+  midi: number;
   noteName: string;
   glide: number;
   /** 0 = oscuro, 1 = brillante. */
@@ -70,6 +71,7 @@ export class Mapper {
   private candidateFingers = 0;
   private candidateStreak = 0;
   private lastFreq = 440;
+  private lastMidi = 69;
   private lastNote = '--';
 
   constructor(settings: Readonly<Settings>) {
@@ -133,6 +135,7 @@ export class Mapper {
 
       const pitch = pitchAt(this.layout, pitchX);
       this.lastFreq = pitch.freq;
+      this.lastMidi = pitch.midi;
       this.lastNote = pitch.name;
     } else {
       // La mano ha desaparecido de verdad (mas alla del margen de 500 ms).
@@ -162,6 +165,7 @@ export class Mapper {
       gateEvent,
       gateOpen: this.gate.isOpen,
       freq: this.lastFreq,
+      midi: this.lastMidi,
       noteName: this.lastNote,
       glide: isContinuous(this.layout.scaleId) ? CONTINUOUS_GLIDE : QUANTIZED_GLIDE,
       cutoffNorm,

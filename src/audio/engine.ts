@@ -33,6 +33,8 @@ export class AudioEngine {
   private reverb: Tone.Freeverb | null = null;
   private master: Tone.Gain | null = null;
   private limiter: Tone.Limiter | null = null;
+  private loopBus: Tone.Gain | null = null;
+  private captureTap: MediaStreamAudioDestinationNode | null = null;
 
   private preset: Preset = getPreset('theremin');
   private lastFreq = 0;
@@ -78,6 +80,10 @@ export class AudioEngine {
 
     this.limiter = new Tone.Limiter(-1).toDestination();
     this.master = new Tone.Gain(0).connect(this.limiter);
+    // Los bucles no pasan por el volumen maestro: si lo hicieran, bajar la mano
+    // de expresion apagaria tambien lo ya grabado, que no es lo que hace un
+    // pedal de bucles ni lo que espera nadie.
+    this.loopBus = new Tone.Gain(1).connect(this.limiter);
     this.reverb = new Tone.Freeverb({ roomSize: 0.7, dampening: 2600, wet: this.preset.reverbWet }).connect(
       this.master,
     );
@@ -95,6 +101,32 @@ export class AudioEngine {
     this.lastCutoff = 2000;
     this.lastGain = 0;
     this.started = true;
+  }
+
+  /** Punto de conexion de las capas de bucle. */
+  get loopOutput(): Tone.InputNode {
+    if (!this.loopBus) throw new Error('El motor de audio no esta arrancado');
+    return this.loopBus;
+  }
+
+  /**
+   * Pista de audio de todo lo que suena, para grabar video.
+   *
+   * Se toma detras del limitador, que es lo que se oye de verdad: grabar antes
+   * daria un fichero que suena distinto de lo que oyo quien lo grabo.
+   */
+  captureStream(): MediaStream | null {
+    if (!this.limiter) return null;
+    if (!this.captureTap) {
+      const context = Tone.getContext().rawContext;
+      // El contexto offline no puede grabar; en la practica nunca lo es aqui,
+      // pero el tipo de Tone.js contempla ambos.
+      if (!('createMediaStreamDestination' in context)) return null;
+      const tap = context.createMediaStreamDestination();
+      this.limiter.connect(tap);
+      this.captureTap = tap;
+    }
+    return this.captureTap.stream;
   }
 
   setPreset(preset: Preset): void {
@@ -174,18 +206,23 @@ export class AudioEngine {
     if (this.muted === muted) return;
     this.muted = muted;
     this.applyGain(0.04);
+    // Los bucles cuelgan de su propio bus, asi que silenciar el maestro no los
+    // toca. Sin esta linea, esconder la pestana dejaria el bucle sonando de
+    // fondo, que es justo lo que no debe pasar.
+    this.loopBus?.gain.rampTo(muted ? 0 : 1, 0.04);
   }
 
   /** Corta todo de forma segura. */
   panic(): void {
     this.release();
     this.master?.gain.rampTo(0, 0.03);
+    this.loopBus?.gain.rampTo(0, 0.03);
     this.lastGain = 0;
   }
 
   dispose(): void {
     this.panic();
-    for (const node of [this.synth, this.vibrato, this.filter, this.reverb, this.master, this.limiter]) {
+    for (const node of [this.synth, this.vibrato, this.filter, this.reverb, this.master, this.loopBus, this.limiter]) {
       node?.dispose();
     }
     this.synth = null;
@@ -193,7 +230,9 @@ export class AudioEngine {
     this.filter = null;
     this.reverb = null;
     this.master = null;
+    this.loopBus = null;
     this.limiter = null;
+    this.captureTap = null;
     this.started = false;
   }
 

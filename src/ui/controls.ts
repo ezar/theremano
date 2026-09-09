@@ -2,6 +2,7 @@ import { PRESETS, type PresetId } from '../audio/presets';
 import { NOTE_NAMES, SCALES, type ScaleId } from '../mapping/scales';
 import type { Settings, SettingsStore } from '../state/store';
 import type { CameraInfo } from '../camera/stream';
+import type { ClipAspect } from '../capture/recorder';
 
 /**
  * Panel de ajustes con controles nativos.
@@ -16,6 +17,7 @@ interface ControlsDeps {
   store: SettingsStore;
   onCameraChange: (deviceId: string | null) => void;
   onRequestClose: () => void;
+  onShareLink: () => void;
 }
 
 type Binder = (settings: Readonly<Settings>) => void;
@@ -79,6 +81,27 @@ export class Controls {
 
   private build(): void {
     this.panel.replaceChildren();
+
+    this.section('Compartir');
+    const share = document.createElement('div');
+    share.className = 'share-row';
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.textContent = 'Copiar enlace con esta configuracion';
+    copy.addEventListener('click', () => this.deps.onShareLink());
+    share.append(copy);
+    this.panel.append(share);
+
+    this.select(
+      'Formato del clip',
+      [
+        { value: 'vertical', label: 'Vertical 9:16' },
+        { value: 'landscape', label: 'Apaisado 16:9' },
+      ],
+      (s) => s.clipAspect,
+      (value) => this.deps.store.set({ clipAspect: value as ClipAspect }),
+    );
+    this.hint('Vertical es lo que piden las aplicaciones donde estos videos se ven.');
 
     this.section('Instrumento');
 

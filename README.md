@@ -13,6 +13,22 @@ no al revés.
 
 ---
 
+## Qué hace
+
+Se toca en el aire, se graba por capas y se sale de ahí con un vídeo.
+
+- **Instrumento** — una voz monofónica controlada con las dos manos, con
+  cuantización a escala para que suene bien desde el primer minuto.
+- **Estación de bucles** — hasta cuatro capas superpuestas. La primera marca el
+  compás; las siguientes se graban encima sin esperar a que la vuelta termine.
+- **Clip para compartir** — graba imagen y sonido en 9:16, con la nota y la
+  marca sobreimpresas, y lo entrega por la hoja de compartir del móvil o como
+  descarga.
+- **Enlace con la configuración** — escala, tónica y timbre viajan en el
+  fragmento de la dirección.
+
+---
+
 ## Cómo se toca
 
 | Gesto | Efecto |
@@ -25,6 +41,45 @@ no al revés.
 
 Con una sola mano a la vista, esa mano es la de melodía. Perder una mano no
 silencia nada: su último estado se conserva 500 ms antes de darla por ausente.
+
+Con teclado: **espacio** graba una capa de bucle, **C** graba un clip, **Z**
+quita la última capa.
+
+---
+
+## Sobre los bucles
+
+La estación de bucles no graba audio: graba los gestos. Cada capa es una lista de
+eventos de control que se vuelven a sintetizar en cada vuelta sobre una voz
+propia.
+
+La alternativa habitual —grabar con `MediaRecorder` y reproducir en bucle— tiene
+tres problemas que así no existen: el códec añade un silencio al principio y al
+final que se oye como un hueco en cada vuelta, la memoria crece con la duración,
+y una capa grabada es una foto muerta. Con eventos, el bucle empalma exacto y
+pesa unos pocos kilobytes.
+
+El precio es que esto introduce polifonía, que la v1 dejaba fuera a propósito.
+Pero la voz en directo sigue siendo una sola: lo que suena a la vez son
+grabaciones del propio intérprete, que es exactamente lo que hace un pedal de
+bucles.
+
+---
+
+## Sobre el clip
+
+Se graba sobre un lienzo aparte, no sobre el de la pantalla. Cuesta un dibujado
+extra por fotograma mientras dura, y a cambio el vídeo sale en vertical desde una
+cámara apaisada, a resolución fija, sin depender del tamaño de la ventana ni de
+la densidad del dispositivo.
+
+Se prefiere MP4 sobre WebM cuando el navegador lo permite, porque es lo único que
+Safari en iOS acepta pasar a otras aplicaciones; un WebM allí se queda en el
+carrete sin poder subirse a ningún sitio.
+
+El vídeo lleva la dirección impresa. Es la única pieza de todo esto que existe
+por una razón que no es musical: un vídeo compartido sin la dirección es un
+callejón sin salida para quien lo ve.
 
 ---
 
@@ -169,6 +224,11 @@ Los que se pueden comprobar de forma automática están en `tests/`:
   soltando la nota.
 - **El ataque llega en dos o tres fotogramas** desde que la pinza se cierra.
 - **Recargar conserva** escala, tónica, timbre y ajustes de suavizado.
+- **Una capa de bucle nunca deja una nota colgada** ni coloca eventos fuera del
+  ciclo, tampoco grabando a caballo entre dos vueltas; una toma sin notas se
+  descarta en lugar de dejar una capa fantasma.
+- **Un enlace manipulado no impide arrancar**: se aplica lo que se reconoce y se
+  descarta el resto.
 
 Los que exigen oído o un dispositivo real —25 fps en un móvil de gama media,
 ausencia de chasquidos— no se pueden afirmar desde aquí y quedan por verificar
@@ -176,8 +236,14 @@ en hardware.
 
 ---
 
-## Fuera del alcance de esta versión
+## Fuera del alcance
 
-Polifonía y acordes, grabación o exportación a audio y MIDI, multijugador y
-gestos entrenables por el usuario. Todo ello queda arquitectónicamente posible,
-no implementado.
+Acordes tocados en directo, exportación a MIDI, multijugador y gestos entrenables
+por el usuario. Queda arquitectónicamente posible, no implementado.
+
+## Lo que esto no es
+
+Nada de aquí garantiza que el proyecto circule. Lo que se ha hecho es quitar las
+razones por las que no podía: antes no salía nada del navegador, y ahora sale un
+vídeo vertical con la dirección impresa. Que alguien quiera enseñarlo depende de
+que tocarlo sea divertido, y eso solo lo dice una cámara con manos delante.

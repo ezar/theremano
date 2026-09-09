@@ -19,6 +19,13 @@
 
 * { box-sizing: border-box; }
 
+/*
+ * Una clase con `display` gana en especificidad a la regla `[hidden]` del
+ * navegador, asi que un boton con clase propia se queda visible pese a tener el
+ * atributo puesto. Esto lo zanja de una vez para todo el documento.
+ */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   height: 100%;
@@ -170,8 +177,11 @@ html, body {
 #diagnostics {
   position: absolute;
   right: calc(16px + var(--safe-r));
-  /* Por encima de la fila donde el overlay escribe los nombres de la rejilla. */
-  bottom: calc(46px + var(--safe-b));
+  /*
+   * Arriba, bajo el boton de ajustes. Abajo se peleaba por el mismo sitio con
+   * los nombres de la rejilla y con la barra de acciones.
+   */
+  top: calc(58px + var(--safe-t));
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.7rem;
   line-height: 1.55;
@@ -382,3 +392,203 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 1ms !important; }
 }
+
+/* ---------- Nota coloreada por altura ---------- */
+
+/*
+ * --note-hue lo escribe el HUD en cada cambio de nota. Tener el color en una
+ * variable permite que la nota, el marco de grabacion y el resplandor compartan
+ * el mismo tono sin recalcularlo tres veces.
+ */
+:root { --note-hue: 46; }
+
+#note.sounding { color: hsl(var(--note-hue), 95%, 72%); }
+
+/* ---------- Barra de acciones ---------- */
+
+#actions {
+  position: absolute;
+  left: 50%;
+  bottom: calc(18px + var(--safe-b));
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  z-index: 4;
+  transition: opacity 240ms ease;
+}
+#actions.hidden { opacity: 0; pointer-events: none; }
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  color: var(--fg);
+  font-size: 0.85rem;
+  font-weight: 550;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+  transition: border-color 160ms ease, background 160ms ease, transform 120ms ease;
+}
+.action:hover:not(:disabled) { border-color: rgba(255, 255, 255, 0.32); }
+.action:active:not(:disabled) { transform: scale(0.97); }
+.action:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.action .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+  flex: none;
+  transition: background 160ms ease, opacity 160ms ease;
+}
+
+.action.primary { border-color: rgba(255, 209, 102, 0.45); }
+.action.primary .dot { background: var(--accent); opacity: 1; }
+
+.action.ghost { padding: 10px 14px; color: var(--muted); font-weight: 450; }
+
+/* Grabando: el punto late y el borde se enciende. */
+.action.armed {
+  border-color: rgba(255, 95, 86, 0.75);
+  background: rgba(255, 95, 86, 0.16);
+}
+.action.armed .dot {
+  background: #ff5f56;
+  opacity: 1;
+  animation: pulse 1.05s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.62); opacity: 0.55; }
+}
+
+/* Marco rojo mientras se graba el clip: imposible olvidar que esta grabando. */
+#stage.recording::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 3px solid rgba(255, 95, 86, 0.85);
+  pointer-events: none;
+  z-index: 6;
+  animation: frame-breathe 1.6s ease-in-out infinite;
+}
+@keyframes frame-breathe {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 0.35; }
+}
+
+/* ---------- Capas de bucle ---------- */
+
+#loop-lanes {
+  position: absolute;
+  left: calc(18px + var(--safe-l));
+  bottom: calc(62px + var(--safe-b));
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.loop-lane {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px 5px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  font-size: 0.74rem;
+  color: var(--muted);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  animation: lane-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.loop-lane .swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  box-shadow: 0 0 10px currentColor;
+}
+.loop-lane.muted { opacity: 0.42; }
+.loop-lane.muted .swatch { box-shadow: none; }
+@keyframes lane-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- Pista y avisos ---------- */
+
+#hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(72px + var(--safe-b));
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(9, 12, 20, 0.7);
+  border: 1px solid var(--edge);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+  transition: opacity 500ms ease;
+}
+#hint.gone { opacity: 0; pointer-events: none; }
+
+#toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(78px + var(--safe-b));
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: rgba(9, 12, 20, 0.92);
+  border: 1px solid var(--edge);
+  color: var(--fg);
+  font-size: 0.84rem;
+  text-align: center;
+  max-width: min(86vw, 420px);
+  z-index: 5;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  animation: toast-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+#toast[hidden] { display: none; }
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* En pantallas estrechas la barra de acciones y las capas se pisan. */
+@media (max-width: 520px) {
+  .action .label { display: none; }
+  .action { padding: 12px; }
+  .action.ghost { font-size: 0.78rem; }
+  .action.ghost .label { display: inline; }
+  #loop-lanes { bottom: calc(70px + var(--safe-b)); }
+  #hint { font-size: 0.74rem; }
+}
+
+/* ---------- Enlace para compartir ---------- */
+
+.share-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.share-row button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 209, 102, 0.4);
+  background: rgba(255, 209, 102, 0.12);
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+.share-row button:hover { background: rgba(255, 209, 102, 0.2); }

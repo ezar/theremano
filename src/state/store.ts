@@ -1,5 +1,6 @@
 import type { ScaleId } from '../mapping/scales';
 import type { PresetId } from '../audio/presets';
+import type { ClipAspect } from '../capture/recorder';
 
 /**
  * Estado observable minimo, sin dependencias.
@@ -30,6 +31,8 @@ export interface Settings {
   overlayBeta: number;
   showDiagnostics: boolean;
   showRawTrace: boolean;
+  /** Proporcion del clip que se graba para compartir. */
+  clipAspect: ClipAspect;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -49,6 +52,7 @@ export const DEFAULT_SETTINGS: Settings = {
   overlayBeta: 0.05,
   showDiagnostics: true,
   showRawTrace: false,
+  clipAspect: 'vertical',
 };
 
 const STORAGE_KEY = 'theremano.settings.v1';
@@ -141,6 +145,8 @@ export interface Runtime {
   latencyMs: number;
   inferenceMs: number;
   pinchRatio: number;
+  /** MIDI de la nota actual. El HUD lo usa para colorear. */
+  midi: number;
   notice: string | null;
 }
 
@@ -162,5 +168,6 @@ export const runtime: Runtime = {
   latencyMs: 0,
   inferenceMs: 0,
   pinchRatio: 1,
+  midi: 69,
   notice: null,
 };
