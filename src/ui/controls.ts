@@ -1,7 +1,7 @@
 import { PRESETS, type PresetId } from '../audio/presets';
 import { MELODIES } from '../mapping/melodies';
 import { SCALES, type ScaleId } from '../mapping/scales';
-import { i18n, t, type LocalePreference } from '../i18n';
+import { i18n, t } from '../i18n';
 import type { Settings, SettingsStore } from '../state/store';
 import type { CameraInfo } from '../camera/stream';
 import type { ClipAspect } from '../capture/recorder';
@@ -21,8 +21,8 @@ interface ControlsDeps {
   onRequestClose: () => void;
   onShareLink: () => void;
   onMelodyChange: (id: string) => void;
-  onLocaleChange: (preference: LocalePreference) => void;
-  localePreference: () => LocalePreference;
+  onLocaleChange: (preference: string) => void;
+  localePreference: () => string;
 }
 
 type Binder = (settings: Readonly<Settings>) => void;
@@ -32,6 +32,13 @@ export class Controls {
   private readonly toggle: HTMLButtonElement;
   private readonly binders: Binder[] = [];
   private cameraSelect: HTMLSelectElement | null = null;
+  /**
+   * La lista de camaras la trae la aplicacion una sola vez, al arrancar. Sin
+   * recordarla aqui, reconstruir el panel al cambiar de idioma dejaba el
+   * selector de dispositivo vacio hasta la siguiente recarga.
+   */
+  private cameras: readonly CameraInfo[] = [];
+  private activeCameraId: string | null = null;
   private open = false;
 
   constructor(private readonly deps: ControlsDeps) {
@@ -56,6 +63,7 @@ export class Controls {
     i18n.subscribe(() => {
       this.binders.length = 0;
       this.build();
+      this.setCameras(this.cameras, this.activeCameraId);
       this.refresh();
       this.toggle.textContent = this.open ? t().actions.close : t().actions.settings;
       this.toggle.setAttribute('aria-label', t().actions.settings);
@@ -76,6 +84,8 @@ export class Controls {
   }
 
   setCameras(cameras: readonly CameraInfo[], activeId: string | null): void {
+    this.cameras = cameras;
+    this.activeCameraId = activeId;
     const select = this.cameraSelect;
     if (!select) return;
     select.replaceChildren();
@@ -107,7 +117,7 @@ export class Controls {
         { value: 'en', label: 'English' },
       ],
       () => this.deps.localePreference(),
-      (value) => this.deps.onLocaleChange(value as LocalePreference),
+      (value) => this.deps.onLocaleChange(value),
     );
 
     this.section(s.shareSection);

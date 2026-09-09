@@ -27,8 +27,16 @@ export function detectLocale(): Locale {
   return 'es';
 }
 
-export function resolveLocale(preference: LocalePreference): Locale {
-  return preference === 'auto' ? detectLocale() : preference;
+/**
+ * Normaliza cualquier cosa que llegue guardada.
+ *
+ * El almacenamiento local es entrada externa: un valor de otra version, o
+ * escrito a mano, llegaria hasta aqui. Sin normalizar, un "fr" dejaba el
+ * diccionario en undefined y la aplicacion no llegaba a pintarse.
+ */
+export function resolveLocale(preference: string): Locale {
+  if (preference === 'es' || preference === 'en') return preference;
+  return detectLocale();
 }
 
 type Listener = (strings: Strings, locale: Locale) => void;
@@ -45,7 +53,7 @@ class I18n {
     return LOCALES[this.locale];
   }
 
-  set(preference: LocalePreference): void {
+  set(preference: string): void {
     const next = resolveLocale(preference);
     if (next === this.locale) return;
     this.locale = next;
@@ -54,7 +62,7 @@ class I18n {
   }
 
   /** Se aplica sin notificar: para el arranque, antes de construir nada. */
-  init(preference: LocalePreference): void {
+  init(preference: string): void {
     this.locale = resolveLocale(preference);
     document.documentElement.lang = this.t.htmlLang;
   }

@@ -75,4 +75,15 @@ describe('diccionarios de idioma', () => {
     expect(resolveLocale('en')).toBe('en');
     expect(resolveLocale('es')).toBe('es');
   });
+
+  it('un idioma guardado que no existe no impide arrancar', () => {
+    // El almacenamiento local es entrada externa: un valor de otra version, o
+    // escrito a mano, llega hasta aqui. Sin normalizar dejaba el diccionario en
+    // undefined y la aplicacion no llegaba a pintarse.
+    for (const raro of ['fr', '', 'ES', 'es-AR', 'null', '../../etc']) {
+      const resolved = resolveLocale(raro);
+      expect(['es', 'en'], raro).toContain(resolved);
+      expect(LOCALES[resolved], raro).toBeDefined();
+    }
+  });
 });

@@ -6,7 +6,7 @@ import { getPreset } from './audio/presets';
 import { ClipRecorder, clipRecordingSupported, deliverClip } from './capture/recorder';
 import { GuideSession, getMelody } from './mapping/melodies';
 import { decodeSettings, hasShareableKeys, shareUrl } from './state/share';
-import { i18n, t, type LocalePreference } from './i18n';
+import { i18n, t } from './i18n';
 import { applyStaticStrings } from './ui/static';
 import { Camera, HIGH_RES, LOW_RES, attachStream, type CameraInfo } from './camera/stream';
 import { LandmarkFilter } from './filter/vectorFilter';
@@ -96,7 +96,7 @@ class Theremano {
     const settings = this.store.get();
     // Antes que nada: el idioma decide el texto de todo lo que se construye a
     // continuacion, incluido el HTML estatico de la pantalla inicial.
-    i18n.init(settings.locale as LocalePreference);
+    i18n.init(settings.locale);
     applyStaticStrings();
 
     this.mapper = new Mapper(settings);
@@ -114,11 +114,11 @@ class Theremano {
       onRequestClose: () => undefined,
       onShareLink: () => void this.copyShareLink(),
       onMelodyChange: (id) => this.store.set({ melodyId: id }),
-      onLocaleChange: (preference) => {
-        this.store.set({ locale: preference });
-        i18n.set(preference);
-      },
-      localePreference: () => this.store.get().locale as LocalePreference,
+      // Solo escribe en el store: aplicar el idioma es cosa del suscriptor de
+      // ajustes, para que Restablecer, que tambien lo cambia, pase por el mismo
+      // camino en lugar de dejar la pantalla en un idioma y el selector en otro.
+      onLocaleChange: (preference) => this.store.set({ locale: preference }),
+      localePreference: () => this.store.get().locale,
     });
     i18n.subscribe(() => {
       applyStaticStrings();
@@ -329,8 +329,9 @@ class Theremano {
 
       this.looper.attach(this.engine.loopOutput);
 
-      await this.landmarker.load((message) => this.setStatus(message));
-      await this.landmarker.warmUp((message) => this.setStatus(message));
+      const loading = t().loading;
+      await this.landmarker.load(loading, (message) => this.setStatus(message));
+      await this.landmarker.warmUp(loading.warmup, (message) => this.setStatus(message));
 
       void this.refreshCameraList();
       void this.requestWakeLock();
@@ -595,9 +596,12 @@ class Theremano {
 
     this.lowFpsSince = null;
     this.highRes = false;
-    runtime.notice = t().hud.lowPerformance;
+    // Se compara el mensaje exacto, no su comienzo: buscar un prefijo en
+    // espanol dejaba el aviso ingles clavado en pantalla para siempre.
+    const notice = t().hud.lowPerformance;
+    runtime.notice = notice;
     window.setTimeout(() => {
-      if (runtime.notice?.startsWith('Rendimiento bajo')) runtime.notice = null;
+      if (runtime.notice === notice) runtime.notice = null;
     }, 5000);
     void this.reopenCamera();
   }
@@ -620,9 +624,10 @@ class Theremano {
       void this.refreshCameraList();
     } catch (error) {
       console.error('[theremano] no se pudo reabrir la camara', error);
-      runtime.notice = t().hud.cameraSwitchFailed;
+      const notice = t().hud.cameraSwitchFailed;
+      runtime.notice = notice;
       window.setTimeout(() => {
-        runtime.notice = null;
+        if (runtime.notice === notice) runtime.notice = null;
       }, 4000);
     }
   }
@@ -664,6 +669,7 @@ class Theremano {
       this.mapper.syncSettings(settings);
       this.hud.setSubtitle(settings);
     }
+    if (changed.has('locale')) i18n.set(settings.locale);
     if (changed.has('melodyId')) this.syncGuide(settings.melodyId, { applySuggestedScale: true });
 
     // El modo continuo no reparte el encuadre en zonas, asi que una guia activa
