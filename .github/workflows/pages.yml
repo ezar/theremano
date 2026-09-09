@@ -1,8 +1,12 @@
 name: pages
 
+# Solo manual, y a proposito. El destino de este proyecto es Vercel; GitHub
+# Pages es la alternativa. Publicar en Pages exige antes habilitarlo en
+# Settings -> Pages -> Source: GitHub Actions, asi que si se disparara en cada
+# push a main fallaria siempre en los repositorios que no lo tengan puesto, y un
+# check en rojo permanente deja de significar nada. Una vez habilitado, se lanza
+# desde la pestana Actions.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
