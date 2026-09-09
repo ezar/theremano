@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { decodePerformance, encodePerformance, thin, type Performance } from '../src/state/performance';
-import type { LoopEvent } from '../src/audio/loopTake';
+import { decodePerformance, encodePerformance, hasWholeNotes, thin, type Performance } from '../src/state/performance';
+import { LoopTake, type LoopEvent } from '../src/audio/loopTake';
 
 /**
  * Lo que se comparte viaja por sitios donde el enlace se recorta, se reescribe y
@@ -131,6 +131,66 @@ describe('interpretacion en el enlace', () => {
     expect(attacks.map((e) => Number(e.t.toFixed(1)))).toEqual([0, 0.7, 1.4, 2.1]);
   });
 
+  /**
+   * El caso que casi se cuela.
+   *
+   * Una sobregrabacion que empieza a mitad de vuelta tiene la suelta antes que
+   * su ataque en el array, porque `LoopTake.finish()` ordena por tiempo y la
+   * nota cruza el final del ciclo. La capa se construye aqui con el propio
+   * LoopTake, y no a mano, precisamente para que sea la de verdad.
+   */
+  it('una capa cuya nota cruza el final del ciclo es valida', () => {
+    const take = new LoopTake('theremin', 3.4, 4);
+    const live = { freq: 440, cutoffNorm: 0.5, gain: 0.8 };
+    take.capture(0.1, { ...live, gateEvent: 'attack', gateOpen: true });
+    for (let at = 0.15; at < 0.9; at += 0.05) {
+      take.capture(at, { ...live, gateEvent: null, gateOpen: true });
+    }
+    take.capture(0.95, { ...live, gateEvent: 'release', gateOpen: false });
+    const finished = take.finish(1)!;
+
+    const gates = finished.events.filter((e) => e.kind !== 'param');
+    expect(gates[0]!.kind, 'la suelta queda antes que el ataque al ordenar').toBe('release');
+    expect(gates.at(-1)!.kind).toBe('attack');
+
+    expect(hasWholeNotes(finished.events)).toBe(true);
+    const back = decodePerformance(
+      encodePerformance({ cycleSeconds: finished.cycleSeconds, tracks: [{ presetId: 'theremin', events: finished.events }] })!.encoded,
+    );
+    expect(back, 'y por tanto el enlace tiene que aceptarse').not.toBe(null);
+  });
+
+  describe('notas enteras', () => {
+    const at = (t: number, kind: LoopEvent['kind']): LoopEvent => ({ t, kind, freq: 440, cutoffNorm: 0.5, gain: 0.8 });
+
+    it('acepta una nota normal y una que da la vuelta', () => {
+      expect(hasWholeNotes([at(0, 'attack'), at(0.5, 'param'), at(1, 'release')])).toBe(true);
+      expect(hasWholeNotes([at(0.2, 'release'), at(3, 'attack')])).toBe(true);
+      expect(hasWholeNotes([at(0, 'attack'), at(1, 'release'), at(2, 'attack'), at(3, 'release')])).toBe(true);
+    });
+
+    it('rechaza una capa que no llega a atacar: diria que suena sin sonar', () => {
+      expect(hasWholeNotes([at(0, 'param'), at(1, 'param')])).toBe(false);
+      expect(hasWholeNotes([at(0, 'param'), at(1, 'release')])).toBe(false);
+    });
+
+    it('rechaza un ataque sin suelta: se quedaria sonando en cada vuelta', () => {
+      expect(hasWholeNotes([at(0, 'attack')])).toBe(false);
+      expect(hasWholeNotes([at(0, 'attack'), at(1, 'param')])).toBe(false);
+      expect(hasWholeNotes([at(0, 'attack'), at(1, 'attack'), at(2, 'release')])).toBe(false);
+    });
+  });
+
+  it('no se codifican mas capas de las que se pueden reproducir', () => {
+    const five: Performance = {
+      cycleSeconds: 4,
+      tracks: Array.from({ length: 5 }, () => ({ presetId: 'theremin' as const, events: note(0.5, 69, 1) })),
+    };
+    const result = encodePerformance(five)!;
+    expect(result.tracks).toBe(4);
+    expect(decodePerformance(result.encoded)!.tracks).toHaveLength(4);
+  });
+
   it('sin capas, o sin ciclo, no hay nada que compartir', () => {
     expect(encodePerformance({ cycleSeconds: 4, tracks: [] })).toBe(null);
     expect(encodePerformance({ cycleSeconds: 4, tracks: [{ presetId: 'flute', events: [] }] })).toBe(null);
@@ -162,6 +222,82 @@ describe('interpretacion en el enlace', () => {
       huge[1] = 0xff;
       huge[2] = 0xff;
       expect(decodePerformance(toUrl(huge))).toBe(null);
+    });
+
+    /**
+     * Cinco capas bien formadas, no cinco declaradas sobre los bytes de una.
+     *
+     * La primera version de esta prueba hacia lo segundo, y pasaba por el motivo
+     * equivocado: el recorrido se quedaba sin bytes antes de llegar a ninguna
+     * comprobacion de limite. Aqui se repite el bloque de una capa entero cinco
+     * veces, asi que lo unico que puede rechazarlo es el limite.
+     */
+    it('rechaza cinco capas aunque esten bien formadas', () => {
+      const one = bytesOf(good);
+      const block = one.slice(4);
+      const five = new Uint8Array(4 + block.length * 5);
+      five.set(one.slice(0, 4));
+      five[3] = 5;
+      for (let i = 0; i < 5; i += 1) five.set(block, 4 + i * block.length);
+      expect(decodePerformance(toUrl(five))).toBe(null);
+
+      // Y con cuatro, el mismo montaje se acepta: lo que se rechaza es pasarse.
+      const four = new Uint8Array(4 + block.length * 4);
+      four.set(one.slice(0, 4));
+      four[3] = 4;
+      for (let i = 0; i < 4; i += 1) four.set(block, 4 + i * block.length);
+      expect(decodePerformance(toUrl(four))?.tracks).toHaveLength(4);
+    });
+
+    it('rechaza una capa vacia', () => {
+      const bytes = bytesOf(good);
+      bytes[5] = 0;
+      bytes[6] = 0;
+      expect(decodePerformance(toUrl(bytes))).toBe(null);
+    });
+
+    it('rechaza por bytes una capa cuyas notas no cuadran', () => {
+      // La misma comprobacion, pero por el camino real: se convierte la suelta
+      // final en un segundo ataque y el enlace tiene que caerse entero.
+      const bytes = bytesOf(good);
+      const count = bytes[5]! | (bytes[6]! << 8);
+      const last = 7 + (count - 1) * 6;
+      bytes[last + 1] = bytes[last + 1]! & 0x3f;
+      expect(decodePerformance(toUrl(bytes))).toBe(null);
+    });
+
+    /**
+     * El caso que se cuela por la puerta de atras.
+     *
+     * El reproductor recorre los eventos en orden de array pero los programa en
+     * su instante, y Web Audio los ejecuta por instante. Un enlace con los
+     * tiempos desordenados puede alternar ataques y sueltas en el array y sonar
+     * como dos ataques seguidos, que es exactamente la nota atascada que la
+     * comprobacion de notas enteras existe para evitar.
+     */
+    it('rechaza eventos desordenados en el tiempo', () => {
+      const twoNotes = encodePerformance({
+        cycleSeconds: 4,
+        tracks: [{ presetId: 'theremin', events: [...note(0, 69, 0.5), ...note(1, 72, 0.5)] }],
+      })!.encoded;
+      const bytes = bytesOf(twoNotes);
+
+      // Se adelanta el segundo ataque por delante de la primera suelta sin
+      // tocar el orden del array: las clases siguen alternando.
+      const gates = [];
+      const count = bytes[5]! | (bytes[6]! << 8);
+      for (let e = 0; e < count; e += 1) {
+        const at = 7 + e * 6;
+        const packed = bytes[at]! | (bytes[at + 1]! << 8);
+        if (packed >> 14 !== 2) gates.push({ at, kind: packed >> 14, t: packed & 0x3fff });
+      }
+      expect(gates.map((g) => g.kind), 'ataque, suelta, ataque, suelta').toEqual([0, 1, 0, 1]);
+
+      const release = gates[1]!;
+      const units = gates[2]!.t + 10;
+      bytes[release.at] = units & 0xff;
+      bytes[release.at + 1] = ((units >> 8) & 0x3f) | (1 << 6);
+      expect(decodePerformance(toUrl(bytes))).toBe(null);
     });
 
     it('rechaza un timbre que no existe', () => {

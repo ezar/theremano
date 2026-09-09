@@ -1,6 +1,6 @@
 import { PRESETS, type PresetId } from '../audio/presets';
 import type { LoopEvent } from '../audio/loopTake';
-import { MAX_CYCLE_SECONDS, MIN_CYCLE_SECONDS } from '../audio/loopTake';
+import { MAX_CYCLE_SECONDS, MAX_TRACKS, MIN_CYCLE_SECONDS } from '../audio/loopTake';
 
 /**
  * Una interpretacion dentro de un enlace.
@@ -73,7 +73,9 @@ export interface EncodeResult {
  * comodidad y no puede tumbar la aplicacion.
  */
 export function encodePerformance(performance: Performance): EncodeResult | null {
-  const usable = performance.tracks.filter((track) => track.events.length > 0);
+  // Se recorta a lo que se puede reproducir. Codificar una quinta capa seria
+  // escribir algo que el propio decodificador va a rechazar despues.
+  const usable = performance.tracks.filter((track) => track.events.length > 0).slice(0, MAX_TRACKS);
   if (usable.length === 0) return null;
   if (!(performance.cycleSeconds > 0)) return null;
 
@@ -103,7 +105,10 @@ export function decodePerformance(encoded: string): Performance | null {
   if (!(cycleSeconds >= MIN_CYCLE_SECONDS) || cycleSeconds > MAX_CYCLE_SECONDS) return null;
 
   const trackCount = bytes[at++] ?? 0;
-  if (trackCount < 1 || trackCount > PRESETS.length + 4) return null;
+  // Contra el limite de la estacion de bucles, no contra un numero cualquiera:
+  // aceptar mas capas de las que se pueden reproducir daria por bueno un enlace
+  // al que luego se le caen las ultimas por el camino, en silencio.
+  if (trackCount < 1 || trackCount > MAX_TRACKS) return null;
 
   const tracks: PerformanceTrack[] = [];
   for (let i = 0; i < trackCount; i += 1) {
@@ -112,15 +117,32 @@ export function decodePerformance(encoded: string): Performance | null {
     if (!preset) return null;
     const eventCount = readUint16(bytes, at);
     at += 2;
-    if (at + eventCount * BYTES_PER_EVENT > bytes.length) return null;
+    // Una capa sin eventos no la produce el codificador: las vacias se filtran
+    // antes de escribir. Si aparece, el enlace no es de aqui.
+    if (eventCount === 0 || at + eventCount * BYTES_PER_EVENT > bytes.length) return null;
 
     const events: LoopEvent[] = [];
+    let previous = -1;
     for (let e = 0; e < eventCount; e += 1) {
       const packed = readUint16(bytes, at);
       const kind = KIND_NAMES[packed >> 14];
       if (!kind) return null;
       const t = (packed & MAX_TIME_UNITS) / TIME_SCALE;
       if (t > cycleSeconds + 0.5) return null;
+      /*
+       * En orden de tiempo, y no solo dentro del ciclo.
+       *
+       * Sin esto, la comprobacion de notas enteras miraria el orden del array y
+       * no el del sonido, que son cosas distintas: el reproductor recorre los
+       * eventos en orden de array pero los programa en su instante, y Web Audio
+       * los ejecuta por instante. Un enlace con ataque en 0, suelta en 2, ataque
+       * en 1 y suelta en 3 alterna perfectamente en el array y suena como dos
+       * ataques seguidos. El codificador siempre escribe en orden, porque
+       * LoopTake.finish() ordena antes de cerrar la toma, asi que exigirlo no
+       * rechaza nada legitimo.
+       */
+      if (t < previous) return null;
+      previous = t;
       const midi = readUint16(bytes, at + 2) / PITCH_SCALE;
       events.push({
         t,
@@ -131,14 +153,43 @@ export function decodePerformance(encoded: string): Performance | null {
       });
       at += BYTES_PER_EVENT;
     }
-    if (events.length > 0) tracks.push({ presetId: preset.id, events });
+    if (!hasWholeNotes(events)) return null;
+    tracks.push({ presetId: preset.id, events });
   }
 
-  if (tracks.length === 0) return null;
   // Bytes de sobra significan que esto no lo escribio esta version. Antes que
   // adivinar, se rechaza.
   if (at !== bytes.length) return null;
   return { cycleSeconds, tracks };
+}
+
+/**
+ * Notas enteras, contadas dando la vuelta al ciclo.
+ *
+ * Sin esto, dos capas rotas pasan el resto de la validacion y suenan mal en vez
+ * de rechazarse: una con solo parametros no produce una sola nota, y el enlace
+ * se queda anunciando que esta sonando algo que no suena; y un ataque sin su
+ * suelta deja la nota abierta, y como cada vuelta la vuelve a atacar, se
+ * convierte en un bordon que ya no para.
+ *
+ * Cuenta con que los eventos llegan en orden de tiempo, cosa que el
+ * decodificador exige antes de llamar aqui: mirar el orden del array cuando el
+ * sonido va por otro seria comprobar la lista equivocada.
+ *
+ * La comprobacion es circular y no lineal, y esa es la parte que importa.
+ * `LoopTake.finish()` ordena los eventos por tiempo, asi que una sobregrabacion
+ * que empieza a mitad de vuelta acaba con la suelta ANTES que su ataque en el
+ * array: la nota cruza el final del ciclo. Exigir que empiece por un ataque
+ * rechazaria esas capas, que son perfectamente legitimas. Lo que hay que exigir
+ * es que ataques y sueltas se alternen al dar la vuelta.
+ */
+export function hasWholeNotes(events: readonly LoopEvent[]): boolean {
+  const gates = events.filter((event) => event.kind !== 'param');
+  if (gates.length < 2) return false;
+  for (let i = 0; i < gates.length; i += 1) {
+    if (gates[i]!.kind === gates[(i + 1) % gates.length]!.kind) return false;
+  }
+  return true;
 }
 
 /** Descarta parametros hasta dejar como mucho `paramHz` por segundo. */

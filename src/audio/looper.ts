@@ -1,9 +1,9 @@
 import * as Tone from 'tone';
 import { getPreset, type Preset, type PresetId } from './presets';
-import { LoopTake, type LiveSnapshot, type LoopEvent } from './loopTake';
+import { LoopTake, MAX_TRACKS, type LiveSnapshot, type LoopEvent } from './loopTake';
 
 export type { LoopEvent } from './loopTake';
-export { MAX_CYCLE_SECONDS, MIN_CYCLE_SECONDS } from './loopTake';
+export { MAX_CYCLE_SECONDS, MAX_TRACKS, MIN_CYCLE_SECONDS } from './loopTake';
 
 /**
  * Estacion de bucles.
@@ -24,8 +24,6 @@ export { MAX_CYCLE_SECONDS, MIN_CYCLE_SECONDS } from './loopTake';
  * son grabaciones del propio interprete, que es justo lo que hace un pedal de
  * bucles.
  */
-
-export const MAX_TRACKS = 4;
 
 /** Colores de las capas, en grados de tono. Se reparten para distinguirlas. */
 const TRACK_HUES = [46, 165, 275, 200];
