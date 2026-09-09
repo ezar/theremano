@@ -28,6 +28,12 @@ export interface Strings {
     start: string;
     starting: string;
     permissionNote: string;
+    /** Cuando el enlace trae una interpretacion de otra persona. */
+    invite: string;
+    invitedNote: string;
+    listen: string;
+    stopListening: string;
+    playAlong: string;
   };
   loading: {
     camera: string;
@@ -96,6 +102,8 @@ export interface Strings {
     languageAuto: string;
     shareSection: string;
     copyLink: string;
+    copyPerformance: string;
+    performanceHint: string;
     clipFormat: string;
     clipVertical: string;
     clipLandscape: string;
@@ -155,6 +163,10 @@ export interface Strings {
     stageHands: string;
     stageCamera: string;
     linkCopied: string;
+    performanceCopied: (tracks: number) => string;
+    performanceEmpty: string;
+    performanceTooBig: string;
+    performanceBroken: string;
     linkInAddressBar: string;
     guideStart: (name: string, hint: string) => string;
     guideFinished: (accuracy: number) => string;

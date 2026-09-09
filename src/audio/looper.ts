@@ -232,6 +232,36 @@ export class Looper {
     if (this.tracks.length === 0) this.stopTransport();
   }
 
+  /**
+   * Instala capas que no se han grabado aqui: las que llegan en un enlace.
+   *
+   * Reemplaza lo que hubiera, porque mezclar lo que uno estaba tocando con lo
+   * que le acaban de mandar produce una vuelta que no es de nadie. Devuelve
+   * false si no hay salida de audio todavia o si no llega ninguna capa con
+   * eventos: el resto de la aplicacion decide entonces que contar.
+   */
+  load(tracks: ReadonlyArray<{ presetId: PresetId; events: LoopEvent[] }>, cycleSeconds: number): boolean {
+    if (!this.output || cycleSeconds <= 0) return false;
+    const usable = tracks.filter((track) => track.events.length > 0).slice(0, MAX_TRACKS);
+    if (usable.length === 0) return false;
+
+    this.clear();
+    this.cycleSeconds = cycleSeconds;
+    for (const incoming of usable) {
+      const track: LoopTrack = {
+        id: this.nextId++,
+        presetId: incoming.presetId,
+        events: incoming.events,
+        muted: false,
+        hue: TRACK_HUES[this.tracks.length % TRACK_HUES.length]!,
+      };
+      this.tracks.push(track);
+      this.voices.set(track.id, new LoopVoice(getPreset(track.presetId), this.output));
+    }
+    this.startTransport();
+    return true;
+  }
+
   clear(): void {
     this.recordingTake = null;
     for (const voice of this.voices.values()) {

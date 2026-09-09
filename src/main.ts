@@ -5,7 +5,8 @@ import { Looper } from './audio/looper';
 import { getPreset } from './audio/presets';
 import { ClipRecorder, clipRecordingSupported, deliverClip } from './capture/recorder';
 import { GuideSession, getMelody } from './mapping/melodies';
-import { decodeSettings, hasShareableKeys, shareUrl } from './state/share';
+import { decodeSettings, hasShareableKeys, readPerformanceParam, shareUrl } from './state/share';
+import { decodePerformance, encodePerformance, type Performance } from './state/performance';
 import { i18n, t } from './i18n';
 import { applyStaticStrings } from './ui/static';
 import { Camera, HIGH_RES, LOW_RES, attachStream, type CameraInfo } from './camera/stream';
@@ -77,6 +78,8 @@ class Theremano {
   private readonly splashStatus = must('splash-status');
   private readonly splashError = must('splash-error');
   private readonly startButton = must<HTMLButtonElement>('start-button');
+  private readonly listenButton = must<HTMLButtonElement>('listen-button');
+  private readonly splashInvite = must('splash-invite');
 
   /** Un filtro de overlay por rol: los puntos de cada mano tienen su historia. */
   private readonly overlayFilters: Record<'melody' | 'expression', LandmarkFilter>;
@@ -93,12 +96,26 @@ class Theremano {
   private lastEffectsTime = 0;
   private clipStopping = false;
   private guide: GuideSession | null = null;
+  /** Interpretacion que venia en el enlace, pendiente de sonar. */
+  private pendingPerformance: Performance | null = null;
+  private brokenPerformance = false;
+  /** Sonando el enlace sin haber arrancado la camara. */
+  private listening = false;
 
   constructor() {
     // Un enlace compartido trae escala, tonica y timbre. Se aplica antes de
     // construir nada, para que el instrumento arranque ya configurado.
     const fromLink = decodeSettings(window.location.hash);
     if (hasShareableKeys(fromLink)) this.store.set(fromLink);
+
+    // La interpretacion del enlace se lee aqui, pero no suena hasta que alguien
+    // pulsa: ningun navegador deja arrancar audio sin un gesto, y tampoco seria
+    // de recibo que una direccion empezara a sonar sola.
+    const encoded = readPerformanceParam(window.location.hash);
+    if (encoded) {
+      this.pendingPerformance = decodePerformance(encoded);
+      this.brokenPerformance = this.pendingPerformance === null;
+    }
 
     const settings = this.store.get();
     // Antes que nada: el idioma decide el texto de todo lo que se construye a
@@ -120,6 +137,7 @@ class Theremano {
       },
       onRequestClose: () => undefined,
       onShareLink: () => void this.copyShareLink(),
+      onSharePerformance: () => void this.copyPerformanceLink(),
       onMelodyChange: (id) => this.store.set({ melodyId: id }),
       // Solo escribe en el store: aplicar el idioma es cosa del suscriptor de
       // ajustes, para que Restablecer, que tambien lo cambia, pase por el mismo
@@ -129,6 +147,9 @@ class Theremano {
     });
     i18n.subscribe(() => {
       applyStaticStrings();
+      // applyStaticStrings devuelve los rotulos a su version normal, asi que la
+      // invitacion hay que volver a ponerla despues de cada cambio de idioma.
+      this.applyInvite();
       this.hud.setSubtitle(this.store.get());
     });
 
@@ -140,6 +161,8 @@ class Theremano {
 
     this.store.subscribe((next, changed) => this.onSettingsChanged(next, changed));
     this.startButton.addEventListener('click', () => void this.start());
+    this.listenButton.addEventListener('click', () => void this.toggleListening());
+    this.applyInvite();
     this.bindActions();
     // Al restaurar no se toca la escala: el interprete pudo cambiarla despues de
     // elegir la melodia, y un enlace compartido trae la suya.
@@ -323,6 +346,90 @@ class Theremano {
     this.hud.toast(message, 4800);
   }
 
+  /**
+   * Deja la pantalla inicial en modo invitacion.
+   *
+   * Quien llega por un enlace con musica dentro no viene a montar nada: viene a
+   * oir lo que le han mandado. El boton de escuchar va antes que el de empezar
+   * porque escuchar no pide permiso de camara, y ese permiso es la puerta donde
+   * se queda la mitad de la gente.
+   */
+  private applyInvite(): void {
+    const invited = this.pendingPerformance !== null;
+    this.splashInvite.hidden = !invited;
+    this.listenButton.hidden = !invited;
+    if (invited) {
+      this.startButton.textContent = t().splash.playAlong;
+      // La nota de siempre anuncia el permiso de camara, y aqui eso es falso:
+      // escuchar no lo pide. Dejarla puesta espantaria justo a quien viene a oir.
+      this.setStatus(t().splash.invitedNote);
+      this.listenButton.textContent = this.listening ? t().splash.stopListening : t().splash.listen;
+    }
+    if (this.brokenPerformance) this.showSplashError(t().toast.performanceBroken);
+  }
+
+  private async toggleListening(): Promise<void> {
+    const performance = this.pendingPerformance;
+    if (!performance) return;
+    if (this.listening) {
+      this.looper.clear();
+      this.engine.setMuted(false);
+      this.listening = false;
+      this.listenButton.textContent = t().splash.listen;
+      return;
+    }
+
+    this.listenButton.disabled = true;
+    try {
+      const settings = this.store.get();
+      // El mismo arranque de audio que el del instrumento, y ninguno de los
+      // otros: ni camara, ni modelo, ni bucle de fotogramas. Por eso suena al
+      // instante en vez de despues de descargar catorce megas de modelo.
+      await this.engine.start(settings.preset, settings.masterVolume);
+      this.looper.attach(this.engine.loopOutput);
+      if (!this.looper.load(performance.tracks, performance.cycleSeconds)) {
+        this.showSplashError(t().toast.performanceBroken);
+        return;
+      }
+      this.listening = true;
+      this.listenButton.textContent = t().splash.stopListening;
+    } catch (error) {
+      this.showStartError(error);
+    } finally {
+      this.listenButton.disabled = false;
+    }
+  }
+
+  /**
+   * Copia un enlace con lo que hay en la estacion de bucles dentro.
+   *
+   * Cabe porque lo grabado son gestos y no audio. Si no cupiera entero se dice,
+   * en lugar de mandar un enlace al que le faltan capas sin avisar.
+   */
+  private async copyPerformanceLink(): Promise<void> {
+    const { tracks, cycleSeconds } = this.looper.state;
+    if (tracks.length === 0 || cycleSeconds <= 0) {
+      this.hud.toast(t().toast.performanceEmpty);
+      return;
+    }
+    const encoded = encodePerformance({
+      cycleSeconds,
+      tracks: tracks.map((track) => ({ presetId: track.presetId, events: track.events })),
+    });
+    if (!encoded) {
+      this.hud.toast(t().toast.performanceTooBig);
+      return;
+    }
+    const url = shareUrl(this.store.get(), encoded.encoded);
+    try {
+      await navigator.clipboard.writeText(url);
+      this.hud.toast(t().toast.performanceCopied(encoded.tracks), 4200);
+    } catch {
+      window.location.hash = url.split('#')[1] ?? '';
+      this.hud.toast(t().toast.linkInAddressBar);
+    }
+  }
+
   private async copyShareLink(): Promise<void> {
     const url = shareUrl(this.store.get());
     try {
@@ -361,6 +468,11 @@ class Theremano {
       await this.engine.start(settings.preset, settings.masterVolume);
 
       this.looper.attach(this.engine.loopOutput);
+      // Si no se escucho antes, la interpretacion del enlace entra ahora: quien
+      // pulsa "tocar encima" espera encontrarse el bucle girando, no un silencio.
+      if (this.pendingPerformance && !this.listening) {
+        this.looper.load(this.pendingPerformance.tracks, this.pendingPerformance.cycleSeconds);
+      }
 
       const loading = t().loading;
       await this.landmarker.load(loading, (message) => this.setStatus(message));
@@ -376,6 +488,9 @@ class Theremano {
       this.help.reveal();
 
       runtime.running = true;
+      // A partir de aqui manda el bucle: la escucha era solo el rodeo para oir
+      // el enlace sin camara, y quien gobierna el silencio pasa a ser suspend().
+      this.listening = false;
       if (!this.store.get().onboarded) this.startOnboarding();
       this.splash.classList.add('leaving');
       window.setTimeout(() => {
@@ -389,6 +504,12 @@ class Theremano {
       this.starting = false;
       this.startButton.disabled = false;
     }
+  }
+
+  /** Un aviso en la pantalla inicial, donde el toast del HUD aun no se ve. */
+  private showSplashError(message: string): void {
+    this.splashError.textContent = message;
+    this.splashError.hidden = false;
   }
 
   private showStartError(error: unknown): void {
@@ -750,8 +871,12 @@ class Theremano {
   private onVisibilityChange(): void {
     if (document.hidden) {
       this.suspend();
+      // Escuchando no hay bucle de fotogramas que parar, pero el bucle de audio
+      // sigue girando: una pestana en segundo plano no puede quedarse sonando.
+      if (this.listening) this.engine.setMuted(true);
       return;
     }
+    if (this.listening) this.engine.setMuted(false);
     if (!runtime.running) return;
     this.engine.setMuted(false);
     this.lastFrameTime = 0;
