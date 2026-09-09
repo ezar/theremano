@@ -240,6 +240,12 @@ class Theremano {
       case 'started':
         this.hud.toast(hadCycle ? t().toast.layerRecording : t().toast.layerRecordingFirst);
         return;
+      case 'counting':
+        this.hud.toast(t().toast.countIn);
+        return;
+      case 'cancelled':
+        this.hud.toast(t().toast.countInCancelled);
+        return;
       case 'saved':
         this.hud.toast(t().toast.layerSaved(this.looper.state.tracks.length));
         return;

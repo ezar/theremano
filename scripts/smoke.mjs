@@ -24,6 +24,53 @@ const screenshot = process.argv[3] ?? 'smoke.png';
  */
 const MIN_CLIP_BYTES = 6000;
 
+/*
+ * Sonda de audio. Envuelve connect() para colgar un analizador de todo lo que
+ * llegue al destino y guarda el pico. Va en un initScript porque tiene que estar
+ * puesta antes de que la pagina cree su contexto de audio. La usan la pagina
+ * principal —para oir la claqueta— y la invitada —para oir el enlace—.
+ */
+function audioProbe() {
+  const nativeConnect = AudioNode.prototype.connect;
+  window.__peak = 0;
+  window.__resetPeak = () => {
+    window.__peak = 0;
+  };
+  AudioNode.prototype.connect = function (target, ...rest) {
+    try {
+      if (target instanceof AudioDestinationNode) {
+        const context = target.context;
+        if (!context.__probe) {
+          const probe = context.createAnalyser();
+          /*
+           * Ventana larga a proposito: casi un segundo de historia.
+           *
+           * Con 2048 muestras la ventana dura 46 ms, y el muestreo se hace desde
+           * el hilo principal, que en esta pagina esta saturado por la
+           * inferencia. Los avisos del temporizador llegaban tan separados que
+           * un chasquido de sesenta milisegundos se colaba entre dos ventanas: la
+           * claqueta sonaba y la sonda decia que no.
+           */
+          probe.fftSize = 32768;
+          context.__probe = probe;
+          const buffer = new Float32Array(probe.fftSize);
+          setInterval(() => {
+            probe.getFloatTimeDomainData(buffer);
+            for (const value of buffer) {
+              const level = Math.abs(value);
+              if (level > window.__peak) window.__peak = level;
+            }
+          }, 40);
+        }
+        nativeConnect.call(this, context.__probe);
+      }
+    } catch {
+      /* la sonda nunca puede tumbar a la pagina que observa */
+    }
+    return nativeConnect.call(this, target, ...rest);
+  };
+}
+
 const logs = [];
 const browser = await chromium.launch({
   ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
@@ -36,6 +83,7 @@ const browser = await chromium.launch({
 });
 const ctx = await browser.newContext({ permissions: ['camera'], viewport: { width: 1100, height: 720 } });
 const page = await ctx.newPage();
+await page.addInitScript(audioProbe);
 page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
 
@@ -184,9 +232,34 @@ const backToCamera = await page.evaluate(() => ({
 }));
 console.log(JSON.stringify({ handsOnly, handsClip, backToCamera }, null, 2));
 
-// --- Bucles: una toma sin una sola nota no debe dejar una capa fantasma.
+// --- Claqueta: cuatro pulsos por delante de la primera capa, cancelables.
+await page.evaluate(() => window.__resetPeak?.());
 await page.click('#loop-button');
-await page.waitForTimeout(1200);
+await page.waitForTimeout(700);
+const counting = await page.evaluate(() => ({
+  etiqueta: document.querySelector('#loop-button .label')?.textContent,
+  armado: document.getElementById('loop-button')?.classList.contains('armed'),
+  // Los pulsos tienen que oirse, no solo contarse.
+  picoDeAudio: Number((window.__peak ?? 0).toFixed(4)),
+  toast: document.getElementById('toast')?.textContent,
+}));
+// Volver a pulsar durante la cuenta la cancela sin dejar capa ni grabacion.
+await page.click('#loop-button');
+await page.waitForTimeout(300);
+const cancelled = await page.evaluate(() => ({
+  etiqueta: document.querySelector('#loop-button .label')?.textContent,
+  armado: document.getElementById('loop-button')?.classList.contains('armed'),
+  lanes: document.querySelectorAll('.loop-lane').length,
+}));
+console.log(JSON.stringify({ counting, cancelled }, null, 2));
+
+// --- Bucles: una toma sin una sola nota no debe dejar una capa fantasma.
+// Hay que esperar a que la claqueta termine: antes del pulso de entrada, el
+// segundo pulsado cancelaria en vez de cerrar la toma.
+await page.click('#loop-button');
+await page.waitForTimeout(3400);
+const recording = await page.evaluate(() => document.querySelector('#loop-button .label')?.textContent);
+await page.waitForTimeout(900);
 await page.click('#loop-button');
 await page.waitForTimeout(400);
 const loops = await page.evaluate(() => ({
@@ -194,7 +267,7 @@ const loops = await page.evaluate(() => ({
   undoHidden: document.getElementById('undo-button')?.hidden,
   toast: document.getElementById('toast')?.textContent,
 }));
-console.log(JSON.stringify({ loops }, null, 2));
+console.log(JSON.stringify({ recording, loops }, null, 2));
 
 // El panel de ajustes tiene que abrir y responder.
 await page.click('#settings-toggle');
@@ -318,41 +391,9 @@ const V1_LINK =
 const invited = await ctx.newPage();
 const inviteLogs = [];
 invited.on('pageerror', (e) => inviteLogs.push(e.message));
-/*
- * Sonda de audio. Que el boton cambie de rotulo solo demuestra que el codigo
- * llego hasta el final; lo que hay que demostrar es que sale senal. Se envuelve
- * connect() para colgar un analizador de todo lo que llegue al destino, y se
- * guarda el pico. Va en un initScript porque tiene que estar puesto antes de que
- * la pagina cree su contexto de audio.
- */
-await invited.addInitScript(() => {
-  const nativeConnect = AudioNode.prototype.connect;
-  window.__peak = 0;
-  AudioNode.prototype.connect = function (target, ...rest) {
-    try {
-      if (target instanceof AudioDestinationNode) {
-        const context = target.context;
-        if (!context.__probe) {
-          const probe = context.createAnalyser();
-          probe.fftSize = 2048;
-          context.__probe = probe;
-          const buffer = new Float32Array(probe.fftSize);
-          setInterval(() => {
-            probe.getFloatTimeDomainData(buffer);
-            for (const value of buffer) {
-              const level = Math.abs(value);
-              if (level > window.__peak) window.__peak = level;
-            }
-          }, 60);
-        }
-        nativeConnect.call(this, context.__probe);
-      }
-    } catch {
-      /* la sonda nunca puede tumbar a la pagina que observa */
-    }
-    return nativeConnect.call(this, target, ...rest);
-  };
-});
+// Que el boton cambie de rotulo solo demuestra que el codigo llego hasta el
+// final; lo que hay que demostrar es que sale senal.
+await invited.addInitScript(audioProbe);
 // Sin permiso de camara a proposito: escuchar no puede depender de darlo.
 await invited.goto(`${url.replace(/#.*$/, '')}#p=${V1_LINK}`, { waitUntil: 'domcontentloaded' });
 await invited.waitForTimeout(900);
@@ -521,6 +562,22 @@ if (inviteLogs.length > 0) {
 }
 if (rejected.botonEscuchar || !rejected.error) {
   console.error('\nFALLO: un enlace manipulado no se rechaza como deberia');
+  process.exit(1);
+}
+if (!counting.armado || !/^[1-4]/.test(counting.etiqueta ?? '')) {
+  console.error(`\nFALLO: la claqueta no cuenta en el boton (${counting.etiqueta})`);
+  process.exit(1);
+}
+if (counting.picoDeAudio < 0.01) {
+  console.error(`\nFALLO: la claqueta no suena (pico ${counting.picoDeAudio})`);
+  process.exit(1);
+}
+if (cancelled.armado || cancelled.etiqueta === counting.etiqueta || cancelled.lanes !== 0) {
+  console.error('\nFALLO: no se puede cancelar la claqueta volviendo a pulsar');
+  process.exit(1);
+}
+if (recording === counting.etiqueta || /^[1-4]/.test(recording ?? '')) {
+  console.error(`\nFALLO: pasada la claqueta el boton deberia estar grabando (${recording})`);
   process.exit(1);
 }
 if (loops.lanes !== 0 || loops.undoHidden !== true) {

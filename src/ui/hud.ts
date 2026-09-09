@@ -141,10 +141,20 @@ export class Hud {
   }
 
   setLoops(loops: LoopState): void {
-    this.loopButton.classList.toggle('armed', loops.recording);
-    this.loopButton.disabled = !loops.recording && loops.full;
+    const counting = loops.countInBeats > 0;
+    // Durante la claqueta el boton parpadea como si ya estuviera grabando: lo
+    // esta, a efectos de quien lo mira, y hay que poder volver a pulsarlo para
+    // cancelar, asi que no se deshabilita aunque las capas esten llenas.
+    this.loopButton.classList.toggle('armed', loops.recording || counting);
+    this.loopButton.disabled = !loops.recording && !counting && loops.full;
     const strings = t().actions;
-    const label = loops.recording ? strings.loopStop : loops.full ? strings.loopFull : strings.loop;
+    const label = counting
+      ? strings.loopCounting(loops.countInBeats)
+      : loops.recording
+        ? strings.loopStop
+        : loops.full
+          ? strings.loopFull
+          : strings.loop;
     if (label !== this.last.loopLabel) {
       this.loopButton.querySelector('.label')!.textContent = label;
       this.last.loopLabel = label;

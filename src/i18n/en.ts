@@ -52,6 +52,7 @@ export const en: Strings = {
 
   actions: {
     loop: 'Loop',
+    loopCounting: (beats: number) => `${beats}...`,
     loopStop: 'Stop',
     loopFull: 'Layers full',
     loopTitle: 'Record a loop layer (space)',
@@ -200,6 +201,8 @@ export const en: Strings = {
   },
 
   toast: {
+    countIn: 'Four beats and recording starts. Press again to cancel',
+    countInCancelled: 'Count-in cancelled',
     layerRecording: 'Recording a layer over the loop',
     layerRecordingFirst: 'Recording. What you play now sets the bar.',
     layerSaved: (count) => `Layer ${count} added`,

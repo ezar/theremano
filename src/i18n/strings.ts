@@ -64,6 +64,8 @@ export interface Strings {
 
   actions: {
     loop: string;
+    /** Rotulo del boton durante la claqueta: los pulsos que quedan. */
+    loopCounting: (beats: number) => string;
     loopStop: string;
     loopFull: string;
     loopTitle: string;
@@ -146,6 +148,8 @@ export interface Strings {
   };
 
   toast: {
+    countIn: string;
+    countInCancelled: string;
     layerRecording: string;
     layerRecordingFirst: string;
     layerSaved: (count: number) => string;
