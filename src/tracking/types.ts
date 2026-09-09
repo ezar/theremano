@@ -54,9 +54,6 @@ export interface HandFrame {
   landmarks: Landmark[];
   /** 21 puntos sin filtrar, en espacio de vista. Solo para el HUD de diagnostico. */
   raw: Landmark[];
-  /** Etiqueta original de MediaPipe, util solo como desempate. */
-  label: 'Left' | 'Right' | 'Unknown';
-  score: number;
 }
 
 /** Resultado de la asignacion de roles para un fotograma. */

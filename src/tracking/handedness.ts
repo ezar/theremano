@@ -82,18 +82,20 @@ export class RoleTracker {
   }
 
   /**
-   * Primer fotograma con dos manos: la melodica deberia ser la derecha del
-   * interprete. Se prueba con la etiqueta de MediaPipe y, si no la hay, con la
-   * posicion en pantalla, que en espacio de vista ya coincide con la del
-   * interprete.
+   * Primer fotograma con dos manos: toca la melodia la que este mas a la
+   * derecha del encuadre, que en espacio de vista es la derecha del interprete.
+   *
+   * Se decide solo por posicion, sin mirar la lateralidad que reporta
+   * MediaPipe. Esa etiqueta es inestable cuando la mano gira o se sale del
+   * encuadre, y ademas describe anatomia: usarla haria que un zurdo que levanta
+   * las dos manos a la vez recibiera la melodia en la mano derecha sin poder
+   * cambiarlo. Por posicion, en cambio, el reparto siempre se corrige moviendo
+   * las manos, que es algo que el interprete controla.
    */
   private bootstrapPrefers(
-    a: { hand: HandFrame; position: Vec2 },
-    b: { hand: HandFrame; position: Vec2 },
+    a: { position: Vec2 },
+    b: { position: Vec2 },
   ): boolean {
-    const aRight = a.hand.label === 'Right';
-    const bRight = b.hand.label === 'Right';
-    if (aRight !== bRight) return aRight;
     return a.position.x >= b.position.x;
   }
 

@@ -3,8 +3,8 @@ import { RoleTracker, HOLD_MS } from '../src/tracking/handedness';
 import type { HandFrame } from '../src/tracking/types';
 import { makeHand } from './helpers';
 
-function frame(cx: number, cy: number, label: 'Left' | 'Right' | 'Unknown' = 'Unknown'): HandFrame {
-  return { landmarks: [], raw: makeHand(cx, cy), label, score: 0.9 };
+function frame(cx: number, cy: number): HandFrame {
+  return { landmarks: [], raw: makeHand(cx, cy) };
 }
 
 /** Distancia entre el centro de palma asignado y una posicion esperada. */
@@ -17,7 +17,7 @@ function nearX(hand: HandFrame | undefined, expected: number): boolean {
 describe('asignacion de roles', () => {
   it('con una sola mano, esa mano es la de melodia', () => {
     const tracker = new RoleTracker();
-    const result = tracker.update([frame(0.4, 0.5, 'Left')], 0);
+    const result = tracker.update([frame(0.4, 0.5)], 0);
     expect(result.melody).not.toBe(null);
     expect(result.expression).toBe(null);
   });
@@ -25,13 +25,13 @@ describe('asignacion de roles', () => {
   it('mantiene el rol de cada mano mientras se mueven', () => {
     const tracker = new RoleTracker();
     let now = 0;
-    tracker.update([frame(0.7, 0.5, 'Right'), frame(0.3, 0.5, 'Left')], now);
+    tracker.update([frame(0.7, 0.5), frame(0.3, 0.5)], now);
 
     // La mano de melodia se desplaza; la de expresion apenas se mueve.
     for (let i = 1; i <= 20; i += 1) {
       now += 33;
       const melodyX = 0.7 - i * 0.012;
-      const result = tracker.update([frame(0.3, 0.5, 'Left'), frame(melodyX, 0.5, 'Right')], now);
+      const result = tracker.update([frame(0.3, 0.5), frame(melodyX, 0.5)], now);
       expect(nearX(result.melody?.hand, melodyX), `fotograma ${i}`).toBe(true);
       expect(nearX(result.expression?.hand, 0.3), `fotograma ${i}`).toBe(true);
     }
@@ -70,9 +70,22 @@ describe('asignacion de roles', () => {
     expect(result.melody?.held, 'la melodia debe estar en el margen de gracia').toBe(true);
   });
 
-  it('arranca prefiriendo la mano derecha del interprete para la melodia', () => {
+  it('arranca dando la melodia a la mano mas a la derecha del encuadre', () => {
     const tracker = new RoleTracker();
-    const result = tracker.update([frame(0.2, 0.5, 'Left'), frame(0.8, 0.5, 'Right')], 0);
+    const result = tracker.update([frame(0.2, 0.5), frame(0.8, 0.5)], 0);
     expect(nearX(result.melody?.hand, 0.8)).toBe(true);
+  });
+
+  it('el reparto inicial se corrige cruzando las manos', () => {
+    // Solo depende de la posicion, no de la anatomia. Es lo que permite que un
+    // zurdo que levanta las dos manos a la vez pueda elegir cual toca la
+    // melodia, en lugar de recibir un reparto fijo que no puede cambiar.
+    const tracker = new RoleTracker();
+    const result = tracker.update([frame(0.75, 0.5), frame(0.25, 0.5)], 0);
+    expect(nearX(result.melody?.hand, 0.75)).toBe(true);
+
+    const cruzado = new RoleTracker();
+    const swapped = cruzado.update([frame(0.25, 0.5), frame(0.75, 0.5)], 0);
+    expect(nearX(swapped.melody?.hand, 0.75), 'el orden del array no debe influir').toBe(true);
   });
 });

@@ -129,6 +129,20 @@ describe('introduccion guiada', () => {
     expect(feed(coach, { expressionVisible: true, attack: true }, 1)).toEqual([]);
   });
 
+  it('solo el paso de la segunda mano es opcional', () => {
+    // La marca vive en el dato para que la tarjeta pueda anunciarla antes de que
+    // nadie lo intente. Si alguien anade un paso opcional sin querer, o quita
+    // esta marca, el instrumento pasaria a exigir dos manos sin decirlo.
+    const optional = STEPS.filter((step) => step.optional).map((step) => step.id);
+    expect(optional).toEqual(['volume']);
+  });
+
+  it('el paso opcional se puede completar igualmente si hay segunda mano', () => {
+    const coach = coachAt('volume');
+    expect(STEPS.find((s) => s.id === 'volume')?.optional).toBe(true);
+    expect(feed(coach, { expressionVisible: true }, 2, (t) => ({ volume: t < 1 ? 0.1 : 0.9 }))).toEqual(['finished']);
+  });
+
   it('se puede saltar paso a paso hasta el final', () => {
     const coach = new Onboarding();
     coach.start();

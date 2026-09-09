@@ -103,18 +103,15 @@ export class Landmarker {
     }
     const inferenceMs = performance.now() - t0;
 
-    const categories = result.handedness ?? result.handednesses ?? [];
+    // La lateralidad que reporta MediaPipe se descarta a proposito: es inestable
+    // cuando la mano gira o se sale del encuadre, y el reparto de roles se
+    // decide por continuidad espacial.
     const hands: HandFrame[] = [];
-    for (let i = 0; i < result.landmarks.length; i += 1) {
-      const raw = result.landmarks[i];
+    for (const raw of result.landmarks) {
       if (!raw) continue;
-      const category = categories[i]?.[0];
-      const label = category?.categoryName;
       hands.push({
         landmarks: [],
         raw: raw.map<Landmark>((p) => ({ x: mirror ? 1 - p.x : p.x, y: p.y, z: p.z })),
-        label: label === 'Left' || label === 'Right' ? label : 'Unknown',
-        score: category?.score ?? 0,
       });
     }
 
