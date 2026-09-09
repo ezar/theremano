@@ -206,9 +206,20 @@ empiezan a soltar capas.
 
 Lo que se decodifica viene de una dirección que cualquiera puede escribir a mano,
 así que se valida entero y se rechaza en bloque: versión, duración del ciclo,
-timbres que existan, recuentos que cuadren, eventos dentro del ciclo y ni un byte
-de sobra al final. Medio bucle reconstruido de un enlace roto sonaría a fallo del
+timbres que existan, recuentos que cuadren, no más capas de las que se pueden
+reproducir, notas enteras, eventos dentro del ciclo y ni un byte de sobra al
+final. Medio bucle reconstruido de un enlace roto sonaría a fallo del
 instrumento.
+
+Lo de «notas enteras» tiene truco. Una capa con solo parámetros no llega a atacar
+ni una nota, y dejaría el enlace anunciando que suena algo que no suena; un
+ataque sin su suelta deja la nota abierta y, como cada vuelta la vuelve a atacar,
+se convierte en un bordón que ya no para. Pero la comprobación tiene que ser
+**circular**: `LoopTake.finish()` ordena los eventos por tiempo, así que una
+sobregrabación que empieza a mitad de vuelta acaba con la suelta *antes* que su
+ataque en el array, porque la nota cruza el final del ciclo. Exigir que empiece
+por un ataque rechazaría capas perfectamente legítimas. Lo que se exige es que
+ataques y sueltas se alternen al dar la vuelta.
 
 Hay un enlace de la versión 1 guardado en las pruebas. No comprueba que el
 codificador siga produciendo esos mismos bytes —cambiar el remuestreo por dentro

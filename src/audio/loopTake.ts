@@ -27,6 +27,16 @@ export interface LiveSnapshot {
   gain: number;
 }
 
+/**
+ * Capas simultaneas.
+ *
+ * Vive aqui, en el modulo sin audio, y no junto a la estacion de bucles, porque
+ * el codificador de enlaces tambien tiene que conocer el limite: un enlace que
+ * declare mas capas de las que se pueden reproducir hay que rechazarlo al leerlo
+ * y no recortarlo en silencio al montarlo.
+ */
+export const MAX_TRACKS = 4;
+
 export const MAX_CYCLE_SECONDS = 20;
 export const MIN_CYCLE_SECONDS = 0.8;
 
