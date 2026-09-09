@@ -37,6 +37,47 @@ await page.waitForFunction(() => !document.getElementById('splash')?.hidden === 
   .catch(() => {});
 await page.waitForTimeout(12000);
 
+// --- Introduccion guiada: quien llega por primera vez tiene que verla.
+const coachStart = await page.evaluate(() => ({
+  visible: !document.getElementById('coach')?.hidden,
+  title: document.getElementById('coach-title')?.textContent,
+  dots: document.querySelectorAll('#coach-dots span').length,
+  current: document.querySelectorAll('#coach-dots span.current').length,
+}));
+
+// Sin manos delante de la camara ningun paso se cierra solo, que es justo lo
+// que debe pasar. Se recorre entera con el boton de saltar.
+let skips = 0;
+while (await page.evaluate(() => !document.getElementById('coach')?.hidden)) {
+  await page.click('#coach-skip-step');
+  await page.waitForTimeout(120);
+  if (++skips > 12) break;
+}
+const coachEnd = await page.evaluate(() => ({
+  visible: !document.getElementById('coach')?.hidden,
+  onboarded: JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').onboarded,
+}));
+console.log(JSON.stringify({ coachStart, skips, coachEnd }, null, 2));
+
+// --- Ayuda: tiene que abrirse siempre y poder relanzar la introduccion.
+await page.click('#help-toggle');
+await page.waitForTimeout(300);
+const helpOpen = await page.evaluate(() => ({
+  visible: !document.getElementById('help')?.hidden,
+  rows: document.querySelectorAll('#help .help-table tr').length,
+  keys: document.querySelectorAll('#help kbd').length,
+}));
+await page.click('#help-replay');
+await page.waitForTimeout(400);
+const replayed = await page.evaluate(() => ({
+  helpClosed: document.getElementById('help')?.hidden,
+  coachVisible: !document.getElementById('coach')?.hidden,
+  title: document.getElementById('coach-title')?.textContent,
+}));
+console.log(JSON.stringify({ helpOpen, replayed }, null, 2));
+await page.click('#coach-skip-all');
+await page.waitForTimeout(300);
+
 const state = await page.evaluate(() => {
   const diag = document.getElementById('diagnostics');
   const err = document.getElementById('splash-error');
@@ -134,6 +175,22 @@ console.log('--- consola ---');
 console.log(logs.slice(-25).join('\n'));
 await browser.close();
 
+if (!coachStart.visible || coachStart.dots !== 5 || coachStart.current !== 1) {
+  console.error('\nFALLO: la introduccion no aparece al llegar por primera vez');
+  process.exit(1);
+}
+if (coachEnd.visible || coachEnd.onboarded !== true) {
+  console.error('\nFALLO: la introduccion no se cierra ni se recuerda como vista');
+  process.exit(1);
+}
+if (!helpOpen.visible || helpOpen.rows < 5 || helpOpen.keys < 4) {
+  console.error('\nFALLO: la ayuda no muestra el contenido esperado');
+  process.exit(1);
+}
+if (!replayed.helpClosed || !replayed.coachVisible) {
+  console.error('\nFALLO: no se puede relanzar la introduccion desde la ayuda');
+  process.exit(1);
+}
 if (afterContinuous.melody !== '' || afterContinuous.chipHidden !== true) {
   console.error('\nFALLO: la guia sigue activa en una escala sin zonas');
   process.exit(1);
@@ -158,4 +215,6 @@ if (!state.splashHidden || !state.hudVisible) {
   console.error('\nFALLO: el instrumento no llego a arrancar');
   process.exit(1);
 }
-console.log(`\nOK: arranque, modelo, audio, bucle en marcha, clip de ${(clip.bytes / 1024).toFixed(0)} kB y enlace compartible.`);
+console.log(
+  `\nOK: arranque, modelo, audio, introduccion de ${coachStart.dots} pasos, ayuda, bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB y enlace compartible.`,
+);

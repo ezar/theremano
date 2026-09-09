@@ -35,6 +35,8 @@ export interface Settings {
   clipAspect: ClipAspect;
   /** Melodia guiada activa. Cadena vacia si no hay ninguna. */
   melodyId: string;
+  /** true en cuanto se ha visto la introduccion, se complete o se salte. */
+  onboarded: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -56,6 +58,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showRawTrace: false,
   clipAspect: 'vertical',
   melodyId: '',
+  onboarded: false,
 };
 
 const STORAGE_KEY = 'theremano.settings.v1';

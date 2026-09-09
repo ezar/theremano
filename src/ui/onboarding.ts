@@ -1,0 +1,176 @@
+/**
+ * Introduccion guiada para quien abre esto por primera vez.
+ *
+ * La premisa es que un instrumento que se toca con gestos no se aprende
+ * leyendo. "Junta el pulgar y el indice" en una lista de la pantalla inicial se
+ * salta sin leer, y quien lo lee tampoco sabe todavia si lo esta haciendo bien.
+ *
+ * Por eso cada paso se cierra cuando el gesto ocurre de verdad, medido sobre las
+ * mismas senales que mueven el instrumento. No hay boton de "siguiente": el
+ * boton es la mano. Y no bloquea nada, porque la unica forma de practicar un
+ * gesto es teniendo el instrumento vivo mientras se practica.
+ */
+
+export interface CoachSignals {
+  melodyVisible: boolean;
+  expressionVisible: boolean;
+  gateOpen: boolean;
+  /** true solo en el fotograma en que se abre el gate. */
+  attack: boolean;
+  /** Posicion horizontal de la mano de melodia, o -1 si no hay. */
+  pitchX: number;
+  /** Volumen que dicta la mano de expresion, de 0 a 1. */
+  volume: number;
+  /** Segundos transcurridos desde el fotograma anterior. */
+  dt: number;
+}
+
+/** Estado acumulado dentro de un paso. Se reinicia al entrar en el. */
+interface StepProgress {
+  elapsed: number;
+  held: number;
+  min: number;
+  max: number;
+  attacks: number;
+}
+
+export interface OnboardingStep {
+  id: string;
+  title: string;
+  body: string;
+  /** Se cierra cuando esto devuelve true. */
+  isDone: (progress: Readonly<StepProgress>, signals: CoachSignals) => boolean;
+}
+
+/** Recorrido de un valor durante el paso. Mide "muevete", no "estate quieto". */
+const span = (p: Readonly<StepProgress>): number => (p.max >= p.min ? p.max - p.min : 0);
+
+export const STEPS: readonly OnboardingStep[] = [
+  {
+    id: 'hand',
+    title: 'Ensena una mano',
+    body: 'Levantala delante de la camara, con la palma hacia ti.',
+    // Un instante suelto puede ser una deteccion falsa; medio segundo, no.
+    isDone: (p) => p.held >= 0.5,
+  },
+  {
+    id: 'move',
+    title: 'Muevela a izquierda y derecha',
+    body: 'Ahi esta la nota: grave a la izquierda, aguda a la derecha.',
+    isDone: (p) => span(p) >= 0.4,
+  },
+  {
+    id: 'pinch',
+    title: 'Junta el pulgar y el indice',
+    body: 'Esa pinza es la llave: mientras esten juntos, suena.',
+    isDone: (p) => p.attacks >= 1,
+  },
+  {
+    id: 'play',
+    title: 'Sin soltar la pinza, muevete',
+    body: 'Eso ya es tocar. Suelta los dedos para callar.',
+    // Hay que sostener la nota y ademas recorrer algo: sostener sin moverse no
+    // ensena nada, y moverse sin sostener tampoco.
+    isDone: (p) => p.held >= 1 && span(p) >= 0.12,
+  },
+  {
+    id: 'volume',
+    title: 'Levanta la otra mano y subela o bajala',
+    body: 'La segunda mano manda en el volumen. Arriba fuerte, abajo suave.',
+    isDone: (p) => span(p) >= 0.3,
+  },
+];
+
+export type CoachEvent = 'advanced' | 'finished' | null;
+
+export class Onboarding {
+  private cursor = 0;
+  private progress: StepProgress = blank();
+  private active = false;
+
+  get isActive(): boolean {
+    return this.active;
+  }
+
+  get step(): OnboardingStep | null {
+    return this.active ? (STEPS[this.cursor] ?? null) : null;
+  }
+
+  get index(): number {
+    return this.cursor;
+  }
+
+  get total(): number {
+    return STEPS.length;
+  }
+
+  start(): void {
+    this.active = true;
+    this.cursor = 0;
+    this.progress = blank();
+  }
+
+  stop(): void {
+    this.active = false;
+  }
+
+  /** Salta el paso actual. Si era el ultimo, termina. */
+  skipStep(): CoachEvent {
+    if (!this.active) return null;
+    return this.advance();
+  }
+
+  update(signals: CoachSignals): CoachEvent {
+    const step = this.step;
+    if (!step) return null;
+
+    const p = this.progress;
+    p.elapsed += signals.dt;
+    if (signals.attack) p.attacks += 1;
+
+    // Cada paso mide lo suyo. Meter todas las medidas en el mismo acumulador
+    // haria que el recorrido de la mano contase para el paso del volumen.
+    switch (step.id) {
+      case 'hand':
+        p.held = signals.melodyVisible ? p.held + signals.dt : 0;
+        break;
+      case 'move':
+        if (signals.melodyVisible && signals.pitchX >= 0) track(p, signals.pitchX);
+        break;
+      case 'play':
+        if (signals.gateOpen) {
+          p.held += signals.dt;
+          if (signals.pitchX >= 0) track(p, signals.pitchX);
+        }
+        break;
+      case 'volume':
+        if (signals.expressionVisible) track(p, signals.volume);
+        break;
+      default:
+        break;
+    }
+
+    if (!step.isDone(p, signals)) return null;
+    return this.advance();
+  }
+
+  private advance(): CoachEvent {
+    this.cursor += 1;
+    this.progress = blank();
+    if (this.cursor >= STEPS.length) {
+      this.active = false;
+      this.cursor = STEPS.length;
+      return 'finished';
+    }
+    return 'advanced';
+  }
+}
+
+function blank(): StepProgress {
+  return { elapsed: 0, held: 0, min: Infinity, max: -Infinity, attacks: 0 };
+}
+
+function track(p: StepProgress, value: number): void {
+  p.min = Math.min(p.min, value);
+  p.max = Math.max(p.max, value);
+}

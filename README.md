@@ -24,6 +24,8 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo.
 - **Clip para compartir** — graba imagen y sonido en 9:16, con la nota y la
   marca sobreimpresas, y lo entrega por la hoja de compartir del móvil o como
   descarga.
+- **Introducción interactiva** — cinco pasos que se cierran cuando el gesto
+  ocurre de verdad, no cuando se pulsa «siguiente». Repetible desde la ayuda.
 - **Melodías guiadas** — cinco secuencias que seguir, con el objetivo marcado
   sobre la rejilla. Sin presión de tiempo: se sigue el orden, no el compás.
 - **Enlace con la configuración** — escala, tónica y timbre viajan en el
@@ -45,7 +47,24 @@ Con una sola mano a la vista, esa mano es la de melodía. Perder una mano no
 silencia nada: su último estado se conserva 500 ms antes de darla por ausente.
 
 Con teclado: **espacio** graba una capa de bucle, **C** graba un clip, **Z**
-quita la última capa.
+quita la última capa, **H** abre la ayuda.
+
+---
+
+## Sobre la introducción
+
+Un instrumento que se toca con gestos no se aprende leyendo. «Junta el pulgar y
+el índice» en una lista de la pantalla inicial se salta sin leer, y quien lo lee
+tampoco sabe todavía si lo está haciendo bien.
+
+Por eso cada paso se cierra **cuando el gesto ocurre de verdad**, medido sobre las
+mismas señales que mueven el instrumento: no hay botón de «siguiente», el botón
+es la mano. Y no bloquea nada, porque la única forma de practicar un gesto es
+teniendo el instrumento vivo mientras se practica.
+
+Se marca como vista tanto si se completa como si se salta —insistir con algo ya
+rechazado es la forma más rápida de molestar— y se puede repetir en cualquier
+momento desde el panel de ayuda, al que se llega con el botón **?** o con **H**.
 
 ---
 
@@ -178,6 +197,9 @@ src/
     engine.ts             grafo de Tone.js, arranque, rampas
     presets.ts            cuatro timbres
   ui/
+    onboarding.ts         pasos de la introducción, sin DOM
+    coach.ts              tarjeta de la introducción
+    help.ts               panel de ayuda
     overlay.ts            esqueleto de la mano sobre el vídeo
     hud.ts                nota, volumen, latencia, fps
     controls.ts           panel de ajustes
@@ -258,6 +280,8 @@ Los que se pueden comprobar de forma automática están en `tests/`:
   descarta en lugar de dejar una capa fantasma.
 - **Un enlace manipulado no impide arrancar**: se aplica lo que se reconoce y se
   descarta el resto, y un fragmento sin tónica no inventa una.
+- **Ningún paso de la introducción se cierra solo**: cada uno se prueba con la
+  señal que le toca y con todo lo demás moviéndose menos esa señal.
 - **Una melodía guiada se puede completar en cualquier escala** que reparta el
   encuadre en zonas, y cambiar de escala a mitad no pierde el progreso. En modo
   continuo no hay zonas, así que la guía se retira sola en lugar de quedarse
