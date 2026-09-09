@@ -13,7 +13,6 @@ import { makeHand, withMiddlePinch } from './helpers';
  */
 
 const FPS = 30;
-const STEP_MS = 1000 / FPS;
 
 function hand(cx: number, cy: number, options: Parameters<typeof makeHand>[2] = {}): HandFrame {
   return { landmarks: [], raw: makeHand(cx, cy, options) };
@@ -25,21 +24,29 @@ class Rig {
   now = 0;
   readonly events: string[] = [];
   readonly presetChanges: string[] = [];
+  private readonly stepMs: number;
 
-  constructor(settings: Settings = { ...DEFAULT_SETTINGS }) {
+  /** @param fps para poder comprobar que nada dependa del ritmo de fotogramas. */
+  constructor(settings: Settings = { ...DEFAULT_SETTINGS }, fps = FPS) {
     this.mapper = new Mapper(settings);
+    this.stepMs = 1000 / fps;
   }
 
   step(hands: HandFrame[], frames = 1) {
     let output = this.mapper.update(this.tracker.update(hands, this.now), this.now / 1000);
     this.record(output);
     for (let i = 1; i < frames; i += 1) {
-      this.now += STEP_MS;
+      this.now += this.stepMs;
       output = this.mapper.update(this.tracker.update(hands, this.now), this.now / 1000);
       this.record(output);
     }
-    this.now += STEP_MS;
+    this.now += this.stepMs;
     return output;
+  }
+
+  /** Segundos, no fotogramas: para gestos que duran lo que duran. */
+  hold(hands: HandFrame[], seconds: number) {
+    return this.step(hands, Math.max(1, Math.round((seconds * 1000) / this.stepMs)));
   }
 
   private record(output: ReturnType<Mapper['update']>): void {
@@ -279,6 +286,33 @@ describe('el instrumento de punta a punta', () => {
     expect(soft.gain).toBeGreaterThan(loud.gain * 0.5);
     // El volumen que se ensena no lo toca: ese sigue a la mano de expresion.
     expect(soft.volume).toBeCloseTo(loud.volume, 5);
+  });
+
+  /**
+   * El mismo gesto no puede dar dos fuerzas segun lo cargado que vaya el
+   * telefono. Antes se medía entre dos fotogramas consecutivos, asi que a
+   * treinta cubria el doble de tiempo que a sesenta y la nota entraba distinta.
+   */
+  it('la fuerza del ataque no depende de los fotogramas por segundo', () => {
+    // Un cierre de golpe, que es donde se veia el fallo: el gate confirma dos
+    // fotogramas despues, asi que medir entre dos consecutivos no medía el gesto
+    // sino lo que le quedaba al filtro, y eso dura lo mismo en segundos pero
+    // distinto en fotogramas.
+    const gains = [30, 60, 120].map((fps) => {
+      const rig = new Rig({ ...DEFAULT_SETTINGS }, fps);
+      rig.hold([hand(0.5, 0.5, { pinch: 0.9 })], 0.5);
+      return rig.hold([hand(0.5, 0.5, { pinch: 0.05 })], 0.3).gain;
+    });
+    /*
+     * No sale identico y no puede salirlo: el gate confirma dos fotogramas
+     * despues del cruce, y esos dos fotogramas caen en puntos algo distintos de
+     * la trayectoria segun el ritmo. Lo que importa es el orden de magnitud:
+     * medido entre dos fotogramas consecutivos la dispersion era del 27% —de
+     * 0,59 a 0,75, que se oye—; con la ventana en segundos se queda por debajo
+     * del 5%, que no.
+     */
+    const spread = Math.max(...gains) / Math.min(...gains);
+    expect(spread).toBeLessThan(1.05);
   });
 
   it('acercar la mano a la camara abre el espacio', () => {

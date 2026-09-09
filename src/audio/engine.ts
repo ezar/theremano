@@ -151,6 +151,11 @@ export class AudioEngine {
 
     // Cambiar el tipo de oscilador con la nota sonando produce un salto de fase.
     // Un hueco de unos milisegundos lo tapa por completo y es imperceptible.
+    // El espacio se recalcula desde cero con el timbre nuevo: `apply()` devuelve
+    // la reverberacion y el eco al valor seco del preset, y sin invalidar esto la
+    // zona muerta de setSpace se tragaria la correccion. El gesto se quedaba sin
+    // efecto hasta que la mano volvia a moverse en profundidad.
+    this.lastSpace = -1;
     const dipping = this.gateOpen && !this.muted;
     if (dipping) this.master?.gain.rampTo(0, 0.012);
 

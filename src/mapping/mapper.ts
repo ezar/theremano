@@ -1,6 +1,7 @@
 import { OneEuroFilter, DEFAULT_D_CUTOFF } from '../filter/oneEuro';
-import { attackVelocity, depthFromSpan, expressionFeatures, handSpan, melodyFeatures, middlePinchRatio } from './features';
+import { attackVelocity, depthFromSize, expressionFeatures, melodyFeatures, middlePinchRatio, palmSize, pinchRatio } from './features';
 import { HoldGesture } from './holdGesture';
+import { ClosingSpeed } from './closingSpeed';
 import { PinchGate, type GateEvent } from './gate';
 import { createLayout, isContinuous, pitchAt, type PitchLayout } from './scales';
 import { getPreset, presetForFingerCount, type Preset, type PresetId } from '../audio/presets';
@@ -37,6 +38,14 @@ const PRESET_CONFIRM_FRAMES = 6;
  * treinta segundos de mano parada en el peor punto de la banda, los cortes
  * espurios son cero en ambos casos.
  */
+/**
+ * Cuanto mas suavizada va la distancia que el resto de los controles.
+ *
+ * Se mueve despacio y no dispara nada, asi que puede ir mas filtrada sin que se
+ * note un retraso.
+ */
+const SPACE_SMOOTHING = 0.6;
+
 const GATE_MIN_CUTOFF = 2.0;
 const GATE_BETA = 6.0;
 
@@ -100,7 +109,7 @@ export class Mapper {
   private readonly loopHold = new HoldGesture();
   private readonly spaceFilter: OneEuroFilter;
   private space = 0.5;
-  private lastPinch = 1;
+  private readonly closing = new ClosingSpeed();
   private lastTimestamp = -1;
   /** Fuerza de la nota que suena ahora, fijada en su ataque. */
   private velocity = 1;
@@ -121,7 +130,7 @@ export class Mapper {
     this.pinchFilter = new OneEuroFilter({ minCutoff: GATE_MIN_CUTOFF, beta: GATE_BETA, dCutoff: DEFAULT_D_CUTOFF });
     // La distancia se mueve despacio y no dispara nada: puede ir mas suavizada
     // que el resto sin que se note un retraso.
-    this.spaceFilter = new OneEuroFilter({ ...control, minCutoff: control.minCutoff * 0.6 });
+    this.spaceFilter = new OneEuroFilter({ ...control, minCutoff: control.minCutoff * SPACE_SMOOTHING });
     this.volume = settings.masterVolume;
     this.currentPreset = getPreset(settings.preset);
   }
@@ -133,6 +142,7 @@ export class Mapper {
     const control = { minCutoff: settings.controlMinCutoff, beta: settings.controlBeta };
     this.cutoffFilter.setParams(control);
     this.volumeFilter.setParams(control);
+    this.spaceFilter.setParams({ ...control, minCutoff: control.minCutoff * SPACE_SMOOTHING });
     this.currentPreset = getPreset(settings.preset);
   }
 
@@ -172,22 +182,18 @@ export class Mapper {
       pinch = this.pinchFilter.filter(f.pinch, timestamp);
 
       /*
-       * Velocidad de cierre, en unidades de pinza por segundo.
-       *
-       * Se mide sobre la senal ya filtrada, que es la misma que decide el gate:
-       * si se midiera sobre la cruda, el ruido del detector se colaria como
+       * Velocidad de cierre. Se mide sobre la senal ya filtrada, que es la misma
+       * que decide el gate: sobre la cruda, el ruido del detector se colaria como
        * fuerza y dos notas iguales sonarian distinto sin motivo.
        */
-      const dt = this.lastTimestamp >= 0 ? timestamp - this.lastTimestamp : 0;
-      const closing = dt > 0 ? (this.lastPinch - pinch) / dt : 0;
-      this.lastPinch = pinch;
+      this.closing.push(timestamp, pinch);
 
       gateEvent = this.gate.update(pinch);
       // La fuerza se fija en el ataque y dura toda la nota. Recalcularla por
       // fotograma convertiria un matiz de entrada en un temblor de volumen.
-      if (gateEvent === 'attack') this.velocity = attackVelocity(closing);
+      if (gateEvent === 'attack') this.velocity = attackVelocity(this.closing.speed);
 
-      space = this.spaceFilter.filter(depthFromSpan(handSpan(melody.hand.raw)), timestamp);
+      space = this.spaceFilter.filter(depthFromSize(palmSize(melody.hand.raw)), timestamp);
 
       const pitch = pitchAt(this.layout, pitchX);
       this.lastFreq = pitch.freq;
@@ -201,6 +207,7 @@ export class Mapper {
       this.cutoffFilter.reset();
       this.pinchFilter.reset();
       this.spaceFilter.reset();
+      this.closing.reset();
       this.lastTimestamp = -1;
     }
     this.space = space;
@@ -217,7 +224,15 @@ export class Mapper {
       // sosteniendo: medio segundo de mano recordada bastaria para dispararlo.
       const dt = this.lastTimestamp >= 0 ? Math.max(0, timestamp - this.lastTimestamp) : 0;
       if (expression.held) this.loopHold.reset();
-      else loopGesture = this.loopHold.update(middlePinchRatio(expression.hand.raw), dt);
+      else {
+        // Las dos distancias: el gesto exige que el pulgar este claramente mas
+        // cerca del corazon que del indice, o una pinza normal lo dispararia.
+        loopGesture = this.loopHold.update(
+          middlePinchRatio(expression.hand.raw),
+          pinchRatio(expression.hand.raw),
+          dt,
+        );
+      }
 
       /*
        * Mientras el gesto esta en marcha no se cambia de timbre.

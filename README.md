@@ -83,14 +83,22 @@ bucle. Se usa el corazón y no otro dedo porque es el único que se junta con el
 pulgar sin arrastrar al índice: con el anular o el meñique la mano entera se
 cierra y el gesto se confunde con un puño.
 
-Tres reglas, y las tres están porque aquí un falso positivo no es un píxel mal
-puesto, es una grabación que arranca sola en mitad de lo que estabas tocando:
+Cuatro reglas, y las cuatro están porque aquí un falso positivo no es un píxel
+mal puesto, es una grabación que arranca sola en mitad de lo que estabas tocando:
 histéresis como en la pinza que suena; hay que mantenerlo medio segundo, porque
 un roce al pasar entre dos dedos no es una decisión; y una vez disparado se queda
 trabado hasta que la mano se abre, o seguir con los dedos juntos encadenaría
 bucles cada medio segundo. Lo sostenido tampoco sobrevive a perder la mano de
 vista: si sobreviviera, bastaría un parpadeo del detector —con el gesto ya
 hecho— para completar algo que nadie mantuvo.
+
+Y la cuarta, que se pasó por alto en la primera versión: **el pulgar tiene que
+estar claramente más cerca del corazón que del índice**. En una mano de verdad
+las puntas del índice y del corazón están a un quinto del tamaño de la mano una
+de otra, así que el pulgar posado en el índice queda también por debajo del
+umbral del corazón. Sin ese margen, una pinza normal con la mano de expresión
+grababa una capa sola. El modelo de mano sintética de las pruebas separaba los
+dedos más de lo que lo hace una mano real y no lo enseñaba.
 
 Mientras el gesto está en marcha, el timbre no cambia. Al juntar pulgar y corazón
 el corazón se dobla y el recuento de dedos extendidos baja uno; sin esa
@@ -101,10 +109,19 @@ bucle entero sin tocar nada.
 
 ### La distancia a la cámara es el espacio
 
-Sale del tamaño aparente de la mano, que ya se calcula para normalizar la pinza:
-acercarse la agranda en el encuadre. No es profundidad de verdad —el modelo da
-una z, pero es relativa a la propia mano y no sirve para esto— y es la única
-señal de distancia estable que hay aquí.
+Sale del tamaño aparente de la mano: acercarse la agranda en el encuadre. No es
+profundidad de verdad —el modelo da una z, pero es relativa a la propia mano y no
+sirve para esto— y es la única señal de distancia estable que hay aquí.
+
+El tamaño se mide como **la raíz del área del triángulo de la palma**, no como
+una distancia, y ahí está el detalle que costó una corrección. Los puntos vienen
+normalizados por ancho en x y por alto en y, que en un encuadre 16:9 no son la
+misma unidad: una distancia en ese espacio cambia al girar la mano aunque la mano
+no se haya movido, y girar la muñeca noventa grados bastaba para recorrer el
+rango entero. Un área no tiene ese problema, porque esa normalización multiplica
+todas las áreas por el mismo factor sea cual sea la orientación. En la pinza el
+problema no existía: allí se dividen dos distancias medidas en el mismo espacio y
+la deformación se cancela sola.
 
 Mueve la reverberación y el eco a la vez, porque lo que se busca no es «más
 reverb» sino la sensación de alejarse: una sala grande tiene las dos cosas. El
@@ -126,6 +143,15 @@ distinto sin motivo. Se fija en el ataque y dura toda la nota, porque
 recalcularla por fotograma convertiría un matiz de entrada en un temblor de
 volumen. Y el suelo no es cero: una nota que no suena porque se cerró despacio se
 lee como un fallo del instrumento, no como un matiz.
+
+**La velocidad se mide en una ventana de tiempo fija, no entre dos fotogramas.**
+La primera versión hacía lo segundo y tenía dos problemas: la puerta confirma con
+dos fotogramas de retraso, así que lo que se medía no era el gesto sino el rebote
+que le quedaba al filtro; y dependía de los fotogramas por segundo, con lo que el
+mismo gesto daba dos fuerzas distintas según lo cargado que fuera el teléfono —de
+0,59 a 0,75, que se oye—. Con una ventana en segundos, la dispersión entre 30,
+60 y 120 fps se queda por debajo del 5%. No baja a cero, y no puede: esos dos
+fotogramas de confirmación caen en puntos algo distintos de la trayectoria.
 
 El riel de volumen del HUD sigue mostrando la mano, no la ganancia real. Si
 mostrara la ganancia, saltaría en cada nota sin que nadie haya movido nada.

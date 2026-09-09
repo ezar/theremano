@@ -24,6 +24,18 @@ export const HOLD_OPEN = 0.46;
 /** Lo que hay que aguantar para que cuente. */
 export const HOLD_SECONDS = 0.45;
 
+/**
+ * El pulgar tiene que estar claramente mas cerca del corazon que del indice.
+ *
+ * Sin esto, una pinza normal —pulgar contra indice— tambien pide un bucle. En
+ * una mano de verdad las puntas del indice y del corazon estan a un quinto del
+ * tamano de la mano una de otra, asi que el pulgar posado en el indice queda
+ * tambien cerca del corazon, por debajo del umbral. Este margen es lo que
+ * distingue "el pulgar ha ido al corazon" de "el pulgar ha ido al indice y el
+ * corazon estaba al lado".
+ */
+export const MIDDLE_MARGIN = 0.7;
+
 export class HoldGesture {
   private held = 0;
   private fired = false;
@@ -45,19 +57,21 @@ export class HoldGesture {
   }
 
   /**
-   * @param ratio distancia entre las dos puntas, normalizada por la mano.
+   * @param middle distancia pulgar-corazon, normalizada por la mano.
+   * @param index distancia pulgar-indice, normalizada igual.
    * @param dt segundos desde el fotograma anterior.
    * @returns true solo en el fotograma en que el gesto se completa.
    */
-  update(ratio: number, dt: number): boolean {
-    if (ratio > HOLD_OPEN) {
+  update(middle: number, index: number, dt: number): boolean {
+    if (middle > HOLD_OPEN) {
       this.held = 0;
       this.fired = false;
       return false;
     }
-    if (ratio > HOLD_CLOSE) {
+    if (middle > HOLD_CLOSE || middle > index * MIDDLE_MARGIN) {
       // Banda muerta: ni cuenta ni descuenta. Lo sostenido se conserva para que
-      // un temblor en el umbral no obligue a empezar de nuevo.
+      // un temblor en el umbral no obligue a empezar de nuevo. Aqui cae tambien
+      // la pinza normal, que queda cerca del corazon sin ir a por el.
       return false;
     }
 

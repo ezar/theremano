@@ -54,22 +54,46 @@ export function middlePinchRatio(landmarks: readonly Landmark[]): number {
 }
 
 /**
+ * Tamano aparente de la mano, invariante a como este girada.
+ *
+ * Es la raiz del area del triangulo de la palma —muneca, base del indice, base
+ * del menique— y no una distancia, y ahi esta el motivo. Los puntos vienen
+ * normalizados por ancho en x y por alto en y, que en un encuadre 16:9 no son
+ * la misma unidad: una distancia entre dos puntos cambia al girar la mano
+ * aunque la mano no se haya movido. Girar la muneca noventa grados bastaba para
+ * recorrer el rango entero de la profundidad.
+ *
+ * Un area no tiene ese problema. Esa normalizacion es una transformacion lineal
+ * de determinante constante, asi que multiplica todas las areas por el mismo
+ * factor sea cual sea la orientacion de lo que se mide.
+ *
+ * En la pinza el problema no existia: alli se dividen dos distancias medidas en
+ * el mismo espacio y la deformacion se cancela sola.
+ */
+export function palmSize(landmarks: readonly Landmark[]): number {
+  const a = point(landmarks, LM.WRIST);
+  const b = point(landmarks, LM.INDEX_MCP);
+  const c = point(landmarks, LM.PINKY_MCP);
+  const area = Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) / 2;
+  return Math.sqrt(area);
+}
+
+/**
  * Cerca o lejos de la camara, de 0 a 1.
  *
- * Sale del tamano aparente de la mano, que ya se calcula para normalizar la
- * pinza: acercarse agranda la mano en el encuadre. No es una medida de
- * profundidad de verdad —el modelo da una z, pero es relativa a la propia mano y
- * no sirve para esto—, es la unica senal de distancia estable que hay aqui.
+ * Acercarse agranda la mano en el encuadre. No es una medida de profundidad de
+ * verdad —el modelo da una z, pero es relativa a la propia mano y no sirve para
+ * esto—, es la unica senal de distancia estable que hay aqui.
  *
- * Los dos extremos estan puestos alrededor de una mano a distancia de trabajo,
- * que mide unos 0,15 de la altura del encuadre. Quedan sitio para acercarse y
- * para alejarse sin llegar a saturar en ninguno de los dos lados.
+ * Los extremos estan puestos alrededor de una mano a distancia de trabajo, que
+ * da un tamano de palma de unos 0,10. Queda sitio para acercarse y para alejarse
+ * sin saturar en ninguno de los dos lados.
  */
-const SPAN_FAR = 0.09;
-const SPAN_NEAR = 0.26;
+const SIZE_FAR = 0.06;
+const SIZE_NEAR = 0.17;
 
-export function depthFromSpan(span: number): number {
-  return clamp01((span - SPAN_FAR) / (SPAN_NEAR - SPAN_FAR));
+export function depthFromSize(size: number): number {
+  return clamp01((size - SIZE_FAR) / (SIZE_NEAR - SIZE_FAR));
 }
 
 /**
