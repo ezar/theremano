@@ -115,7 +115,7 @@ export const en: Strings = {
     recordTitle: 'Record and share',
     record: [
       'Loop records a layer. The first one sets the bar; the rest stack on top. Up to four.',
-      'Record clip saves a vertical video with sound, ready to share. Thirty seconds maximum.',
+      'Record clip saves a vertical video with sound, ready to share. One minute maximum.',
       'Hands only hides the camera: on screen and in the video you get the skeleton over a dark backdrop, with no face and no room. Key V.',
       'In Settings you can copy a link carrying your scale, your tonic and your timbre.',
     ],

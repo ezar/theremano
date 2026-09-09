@@ -37,11 +37,18 @@ const LOW_FPS_WINDOW_MS = 3000;
 /**
  * Tope de duracion del clip.
  *
- * No es una limitacion tecnica: es que un clip largo no se comparte. Treinta
- * segundos entran enteros en cualquier sitio donde estos videos circulan, y
- * obligan a que la toma sea la buena.
+ * No es una limitacion tecnica: es la duracion que se comparte entera. Estaba en
+ * treinta segundos, que obligaban a que la toma fuera la buena, pero se quedaban
+ * cortos para lo que se acabo pudiendo tocar: "Cumpleanos feliz" son veinticinco
+ * notas, y a ritmo de gesto no cabia en un clip. Un minuto deja terminar una
+ * melodia guiada y sigue por debajo del limite de cualquier sitio donde estos
+ * videos circulan.
+ *
+ * El precio es el tamano: al doble de duracion, el doble de fichero. Medido, un
+ * clip con la camara visible ronda los 270 kB por segundo, asi que el minuto
+ * entero se va a unos dieciseis megas; en solo manos, a una fraccion.
  */
-const CLIP_MAX_SECONDS = 30;
+const CLIP_MAX_SECONDS = 60;
 
 function must<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
