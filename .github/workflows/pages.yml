@@ -1,12 +1,15 @@
 name: pages
 
-# Solo manual, y a proposito. El destino de este proyecto es Vercel; GitHub
-# Pages es la alternativa. Publicar en Pages exige antes habilitarlo en
-# Settings -> Pages -> Source: GitHub Actions, asi que si se disparara en cada
-# push a main fallaria siempre en los repositorios que no lo tengan puesto, y un
-# check en rojo permanente deja de significar nada. Una vez habilitado, se lanza
-# desde la pestana Actions.
+# Este repositorio ya tiene Pages habilitado (Settings -> Pages -> Source:
+# GitHub Actions), que era lo unico que faltaba para que el disparador por push
+# funcionase, asi que main se publica solo. Se conserva workflow_dispatch para
+# poder relanzar un despliegue sin tocar codigo.
+#
+# En un fork o un clon sin Pages habilitado este workflow fallara en el paso
+# actions/configure-pages hasta que se active en los ajustes del repositorio.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
