@@ -22,9 +22,9 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
   cuantización a escala para que suene bien desde el primer minuto.
 - **Estación de bucles** — hasta cuatro capas superpuestas. La primera marca el
   compás; las siguientes se graban encima sin esperar a que la vuelta termine.
-- **Clip para compartir** — graba imagen y sonido en 9:16, con la nota y la
-  marca sobreimpresas, y lo entrega por la hoja de compartir del móvil o como
-  descarga.
+- **Clip para compartir** — graba imagen y sonido en 9:16, hasta un minuto, con
+  la nota y la marca sobreimpresas, y lo entrega por la hoja de compartir del
+  móvil o como descarga.
 - **Solo manos** — oculta la imagen de la cámara, en pantalla y en el clip: se ve
   el esqueleto sobre un fondo oscuro, sin cara ni habitación. Tecla **V**.
 - **Introducción interactiva** — cinco pasos que se cierran cuando el gesto

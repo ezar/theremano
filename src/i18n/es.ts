@@ -115,7 +115,7 @@ export const es: Strings = {
     recordTitle: 'Grabar y compartir',
     record: [
       'Bucle graba una capa. La primera marca el compás; las siguientes se superponen. Hasta cuatro.',
-      'Grabar clip guarda un vídeo vertical con sonido, listo para compartir. Máximo 30 segundos.',
+      'Grabar clip guarda un vídeo vertical con sonido, listo para compartir. Máximo un minuto.',
       'Solo manos oculta la cámara: en pantalla y en el vídeo se ve el esqueleto sobre un fondo oscuro, sin tu cara ni tu habitación. Tecla V.',
       'En Ajustes puedes copiar un enlace que lleva tu escala, tu tónica y tu timbre.',
     ],
