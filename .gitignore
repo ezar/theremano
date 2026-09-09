@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-ssr
+.vercel
+*.local
+.DS_Store
+.vite
+
+# Activos descargados o copiados en tiempo de build (ver scripts/fetch-assets.mjs)
+public/models/*.task
+public/wasm/*
