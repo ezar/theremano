@@ -203,6 +203,8 @@ export const en: Strings = {
 
   overlay: { melodyTag: 'MELODY', expressionTag: 'EXPRESSION' },
 
+  shareText: 'Played with my hands in the air, touching nothing.',
+
   scales: {
     pentatonic: 'Minor pentatonic',
     blues: 'Blues',

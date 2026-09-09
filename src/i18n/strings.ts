@@ -157,6 +157,9 @@ export interface Strings {
 
   overlay: { melodyTag: string; expressionTag: string };
 
+  /** Texto que acompana al clip en la hoja de compartir del sistema. */
+  shareText: string;
+
   scales: Record<ScaleId, string>;
   presets: Record<PresetId, string>;
   melodies: Record<string, { name: string; hint: string }>;
