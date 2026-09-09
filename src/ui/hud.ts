@@ -131,7 +131,7 @@ export class Hud {
     this.guideChip.hidden = guide === null;
     if (!guide) return;
     this.guideName.textContent = guide.name;
-    this.guideProgress.textContent = guide.finished ? 'completada' : `${guide.done}/${guide.total}`;
+    this.guideProgress.textContent = guide.finished ? t().hud.guideDone : `${guide.done}/${guide.total}`;
     this.guideChip.classList.toggle('done', guide.finished);
   }
 

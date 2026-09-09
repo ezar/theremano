@@ -1,4 +1,5 @@
 import type { RenderTarget } from '../ui/target';
+import { t } from '../i18n';
 
 /**
  * Grabacion de un clip con imagen y sonido.
@@ -157,7 +158,7 @@ export async function deliverClip(result: ClipResult, baseName: string): Promise
       await navigator.share({
         files: [file],
         title: 'theremano',
-        text: 'Tocado con las manos en el aire, sin tocar nada.',
+        text: t().shareText,
       });
       return 'shared';
     } catch (error) {
