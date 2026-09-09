@@ -42,6 +42,15 @@ export interface OverlayFrame {
 export interface PaintOptions {
   /** Dibuja el fotograma de la camara en el propio lienzo (grabacion). */
   video?: HTMLVideoElement;
+  /**
+   * Rellena el destino con un degradado propio antes de pintar nada.
+   *
+   * Es lo que sostiene el modo de solo manos: en pantalla tapa el video que hay
+   * detras del lienzo, y en el clip ocupa el sitio del fotograma que no se
+   * dibuja. Sin esto, el lienzo transparente de la pantalla dejaria ver la
+   * camara igualmente.
+   */
+  backdrop?: boolean;
   mirror?: boolean;
   /** Marca discreta con el nombre y la direccion. Solo en lo que se comparte. */
   watermark?: boolean;
@@ -103,11 +112,15 @@ export class Overlay {
     const { ctx } = target;
     ctx.clearRect(0, 0, target.width, target.height);
 
+    if (options.backdrop) this.drawBackdrop(target);
     if (options.video) this.drawVideo(target, options.video, videoWidth, videoHeight, options.mirror ?? false);
 
     const rect = coverRect(target, videoWidth, videoHeight);
     this.visualizer.paintBackground(target);
-    this.drawGrid(target, rect, frame);
+    // La rejilla se calibro contra una imagen de camara. Sobre el fondo oscuro
+    // del modo de solo manos, con esos mismos valores, casi no se ve: hay que
+    // subirla, porque ahi es de lo poco que queda en pantalla.
+    this.drawGrid(target, rect, frame, options.backdrop ? 1.7 : 1);
 
     const melody = frame.assignment.melody;
     const expression = frame.assignment.expression;
@@ -137,6 +150,24 @@ export class Overlay {
     return { x: (thumb.x + index.x) / 2, y: (thumb.y + index.y) / 2 };
   }
 
+  /**
+   * Fondo del modo de solo manos.
+   *
+   * Opaco a proposito: es lo unico que separa la camara de la pantalla en ese
+   * modo, y un degradado translucido dejaria una silueta reconocible detras.
+   */
+  private drawBackdrop(target: RenderTarget): void {
+    const { ctx, width, height } = target;
+    const sky = ctx.createLinearGradient(0, 0, 0, height);
+    sky.addColorStop(0, '#0b1020');
+    sky.addColorStop(0.55, '#070a14');
+    sky.addColorStop(1, '#03050c');
+    ctx.save();
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+  }
+
   private drawVideo(
     target: RenderTarget,
     video: HTMLVideoElement,
@@ -159,7 +190,7 @@ export class Overlay {
     ctx.restore();
   }
 
-  private drawGrid(target: RenderTarget, rect: Rect2, frame: OverlayFrame): void {
+  private drawGrid(target: RenderTarget, rect: Rect2, frame: OverlayFrame, lift: number): void {
     const { ctx } = target;
     const centers = zoneCenters(frame.layout);
     if (centers.length === 0) return;
@@ -225,7 +256,7 @@ export class Overlay {
       }
 
       const line = ctx.createLinearGradient(x, top, x, bottom);
-      const strength = isActive ? 0.85 : isTonic ? 0.3 : 0.13;
+      const strength = Math.min(1, (isActive ? 0.85 : isTonic ? 0.3 : 0.13) * lift);
       line.addColorStop(0, `rgba(255,255,255,0)`);
       line.addColorStop(0.5, `rgba(255,255,255,${strength})`);
       line.addColorStop(1, `rgba(255,255,255,0)`);
@@ -238,7 +269,7 @@ export class Overlay {
 
       if (isTonic || isActive || isTarget) {
         const labelX = Math.min(Math.max(x, labelPad), target.width - labelPad);
-        ctx.fillStyle = isActive ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.38)';
+        ctx.fillStyle = isActive ? 'rgba(255,255,255,0.95)' : `rgba(255,255,255,${Math.min(1, 0.38 * lift)})`;
         ctx.fillText(midiToName(frame.layout.baseMidi + semitone, t().notes), labelX, labelY);
       }
     }

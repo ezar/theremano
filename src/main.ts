@@ -20,7 +20,7 @@ import { Help } from './ui/help';
 import { Hud } from './ui/hud';
 import { Onboarding } from './ui/onboarding';
 import { Overlay, type OverlayFrame } from './ui/overlay';
-import { SettingsStore, runtime, type Settings } from './state/store';
+import { SettingsStore, runtime, type Settings, type StageMode } from './state/store';
 
 /**
  * Arranque y bucle principal.
@@ -178,8 +178,27 @@ class Theremano {
         void this.toggleClip();
       } else if (event.key.toLowerCase() === 'z') {
         this.looper.undo();
+      } else if (event.key.toLowerCase() === 'v') {
+        this.toggleStageMode();
       }
     });
+  }
+
+  /**
+   * Alterna entre ver la camara y ver solo las manos.
+   *
+   * Tiene atajo propio porque la razon para usarlo suele aparecer un segundo
+   * antes de grabar, y abrir los ajustes en ese momento es abrir los ajustes en
+   * mitad de una toma.
+   */
+  private toggleStageMode(): void {
+    const handsOnly = this.store.get().stageMode !== 'hands';
+    // El aviso se resuelve antes de la llamada: la guarda de textos revisa lo
+    // que se le pasa a toast(), y un literal de comparacion ahi dentro la
+    // dispara aunque no sea texto que nadie vaya a leer.
+    const message = handsOnly ? t().toast.stageHands : t().toast.stageCamera;
+    this.store.set({ stageMode: handsOnly ? 'hands' : 'camera' });
+    this.hud.toast(message);
   }
 
   private toggleLoop(): void {
@@ -322,6 +341,7 @@ class Theremano {
       this.highRes = true;
       await attachStream(this.video, state.stream);
       this.applyMirror(state.frontFacing);
+      this.applyStageMode(settings.stageMode);
       this.store.set({ cameraId: state.deviceId });
 
       this.setStatus(t().loading.audio);
@@ -495,14 +515,17 @@ class Theremano {
     }
     this.overlay.update(frame, dt);
 
-    this.overlay.paint(this.overlay.screenTarget, frame, this.video.videoWidth, this.video.videoHeight);
+    const handsOnly = settings.stageMode === 'hands';
+    this.overlay.paint(this.overlay.screenTarget, frame, this.video.videoWidth, this.video.videoHeight, {
+      backdrop: handsOnly,
+    });
 
     const clipTarget = this.clip.target;
     if (clipTarget) {
       // El clip se dibuja aparte y completo: incluye el fotograma de la camara,
       // la nota y la marca, porque en el video no hay HUD de HTML detras.
       this.overlay.paint(clipTarget, frame, this.video.videoWidth, this.video.videoHeight, {
-        video: this.video,
+        ...(handsOnly ? { backdrop: true } : { video: this.video }),
         mirror: settings.mirror,
         watermark: true,
         caption: true,
@@ -654,6 +677,16 @@ class Theremano {
     this.video.classList.toggle('mirrored', this.store.get().mirror);
   }
 
+  /**
+   * El degradado del lienzo ya tapa la camara, pero el video sigue ahi debajo.
+   * Ocultarlo ademas por CSS evita que un fotograma pintado a medias, o un
+   * lienzo que aun no se ha redimensionado tras girar el movil, deje ver la
+   * habitacion por un borde.
+   */
+  private applyStageMode(mode: StageMode): void {
+    this.video.classList.toggle('camera-hidden', mode === 'hands');
+  }
+
   private onSettingsChanged(settings: Readonly<Settings>, changed: ReadonlySet<keyof Settings>): void {
     if (
       changed.has('scale') ||
@@ -689,6 +722,7 @@ class Theremano {
     }
     if (changed.has('preset')) this.engine.setPreset(getPreset(settings.preset));
     if (changed.has('masterVolume')) this.mapper.setVolume(settings.masterVolume);
+    if (changed.has('stageMode')) this.applyStageMode(settings.stageMode);
     if (changed.has('mirror')) {
       this.video.classList.toggle('mirrored', settings.mirror);
       this.roles.reset();

@@ -100,6 +100,10 @@ export interface Strings {
     clipVertical: string;
     clipLandscape: string;
     clipHint: string;
+    stage: string;
+    stageCamera: string;
+    stageHands: string;
+    stageHint: string;
     instrumentSection: string;
     scale: string;
     tonic: string;
@@ -146,6 +150,8 @@ export interface Strings {
     clipDownloaded: string;
     clipCancelled: string;
     clipSaveFailed: string;
+    stageHands: string;
+    stageCamera: string;
     linkCopied: string;
     linkInAddressBar: string;
     guideStart: (name: string, hint: string) => string;
