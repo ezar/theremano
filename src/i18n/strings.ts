@@ -116,6 +116,8 @@ export interface Strings {
     guideSection: string;
     melody: string;
     melodyNone: string;
+    melodySongs: string;
+    melodyExercises: string;
     melodyHint: string;
     cameraSection: string;
     device: string;

@@ -1,5 +1,5 @@
 import { PRESETS, type PresetId } from '../audio/presets';
-import { MELODIES } from '../mapping/melodies';
+import { MELODIES, type MelodyKind } from '../mapping/melodies';
 import { SCALES, type ScaleId } from '../mapping/scales';
 import { i18n, t } from '../i18n';
 import type { Settings, SettingsStore, StageMode } from '../state/store';
@@ -26,6 +26,17 @@ interface ControlsDeps {
 }
 
 type Binder = (settings: Readonly<Settings>) => void;
+
+interface SelectOption {
+  value: string;
+  label: string;
+}
+
+/** Bloque con encabezado dentro de un desplegable. */
+interface SelectGroup {
+  group: string;
+  options: readonly SelectOption[];
+}
 
 export class Controls {
   private readonly panel: HTMLElement;
@@ -200,10 +211,18 @@ export class Controls {
     this.hint(s.baseVolumeHint);
 
     this.section(s.guideSection);
+    // Diez entradas seguidas no dicen cual es una cancion y cual un ejercicio de
+    // los que hay aqui dentro. Los grupos lo dicen sin gastar una linea de texto.
+    const melodyOf = (kind: MelodyKind) =>
+      MELODIES.filter((m) => m.kind === kind).map((m) => ({ value: m.id, label: t().melodies[m.id]?.name ?? m.id }));
     this.select(
       'melody',
       s.melody,
-      [{ value: '', label: s.melodyNone }, ...MELODIES.map((m) => ({ value: m.id, label: t().melodies[m.id]?.name ?? m.id }))],
+      [
+        { value: '', label: s.melodyNone },
+        { group: s.melodySongs, options: melodyOf('song') },
+        { group: s.melodyExercises, options: melodyOf('exercise') },
+      ],
       (settings) => settings.melodyId,
       (value) => this.deps.onMelodyChange(value),
     );
@@ -285,7 +304,7 @@ export class Controls {
   private select(
     key: string,
     labelText: string,
-    options: ReadonlyArray<{ value: string; label: string }>,
+    options: ReadonlyArray<SelectOption | SelectGroup>,
     read: (s: Readonly<Settings>) => string,
     write: (value: string) => void,
   ): HTMLSelectElement {
@@ -294,7 +313,18 @@ export class Controls {
     const id = `set-${key}`;
     select.id = id;
     label.htmlFor = id;
-    for (const option of options) select.append(new Option(option.label, option.value));
+    for (const option of options) {
+      if ('group' in option) {
+        // Un grupo vacio dejaria un encabezado suelto sin nada debajo.
+        if (option.options.length === 0) continue;
+        const group = document.createElement('optgroup');
+        group.label = option.group;
+        for (const child of option.options) group.append(new Option(child.label, child.value));
+        select.append(group);
+      } else {
+        select.append(new Option(option.label, option.value));
+      }
+    }
     select.addEventListener('change', () => write(select.value));
     wrapper.append(select);
     this.binders.push((s) => {

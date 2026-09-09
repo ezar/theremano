@@ -16,8 +16,12 @@ import type { ScaleId } from './scales';
  * ninguna parte.
  */
 
+export type MelodyKind = 'exercise' | 'song';
+
 export interface Melody {
   id: string;
+  /** Ejercicio inventado aqui, o cancion conocida. Solo cambia como se agrupa. */
+  kind: MelodyKind;
   /**
    * Semitonos sobre la tonica. Se resuelven contra la escala activa buscando la
    * zona mas cercana, de modo que cualquier melodia se puede tocar en cualquier
@@ -25,33 +29,110 @@ export interface Melody {
    */
   notes: readonly number[];
   suggestedScale: ScaleId;
+  /**
+   * Octavas que necesita el encuadre para que la melodia quepa entera.
+   *
+   * Los ejercicios caben en una; las canciones recorren mas de una octava y con
+   * el encuadre corto varias notas distintas caerian en la misma zona, que es
+   * exactamente lo que hace que una cancion deje de reconocerse. Al elegirla se
+   * amplia el rango si hace falta, igual que se aplica la escala sugerida.
+   */
+  minOctaves: number;
 }
 
+/**
+ * Canciones. Todas son tradicionales o de dominio publico, y aqui solo esta la
+ * linea melodica en grados, sin ritmo: la guia no mide el tiempo.
+ *
+ * Se escriben transportadas para que ninguna nota quede por debajo de la
+ * tonica, porque el encuadre empieza justo ahi y una nota mas grave no tendria
+ * zona donde caer. Por eso varias empiezan en 7 o en 12 en vez de en 0: es la
+ * misma melodia una quinta o una octava mas arriba, que en un instrumento sin
+ * afinacion fija no cambia nada.
+ *
+ * Cada nota existe exactamente en la escala sugerida; no hay ninguna que
+ * dependa de caer en la zona mas cercana. Una prueba lo comprueba, porque una
+ * nota aproximada en una cancion conocida se oye al momento.
+ */
 export const MELODIES: readonly Melody[] = [
   {
+    // Beethoven, tema de la Novena. Mi mi fa sol sol fa mi re do do re mi mi re re.
+    id: 'alegria',
+    kind: 'song',
+    notes: [4, 4, 5, 7, 7, 5, 4, 2, 0, 0, 2, 4, 4, 2, 2],
+    suggestedScale: 'major',
+    minOctaves: 1,
+  },
+  {
+    // Escrita desde la quinta, que es donde empieza de verdad, subida una octava
+    // para que esa quinta no caiga por debajo del borde del encuadre.
+    id: 'cumple',
+    kind: 'song',
+    notes: [7, 7, 9, 7, 12, 11, 7, 7, 9, 7, 14, 12, 7, 7, 19, 16, 12, 11, 9, 17, 17, 16, 12, 14, 12],
+    suggestedScale: 'major',
+    minOctaves: 2,
+  },
+  {
+    // Ah! vous dirai-je, maman. Do do sol sol la la sol, fa fa mi mi re re do.
+    id: 'estrellita',
+    kind: 'song',
+    notes: [0, 0, 7, 7, 9, 9, 7, 5, 5, 4, 4, 2, 2, 0],
+    suggestedScale: 'major',
+    minOctaves: 1,
+  },
+  {
+    // Sube una octava entera porque el "din, dan, don" del final baja a la
+    // quinta grave.
+    id: 'martinillo',
+    kind: 'song',
+    notes: [12, 14, 16, 12, 16, 17, 19, 19, 21, 19, 17, 16, 12, 12, 7, 12],
+    suggestedScale: 'major',
+    minOctaves: 2,
+  },
+  {
+    // Version eolia, con septima menor: la escala menor de la aplicacion no
+    // tiene sensible, y forzarla dejaria esa nota cayendo en la zona de al lado.
+    // Es ademas como se ha tocado durante siglos, no un apano.
+    id: 'greensleeves',
+    kind: 'song',
+    notes: [12, 15, 17, 19, 20, 19, 17, 14, 10, 12, 14, 15, 12, 12, 10, 12],
+    suggestedScale: 'minor',
+    minOctaves: 2,
+  },
+  {
     id: 'ascenso',
+    kind: 'exercise',
     notes: [0, 3, 5, 7, 10, 12],
     suggestedScale: 'pentatonic',
+    minOctaves: 1,
   },
   {
     id: 'ida-vuelta',
+    kind: 'exercise',
     notes: [0, 3, 5, 7, 5, 3, 0],
     suggestedScale: 'pentatonic',
+    minOctaves: 1,
   },
   {
     id: 'llamada',
+    kind: 'exercise',
     notes: [0, 3, 0, 5, 0, 7, 5, 3, 0],
     suggestedScale: 'pentatonic',
+    minOctaves: 1,
   },
   {
     id: 'blues',
+    kind: 'exercise',
     notes: [0, 3, 5, 6, 7, 6, 5, 3, 0],
     suggestedScale: 'blues',
+    minOctaves: 1,
   },
   {
     id: 'octavas',
+    kind: 'exercise',
     notes: [0, 7, 12, 7, 12, 19, 12, 0],
     suggestedScale: 'pentatonic',
+    minOctaves: 2,
   },
 ];
 

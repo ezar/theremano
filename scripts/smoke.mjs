@@ -197,6 +197,30 @@ const afterScale = await page.evaluate(() => document.getElementById('note-sub')
 const persisted = await page.evaluate(() => localStorage.getItem('theremano.settings.v1'));
 console.log(JSON.stringify({ fields, afterScale, scale: JSON.parse(persisted ?? '{}').scale }, null, 2));
 
+// --- Cancion: elegirla amplia el rango si el encuadre se ha quedado corto.
+await page.evaluate(() => {
+  const range = document.getElementById('set-range');
+  range.value = '1';
+  range.dispatchEvent(new Event('input', { bubbles: true }));
+});
+await page.waitForTimeout(300);
+await page.selectOption('#set-melody', 'martinillo');
+await page.waitForTimeout(700);
+const song = await page.evaluate(() => {
+  const stored = JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}');
+  const grupos = [...document.querySelectorAll('#set-melody optgroup')].map((g) => ({
+    label: g.label,
+    opciones: g.children.length,
+  }));
+  return {
+    progreso: document.getElementById('guide-progress')?.textContent,
+    escala: stored.scale,
+    octavas: stored.octaves,
+    grupos,
+  };
+});
+console.log(JSON.stringify({ song }, null, 2));
+
 // --- Melodia guiada: elegirla muestra el progreso y fija la escala sugerida.
 await page.selectOption('#set-melody', 'blues');
 await page.waitForTimeout(700);
@@ -301,6 +325,14 @@ if (!replayed.helpClosed || !replayed.coachVisible) {
 }
 if (afterContinuous.melody !== '' || afterContinuous.chipHidden !== true) {
   console.error('\nFALLO: la guia sigue activa en una escala sin zonas');
+  process.exit(1);
+}
+if (song.escala !== 'major' || song.octavas !== 2 || song.progreso !== '0/16') {
+  console.error('\nFALLO: elegir una cancion no aplica su escala, su rango o su longitud');
+  process.exit(1);
+}
+if (song.grupos.length !== 2 || song.grupos.some((g) => g.opciones !== 5)) {
+  console.error('\nFALLO: el desplegable de melodias no separa canciones y ejercicios');
   process.exit(1);
 }
 if (!guide.visible || guide.progress !== '0/9' || guide.scale !== 'blues') {

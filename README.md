@@ -29,8 +29,9 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
   el esqueleto sobre un fondo oscuro, sin cara ni habitación. Tecla **V**.
 - **Introducción interactiva** — cinco pasos que se cierran cuando el gesto
   ocurre de verdad, no cuando se pulsa «siguiente». Repetible desde la ayuda.
-- **Melodías guiadas** — cinco secuencias que seguir, con el objetivo marcado
-  sobre la rejilla. Sin presión de tiempo: se sigue el orden, no el compás.
+- **Melodías guiadas** — diez secuencias que seguir, con el objetivo marcado
+  sobre la rejilla: cinco canciones conocidas y cinco ejercicios. Sin presión de
+  tiempo: se sigue el orden, no el compás.
 - **Enlace con la configuración** — escala, tónica y timbre viajan en el
   fragmento de la dirección, y el enlace trae vista previa al compartirlo.
 
@@ -136,8 +137,32 @@ solo consigue que se abandone.
 
 Las melodías se declaran en semitonos sobre la tónica y se resuelven contra la
 escala activa buscando la zona más cercana, así que cualquiera se puede tocar en
-cualquier escala sin quedarse sin notas. Son patrones de escala escritos para
-esto: nada transcrito de ninguna parte.
+cualquier escala sin quedarse sin notas.
+
+Hay de dos clases. Los **ejercicios** —subir, ida y vuelta, llamada y respuesta,
+blues, saltos de octava— son patrones de escala escritos para esto, sin nada
+transcrito. Las **canciones** —Oda a la alegría, Cumpleaños feliz, Estrellita,
+Martinillo, Greensleeves— son tradicionales o de dominio público, y de ellas solo
+está aquí la línea melódica en grados, sin ritmo.
+
+Tres detalles de cómo se escriben:
+
+- **Ninguna nota baja de la tónica.** El encuadre empieza justo ahí y una nota
+  más grave no tendría zona donde caer, así que las que empiezan por debajo van
+  transportadas una quinta o una octava arriba. En un instrumento sin afinación
+  fija eso no cambia nada.
+- **Cada nota existe exacta en la escala que la melodía sugiere.** La búsqueda de
+  la zona más cercana no falla nunca, pero suena la nota de al lado: en un
+  ejercicio da igual, en una canción conocida es la diferencia entre reconocerla
+  y no. Una prueba lo comprueba melodía por melodía.
+- **Cada melodía declara cuántas octavas necesita**, y elegirla amplía el rango
+  si el encuadre se ha quedado corto. Con una sola octava, dos notas distintas de
+  «Cumpleaños feliz» caerían en la misma zona. Solo se amplía: quien toca con
+  cuatro octavas no las pierde por elegir una melodía.
+
+Greensleeves va en su versión eolia, con séptima menor. La escala menor de la
+aplicación no tiene sensible, y forzarla dejaría esa nota cayendo en la zona de
+al lado; además es como se ha tocado durante siglos.
 
 ---
 
