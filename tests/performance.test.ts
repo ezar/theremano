@@ -266,6 +266,40 @@ describe('interpretacion en el enlace', () => {
       expect(decodePerformance(toUrl(bytes))).toBe(null);
     });
 
+    /**
+     * El caso que se cuela por la puerta de atras.
+     *
+     * El reproductor recorre los eventos en orden de array pero los programa en
+     * su instante, y Web Audio los ejecuta por instante. Un enlace con los
+     * tiempos desordenados puede alternar ataques y sueltas en el array y sonar
+     * como dos ataques seguidos, que es exactamente la nota atascada que la
+     * comprobacion de notas enteras existe para evitar.
+     */
+    it('rechaza eventos desordenados en el tiempo', () => {
+      const twoNotes = encodePerformance({
+        cycleSeconds: 4,
+        tracks: [{ presetId: 'theremin', events: [...note(0, 69, 0.5), ...note(1, 72, 0.5)] }],
+      })!.encoded;
+      const bytes = bytesOf(twoNotes);
+
+      // Se adelanta el segundo ataque por delante de la primera suelta sin
+      // tocar el orden del array: las clases siguen alternando.
+      const gates = [];
+      const count = bytes[5]! | (bytes[6]! << 8);
+      for (let e = 0; e < count; e += 1) {
+        const at = 7 + e * 6;
+        const packed = bytes[at]! | (bytes[at + 1]! << 8);
+        if (packed >> 14 !== 2) gates.push({ at, kind: packed >> 14, t: packed & 0x3fff });
+      }
+      expect(gates.map((g) => g.kind), 'ataque, suelta, ataque, suelta').toEqual([0, 1, 0, 1]);
+
+      const release = gates[1]!;
+      const units = gates[2]!.t + 10;
+      bytes[release.at] = units & 0xff;
+      bytes[release.at + 1] = ((units >> 8) & 0x3f) | (1 << 6);
+      expect(decodePerformance(toUrl(bytes))).toBe(null);
+    });
+
     it('rechaza un timbre que no existe', () => {
       const bytes = bytesOf(good);
       bytes[4] = 200;

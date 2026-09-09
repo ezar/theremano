@@ -122,12 +122,27 @@ export function decodePerformance(encoded: string): Performance | null {
     if (eventCount === 0 || at + eventCount * BYTES_PER_EVENT > bytes.length) return null;
 
     const events: LoopEvent[] = [];
+    let previous = -1;
     for (let e = 0; e < eventCount; e += 1) {
       const packed = readUint16(bytes, at);
       const kind = KIND_NAMES[packed >> 14];
       if (!kind) return null;
       const t = (packed & MAX_TIME_UNITS) / TIME_SCALE;
       if (t > cycleSeconds + 0.5) return null;
+      /*
+       * En orden de tiempo, y no solo dentro del ciclo.
+       *
+       * Sin esto, la comprobacion de notas enteras miraria el orden del array y
+       * no el del sonido, que son cosas distintas: el reproductor recorre los
+       * eventos en orden de array pero los programa en su instante, y Web Audio
+       * los ejecuta por instante. Un enlace con ataque en 0, suelta en 2, ataque
+       * en 1 y suelta en 3 alterna perfectamente en el array y suena como dos
+       * ataques seguidos. El codificador siempre escribe en orden, porque
+       * LoopTake.finish() ordena antes de cerrar la toma, asi que exigirlo no
+       * rechaza nada legitimo.
+       */
+      if (t < previous) return null;
+      previous = t;
       const midi = readUint16(bytes, at + 2) / PITCH_SCALE;
       events.push({
         t,
@@ -156,6 +171,10 @@ export function decodePerformance(encoded: string): Performance | null {
  * se queda anunciando que esta sonando algo que no suena; y un ataque sin su
  * suelta deja la nota abierta, y como cada vuelta la vuelve a atacar, se
  * convierte en un bordon que ya no para.
+ *
+ * Cuenta con que los eventos llegan en orden de tiempo, cosa que el
+ * decodificador exige antes de llamar aqui: mirar el orden del array cuando el
+ * sonido va por otro seria comprobar la lista equivocada.
  *
  * La comprobacion es circular y no lineal, y esa es la parte que importa.
  * `LoopTake.finish()` ordena los eventos por tiempo, asi que una sobregrabacion
