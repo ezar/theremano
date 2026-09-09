@@ -89,8 +89,14 @@ export const en: Strings = {
       volume: {
         title: 'If you have a hand to spare, raise it',
         body:
-          'The second hand raises and lowers the volume, and the number of fingers picks the timbre. ' +
-          'Everything else works with a single hand: if you would rather stay that way, volume and timbre are in Settings.',
+          'The second hand raises and lowers the volume. Everything else works with a single hand: ' +
+          'if you would rather stay that way, volume is in Settings too.',
+      },
+      timbre: {
+        title: 'Change the instrument with that hand’s fingers',
+        body:
+          'One, two, three or four fingers held out: each count is a timbre. Keep the hand still for a moment ' +
+          'and you will see the name appear at the bottom left. It is in Settings as well.',
       },
     },
   },

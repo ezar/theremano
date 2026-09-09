@@ -27,8 +27,8 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
   móvil o como descarga.
 - **Solo manos** — oculta la imagen de la cámara, en pantalla y en el clip: se ve
   el esqueleto sobre un fondo oscuro, sin cara ni habitación. Tecla **V**.
-- **Introducción interactiva** — cinco pasos que se cierran cuando el gesto
-  ocurre de verdad, no cuando se pulsa «siguiente». Repetible desde la ayuda.
+- **Introducción interactiva** — seis pasos que se cierran cuando el gesto ocurre
+  de verdad, no cuando se pulsa «siguiente». Repetible desde la ayuda.
 - **Melodías guiadas** — diez secuencias que seguir, con el objetivo marcado
   sobre la rejilla: cinco canciones conocidas y cinco ejercicios. Sin presión de
   tiempo: se sigue el orden, no el compás.
@@ -67,6 +67,21 @@ Con una mano se toca el instrumento entero. La segunda solo añade volumen y
 cambio de timbre, y las dos cosas están también en el panel de ajustes. Perder
 una mano no silencia nada: su último estado se conserva 500 ms antes de darla por
 ausente, y el volumen se queda donde estaba en lugar de caer a cero.
+
+### El cambio de timbre se ve venir
+
+El gesto de los dedos existía desde el principio y no lo encontraba nadie: solo
+se sabía de él leyendo la ayuda. Ahora, en cuanto los dedos apuntan a otro
+timbre, el chip de abajo a la izquierda lo anuncia —«Theremín → Flauta»— con una
+barra que se llena mientras el recuento se sostiene, y que se vacía si la mano
+titubea. El nombre asoma al primer fotograma; confirmar sigue exigiendo la misma
+racha de seis, porque un recuento de dedos parpadea en los bordes del gesto y un
+timbre que cambia solo es desconcertante.
+
+Ver el nombre asomar convierte un dato de la documentación en algo que se
+descubre por accidente, que es como se aprende un instrumento. El sexto paso de
+la introducción, opcional, remata la faena: se cierra solo cuando el cambio de
+timbre ocurre de verdad, no cuando se levantan dedos.
 
 Con teclado: **espacio** graba una capa de bucle, **C** graba un clip, **Z**
 quita la última capa, **V** oculta o muestra la cámara, **H** abre la ayuda.

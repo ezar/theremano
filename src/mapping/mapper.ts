@@ -2,7 +2,7 @@ import { OneEuroFilter, DEFAULT_D_CUTOFF } from '../filter/oneEuro';
 import { expressionFeatures, melodyFeatures } from './features';
 import { PinchGate, type GateEvent } from './gate';
 import { createLayout, isContinuous, pitchAt, type PitchLayout } from './scales';
-import { getPreset, presetForFingerCount, type Preset } from '../audio/presets';
+import { getPreset, presetForFingerCount, type Preset, type PresetId } from '../audio/presets';
 import type { RoleAssignment } from '../tracking/types';
 import type { Settings } from '../state/store';
 
@@ -52,6 +52,16 @@ export interface MappingOutput {
   volume: number;
   /** Cambio de timbre confirmado, o null. */
   preset: Preset | null;
+  /**
+   * Timbre al que apuntan los dedos ahora mismo, todavia sin confirmar.
+   *
+   * Sale del mapeador y no del HUD porque la racha de confirmacion vive aqui.
+   * Ensenarlo es lo unico que convierte el gesto en algo que se descubre solo:
+   * levantas tres dedos, ves el nombre del timbre asomar, y ya sabes que existe.
+   */
+  presetCandidate: PresetId | null;
+  /** Cuanto le falta a ese candidato para confirmarse, de 0 a 1. */
+  presetProgress: number;
   pitchX: number;
   pitchXRaw: number;
   pinch: number;
@@ -172,6 +182,9 @@ export class Mapper {
       cutoffNorm,
       volume: this.volume,
       preset,
+      // Al confirmarse deja de haber candidato: el destino ya es el actual.
+      presetCandidate: preset || this.candidateStreak === 0 ? null : (presetForFingerCount(this.candidateFingers)?.id ?? null),
+      presetProgress: preset ? 0 : Math.min(1, this.candidateStreak / PRESET_CONFIRM_FRAMES),
       pitchX,
       pitchXRaw,
       pinch,

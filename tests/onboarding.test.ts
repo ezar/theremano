@@ -18,6 +18,7 @@ const idle: CoachSignals = {
   expressionHeld: false,
   gateOpen: false,
   attack: false,
+  presetChanged: false,
   pitchX: -1,
   volume: 0.5,
   dt: 1 / FPS,
@@ -118,29 +119,50 @@ describe('introduccion guiada', () => {
     expect(feed(bien, { gateOpen: true, melodyVisible: true }, 3, (t) => ({ pitchX: 0.3 + (t / 3) * 0.4 }))).toEqual(['advanced']);
   });
 
-  it('el ultimo paso mide la segunda mano y termina el recorrido', () => {
+  it('el paso del volumen mide la segunda mano y pasa al siguiente', () => {
     const coach = coachAt('volume');
     expect(feed(coach, { expressionVisible: true, volume: 0.5 }, 4)).toEqual([]);
     const events = feed(coach, { expressionVisible: true }, 2, (t) => ({ volume: t < 1 ? 0.1 : 0.9 }));
-    expect(events).toEqual(['finished']);
+    expect(events).toEqual(['advanced']);
+    expect(coach.step?.id).toBe('timbre');
+  });
+
+  /**
+   * El paso que hace visible el gesto del timbre.
+   *
+   * Solo puede cerrarse con un cambio confirmado de verdad. Contarlo por dedos
+   * levantados lo cerraria en cuanto alguien abriera la mano, que es justo lo
+   * que este paso quiere ensenar que no basta.
+   */
+  it('el ultimo paso solo se cierra al cambiar de timbre de verdad', () => {
+    const coach = coachAt('timbre');
+    // Con la segunda mano a la vista, moviendose y tocando, pero sin que el
+    // timbre llegue a confirmarse, el paso no avanza.
+    expect(
+      feed(coach, { expressionVisible: true, gateOpen: true, attack: true, volume: 0.9, pitchX: 0.5 }, 4),
+    ).toEqual([]);
+    expect(coach.step?.id).toBe('timbre');
+
+    expect(feed(coach, { expressionVisible: true, presetChanged: true }, 0.1)).toEqual(['finished']);
     expect(coach.isActive).toBe(false);
     expect(coach.step).toBe(null);
     // Ya terminado, seguir tocando no vuelve a disparar nada.
-    expect(feed(coach, { expressionVisible: true, attack: true }, 1)).toEqual([]);
+    expect(feed(coach, { expressionVisible: true, attack: true, presetChanged: true }, 1)).toEqual([]);
   });
 
-  it('solo el paso de la segunda mano es opcional', () => {
+  it('los dos pasos de la segunda mano son los opcionales', () => {
     // La marca vive en el dato para que la tarjeta pueda anunciarla antes de que
     // nadie lo intente. Si alguien anade un paso opcional sin querer, o quita
     // esta marca, el instrumento pasaria a exigir dos manos sin decirlo.
     const optional = STEPS.filter((step) => step.optional).map((step) => step.id);
-    expect(optional).toEqual(['volume']);
+    expect(optional).toEqual(['volume', 'timbre']);
   });
 
-  it('el paso opcional se puede completar igualmente si hay segunda mano', () => {
+  it('los pasos opcionales se pueden completar igualmente si hay segunda mano', () => {
     const coach = coachAt('volume');
     expect(STEPS.find((s) => s.id === 'volume')?.optional).toBe(true);
-    expect(feed(coach, { expressionVisible: true }, 2, (t) => ({ volume: t < 1 ? 0.1 : 0.9 }))).toEqual(['finished']);
+    expect(feed(coach, { expressionVisible: true }, 2, (t) => ({ volume: t < 1 ? 0.1 : 0.9 }))).toEqual(['advanced']);
+    expect(feed(coach, { expressionVisible: true, presetChanged: true }, 0.1)).toEqual(['finished']);
   });
 
   it('se puede saltar paso a paso hasta el final', () => {

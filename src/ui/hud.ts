@@ -1,6 +1,7 @@
 import { getScale, midiToName } from '../mapping/scales';
 import { i18n, t } from '../i18n';
 import type { LoopState } from '../audio/looper';
+import type { PresetId } from '../audio/presets';
 import type { Runtime, Settings } from '../state/store';
 import { pitchHue } from './target';
 
@@ -25,6 +26,8 @@ export class Hud {
   private readonly volumeFill = el('volume-fill');
   private readonly volumeValue = el('volume-value');
   private readonly presetName = el('preset-name');
+  private readonly presetNext = el('preset-next');
+  private readonly presetChip = el('preset-chip');
   private readonly presetFingers = el('preset-fingers');
   private readonly dotMelody = el('dot-melody');
   private readonly dotExpression = el('dot-expression');
@@ -54,6 +57,7 @@ export class Hud {
     sounding: false,
     volume: -1,
     preset: '',
+    presetNext: '',
     fingers: -1,
     melody: '',
     expression: '',
@@ -78,6 +82,7 @@ export class Hud {
       this.last.note = '';
       this.last.sub = '';
       this.last.preset = '';
+      this.last.presetNext = '';
       this.last.guide = '';
       this.last.loopLabel = '';
       this.last.clipLabel = '';
@@ -212,6 +217,28 @@ export class Hud {
     if (runtime.fingerCount !== this.last.fingers) {
       this.presetFingers.textContent = runtime.expressionVisible ? `${runtime.fingerCount}/4` : '';
       this.last.fingers = runtime.fingerCount;
+    }
+
+    /*
+     * El timbre al que apuntan los dedos, mientras se confirma.
+     *
+     * El gesto existia desde el principio y no lo encontraba nadie: solo se
+     * sabia de el leyendo la ayuda. Ver el nombre del proximo timbre asomar en
+     * cuanto se levantan dedos convierte un dato de la documentacion en algo que
+     * se descubre por accidente, que es como se aprende un instrumento.
+     */
+    const candidate = runtime.presetCandidate;
+    const candidateName = candidate ? (t().presets[candidate as PresetId] ?? '') : '';
+    if (candidateName !== this.last.presetNext) {
+      this.presetNext.textContent = candidateName;
+      this.presetNext.hidden = candidateName === '';
+      this.presetChip.classList.toggle('arming', candidateName !== '');
+      this.last.presetNext = candidateName;
+    }
+    // El progreso se pinta siempre que haya candidato: es una barra que se llena
+    // en seis fotogramas, y saltarse repintados aqui la dejaria a tirones.
+    if (candidateName !== '') {
+      this.presetChip.style.setProperty('--preset-progress', `${Math.round(runtime.presetProgress * 100)}%`);
     }
 
     this.updateDot(this.dotMelody, runtime.melodyVisible, runtime.melodyHeld, 'melody');
