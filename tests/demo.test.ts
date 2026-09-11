@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { DemoPerformance, HAND_SCALE, NOTE_SECONDS, POSE_CLOSED, POSE_OPEN, TILT_SWING } from '../src/mapping/demo';
+import { DemoPerformance, HAND_SCALE, NOTE_SECONDS, POSE_CLOSED, POSE_OPEN } from '../src/mapping/demo';
 import { phantomHand, phantomScale } from '../src/tracking/phantom';
 import { denormalize, depthFromSize, palmCenter, palmSize, pinchRatio } from '../src/mapping/features';
 import { Mapper } from '../src/mapping/mapper';
 import { PINCH_CLOSE, PINCH_OPEN } from '../src/mapping/gate';
-import { MELODIES, getMelody } from '../src/mapping/melodies';
+import { MELODIES, getMelody, type Melody } from '../src/mapping/melodies';
 import { createLayout } from '../src/mapping/scales';
 import { DEFAULT_SETTINGS, type Settings } from '../src/state/store';
 import { HAND_BONES, type Landmark } from '../src/tracking/types';
@@ -19,6 +19,21 @@ import { HAND_BONES, type Landmark } from '../src/tracking/types';
 
 const WIDE = 16 / 9;
 const TALL = 0.46;
+
+/**
+ * Melodia de dos notas en los dos extremos del encuadre.
+ *
+ * Ninguna de las de verdad llega a la primera y a la ultima zona, y son las dos
+ * posiciones donde la mano se sale. Se escribe aqui para poder comprobar el caso
+ * peor sin depender de que alguna melodia lo visite por casualidad.
+ */
+const EDGES: Melody = {
+  id: 'extremos',
+  kind: 'exercise',
+  notes: [0, 24],
+  suggestedScale: 'pentatonic',
+  minOctaves: 2,
+};
 
 function settingsFor(id: string): Settings {
   const melody = getMelody(id)!;
@@ -99,23 +114,6 @@ describe('mano de mentira', () => {
     expect(depth).toBeLessThan(0.8);
   });
 
-  it('cabe en el encuadre en los dos extremos del recorrido', () => {
-    // Con el tamano natural, la mano puesta en la nota mas grave se salia por la
-    // izquierda, y lo que se salia era el pulgar y el indice: justo lo que hay
-    // que mirar. Por eso la demostracion dibuja la mano un poco mas lejos.
-    const scale = phantomScale(WIDE) * HAND_SCALE;
-    for (const x of [0, 0.5, 1]) {
-      for (const pinch of [POSE_OPEN, POSE_CLOSED]) {
-        for (const tilt of [-TILT_SWING, TILT_SWING]) {
-          const xs = phantomHand({ x: denormalize(x), y: 0.5, pinch, aspect: WIDE, tilt, scale }).map((p) => p.x);
-          expect(Math.min(...xs), `zona ${x}`).toBeGreaterThanOrEqual(0);
-          // Por la derecha se admite la punta del menique, que no ensena nada.
-          expect(Math.max(...xs), `zona ${x}`).toBeLessThan(1.02);
-        }
-      }
-    }
-  });
-
   it('ladearla no cambia ni su tamano ni su pinza', () => {
     const flat = phantomHand({ x: 0.5, y: 0.5, pinch: 0.4, aspect: WIDE });
     const tilted = phantomHand({ x: 0.5, y: 0.5, pinch: 0.4, aspect: WIDE, tilt: 0.3 });
@@ -127,7 +125,7 @@ describe('mano de mentira', () => {
     // La punta del pulgar y la del indice se colocan de antemano y los nudillos
     // de en medio se resuelven despues: si esa resolucion se pasa de largo, el
     // dedo se dibuja como una antena.
-    for (const pinch of [0.1, 0.2, 0.3, 0.45, 0.62, 0.8, 0.9]) {
+    for (const pinch of [0.1, 0.2, 0.3, 0.45, 0.52, 0.8, 0.9]) {
       const hand = phantomHand({ x: 0.5, y: 0.5, pinch, aspect: WIDE });
       const span = Math.hypot(hand[0]!.x - hand[9]!.x, hand[0]!.y - hand[9]!.y);
       for (const bone of fingerBones(hand)) {
@@ -136,6 +134,41 @@ describe('mano de mentira', () => {
       }
     }
   });
+
+  it.each([WIDE, TALL])('no se sale del encuadre de punta a punta (proporcion %f)', (aspect) => {
+    // Con la mano de frente, la palma en la nota mas grave dejaba el pulgar y el
+    // indice fuera del encuadre —justo los dos que hay que mirar—, y en vertical
+    // se salia media mano. Se recorre la demostracion entera, con su vaiven y su
+    // ladeo, y se mira cada punto.
+    const performance = new DemoPerformance(EDGES, createLayout('pentatonic', 9, 3, 2));
+    const scale = phantomScale(aspect) * HAND_SCALE;
+    // Lo que no puede salirse: la pinza y la palma. Del resto se admite que un
+    // nudillo asome por el borde, que es lo que le pasa a una mano de verdad
+    // tocando la nota del extremo.
+    const ESSENTIAL = [0, 4, 5, 8, 9, 13, 17];
+    const SLACK = 0.04;
+    for (let frame = 0; frame * (1 / 60) < performance.seconds; frame += 1) {
+      const seconds = frame / 60;
+      const pose = performance.poseAt(seconds);
+      const hand = phantomHand({
+        x: denormalize(pose.x),
+        y: denormalize(pose.y),
+        pinch: pose.pinch,
+        tilt: pose.tilt,
+        aspect,
+        scale,
+      });
+      for (const index of ESSENTIAL) {
+        expect(hand[index]!.x, `punto ${index} en ${seconds.toFixed(2)}s`).toBeGreaterThanOrEqual(0);
+        expect(hand[index]!.x, `punto ${index} en ${seconds.toFixed(2)}s`).toBeLessThanOrEqual(1);
+      }
+      for (const point of hand) {
+        expect(point.x).toBeGreaterThan(-SLACK);
+        expect(point.x).toBeLessThan(1 + SLACK);
+      }
+    }
+  });
+
 });
 
 describe('demostracion', () => {

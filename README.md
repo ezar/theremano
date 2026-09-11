@@ -304,10 +304,15 @@ Dos cosas que parecen detalles y no lo son:
   grado por debajo. Una prueba toca las diez melodías enteras y compara nota a
   nota: el fallo que vigila no es el silencio, es la nota equivocada, que se oye
   perfectamente y está mal.
-- **La mano se dibuja un poco más lejos de la cámara de lo normal.** Con el
-  tamaño natural, la mano puesta en la nota más grave se sale del encuadre por la
-  izquierda, y lo que se sale es justo lo que hay que mirar: el pulgar y el
-  índice.
+- **La mano se ladea hacia dentro en los extremos del recorrido.** Una mano a
+  distancia de trabajo ocupa buena parte del ancho de un móvil en vertical, así
+  que con la palma en la nota más grave el pulgar y el índice se quedaban fuera
+  del encuadre: justo los dos que hay que mirar. Ladearla los mete dentro sin
+  mover la palma, que es la que decide la nota, y es lo que hace cualquiera que
+  toque esto con el teléfono delante. El ladeo va al cubo de la distancia al
+  centro, así que la mano va derecha por todo el centro del recorrido y solo se
+  angula en los últimos pasos. Se dibuja además un poco más lejos de la cámara
+  que una mano a distancia de trabajo, por el mismo motivo.
 
 La pinza se construye al revés que el resto de la mano. En vez de doblar los
 dedos y ver qué distancia queda, se decide primero dónde se encuentran las dos
@@ -315,6 +320,16 @@ puntas y a qué distancia están, y después se rellenan los nudillos que faltan
 Es la única forma de que una pose de 0,2 abra la nota y una de 0,5 no, sin
 depender de la proporción de la ventana: los puntos normalizados dividen x por el
 ancho e y por el alto, que en apaisado no son la misma unidad.
+
+Los cinco dedos se dibujan igual: un arco desde el nudillo hasta la punta, con
+los nudillos de en medio repartidos por longitud de hueso, y el arco se abre
+justo lo que sobra de dedo. Es lo que hace que la mano parezca una mano. La
+primera versión doblaba cada falange por su ángulo y resolvía el índice con dos
+circunferencias, para conservar la longitud exacta de cada hueso, y salía un
+garabato: el codo del índice saltaba de un lado a otro —un rayo en vez de un
+dedo— y los otros tres se torcían hacia el meñique como un rastrillo. Un dedo que
+se cierra va hacia la palma, que es hacia la cámara, y de frente eso se ve como
+un dedo más corto y algo arqueado, no como un dedo que se tuerce de lado.
 
 Si hay una melodía elegida, se toca esa; si no, «Estrellita», que se reconoce en
 dos notas y cabe en una octava. En cualquier caso queda elegida al salir, así

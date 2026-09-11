@@ -52,7 +52,7 @@ export const NOTE_SECONDS = REACH_SECONDS + SETTLE_SECONDS + CLOSE_SECONDS + SUS
  * del umbral que calla y la cerrada por debajo del que suena. Si alguien
  * estrechara esa banda, estos dos numeros seguirian estando fuera.
  */
-export const POSE_OPEN = 0.62;
+export const POSE_OPEN = 0.52;
 export const POSE_CLOSED = 0.14;
 
 /**
@@ -74,6 +74,19 @@ const HEIGHT_PERIOD = 8.5;
 /** Ladeo, en radianes. Una mano que no se ladea nunca parece una pegatina. */
 export const TILT_SWING = 0.09;
 const TILT_PERIOD = 6.1;
+
+/**
+ * Cuanto se ladea la mano hacia dentro en los extremos del recorrido.
+ *
+ * No es un adorno, resuelve un problema real en vertical. Una mano a distancia
+ * de trabajo ocupa buena parte del ancho de un movil, asi que con la palma en la
+ * nota mas grave el pulgar y el indice se quedan fuera del encuadre, y son justo
+ * los dos que hay que mirar. Ladearla mete la mano entera dentro sin mover la
+ * palma, que es la que decide la nota. Y es lo que hace cualquiera que toque
+ * esto con el telefono delante: angular la mano hacia el centro al llegar a los
+ * bordes.
+ */
+export const EDGE_LEAN = 0.5;
 
 export interface DemoPose {
   /** Posicion en el encuadre util, 0 a 1. La misma que lee el mapeador. */
@@ -141,16 +154,27 @@ export class DemoPerformance {
 
   poseAt(seconds: number): DemoPose {
     const y = HEIGHT + HEIGHT_SWING * Math.sin((seconds / HEIGHT_PERIOD) * Math.PI * 2);
-    const tilt = TILT_SWING * Math.sin((seconds / TILT_PERIOD) * Math.PI * 2);
+    const sway = TILT_SWING * Math.sin((seconds / TILT_PERIOD) * Math.PI * 2);
+    // El ladeo acompana a la mano: se calcula sobre la posicion que se acaba de
+    // devolver, no sobre la nota, para que gire mientras viaja y no a saltos.
+    const pose = (x: number, pinch: number): DemoPose => ({
+      x,
+      y,
+      pinch,
+      // Al cubo, no en linea recta: asi la mano va derecha por todo el centro
+      // del recorrido y solo se angula en los ultimos pasos, que es donde hace
+      // falta y donde alguien lo haria de verdad.
+      tilt: sway + EDGE_LEAN * (2 * x - 1) ** 3,
+    });
     const first = this.positions[0] ?? 0.5;
-    if (this.notes === 0) return { x: 0.5, y, pinch: POSE_OPEN, tilt };
+    if (this.notes === 0) return pose(0.5, POSE_OPEN);
 
     const elapsed = seconds - LEAD_IN_SECONDS;
-    if (elapsed <= 0) return { x: first, y, pinch: POSE_OPEN, tilt };
+    if (elapsed <= 0) return pose(first, POSE_OPEN);
 
     const index = Math.floor(elapsed / NOTE_SECONDS);
     if (index >= this.notes) {
-      return { x: this.positions[this.notes - 1] ?? first, y, pinch: POSE_OPEN, tilt };
+      return pose(this.positions[this.notes - 1] ?? first, POSE_OPEN);
     }
 
     const from = index === 0 ? first : (this.positions[index - 1] ?? first);
@@ -158,17 +182,17 @@ export class DemoPerformance {
     let local = elapsed - index * NOTE_SECONDS;
 
     if (local < REACH_SECONDS) {
-      return { x: from + (to - from) * smooth(local / REACH_SECONDS), y, pinch: POSE_OPEN, tilt };
+      return pose(from + (to - from) * smooth(local / REACH_SECONDS), POSE_OPEN);
     }
     local -= REACH_SECONDS;
-    if (local < SETTLE_SECONDS) return { x: to, y, pinch: POSE_OPEN, tilt };
+    if (local < SETTLE_SECONDS) return pose(to, POSE_OPEN);
     local -= SETTLE_SECONDS;
     if (local < CLOSE_SECONDS) {
-      return { x: to, y, pinch: POSE_OPEN + (POSE_CLOSED - POSE_OPEN) * smooth(local / CLOSE_SECONDS), tilt };
+      return pose(to, POSE_OPEN + (POSE_CLOSED - POSE_OPEN) * smooth(local / CLOSE_SECONDS));
     }
     local -= CLOSE_SECONDS;
-    if (local < SUSTAIN_SECONDS) return { x: to, y, pinch: POSE_CLOSED, tilt };
+    if (local < SUSTAIN_SECONDS) return pose(to, POSE_CLOSED);
     local -= SUSTAIN_SECONDS;
-    return { x: to, y, pinch: POSE_CLOSED + (POSE_OPEN - POSE_CLOSED) * smooth(local / RELEASE_SECONDS), tilt };
+    return pose(to, POSE_CLOSED + (POSE_OPEN - POSE_CLOSED) * smooth(local / RELEASE_SECONDS));
   }
 }
