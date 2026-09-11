@@ -34,6 +34,14 @@ export interface Strings {
     listen: string;
     stopListening: string;
     playAlong: string;
+    /** Ver el instrumento tocandose solo, sin pedir la camara. */
+    demo: string;
+  };
+  demo: {
+    playing: (melody: string) => string;
+    /** Que hay que mirar. Sin esto la demostracion se ve, pero no se lee. */
+    hint: string;
+    stop: string;
   };
   loading: {
     camera: string;

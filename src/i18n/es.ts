@@ -20,6 +20,12 @@ export const es: Strings = {
     listen: 'Escuchar',
     stopListening: 'Parar',
     playAlong: 'Tocar encima',
+    demo: 'Ver una demostración',
+  },
+  demo: {
+    playing: (melody: string) => `Demostración: ${melody}`,
+    hint: 'La mano viaja con los dedos separados y junta pulgar e índice para que suene.',
+    stop: 'Salir',
   },
   loading: {
     camera: 'Pidiendo acceso a la cámara...',

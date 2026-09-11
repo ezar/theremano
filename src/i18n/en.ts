@@ -20,6 +20,12 @@ export const en: Strings = {
     listen: 'Listen',
     stopListening: 'Stop',
     playAlong: 'Play along',
+    demo: 'Watch a demo',
+  },
+  demo: {
+    playing: (melody: string) => `Demo: ${melody}`,
+    hint: 'The hand travels with the fingers apart and pinches thumb and index to make a note.',
+    stop: 'Exit',
   },
   loading: {
     camera: 'Asking for camera access...',

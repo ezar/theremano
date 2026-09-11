@@ -481,6 +481,72 @@ html, body {
 }
 #splash-error[hidden] { display: none; }
 
+/*
+ * Ver la demostracion es la tercera opcion de la pantalla inicial y tiene que
+ * parecerlo: quien ya sabe a que ha venido pulsa Empezar sin mirarla, y quien no
+ * lo sabe se la encuentra justo debajo, sin tener que dar permiso de camara para
+ * averiguar de que va esto.
+ */
+#demo-button {
+  display: block;
+  margin: 14px auto 0;
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-family: inherit;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+#demo-button:hover:not(:disabled) { color: var(--fg); }
+#demo-button:disabled { opacity: 0.55; cursor: progress; }
+
+/*
+ * Rotulo de la demostracion. Abajo, donde estaria la barra de acciones, y no
+ * arriba: arriba esta la nota, que el lienzo pinta en la esquina, y dos cajas
+ * disputandose ese sitio en un movil no caben.
+ */
+#demo-banner {
+  position: absolute;
+  left: 50%;
+  bottom: calc(18px + var(--safe-b));
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(94vw, 640px);
+  padding: 10px 10px 10px 16px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+}
+
+#demo-label { font-size: 0.86rem; font-weight: 600; white-space: nowrap; }
+#demo-hint { font-size: 0.78rem; color: var(--muted); line-height: 1.4; }
+
+#demo-stop {
+  flex: none;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fg);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+#demo-stop:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* En un movil la explicacion no cabe al lado del rotulo, y el rotulo manda. */
+@media (max-width: 620px) {
+  #demo-hint { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 1ms !important; }
 }
