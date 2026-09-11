@@ -91,6 +91,17 @@
 
       <div id="toast" hidden></div>
 
+      <!--
+        Rotulo de la demostracion. Es lo unico que se ve por encima del lienzo
+        mientras el instrumento se toca solo: dice que melodia suena y como
+        salir de ahi.
+      -->
+      <div id="demo-banner" hidden>
+        <span id="demo-label"></span>
+        <span id="demo-hint"></span>
+        <button id="demo-stop" type="button"></button>
+      </div>
+
       <button id="help-toggle" class="hidden">?</button>
       <button id="settings-toggle" class="hidden" aria-expanded="false"></button>
 
@@ -116,6 +127,7 @@
           <ul class="howto" id="splash-bullets"></ul>
           <button id="listen-button" hidden></button>
           <button id="start-button"></button>
+          <button id="demo-button" type="button"></button>
           <p id="splash-status"></p>
           <p id="splash-error" hidden></p>
         </div>

@@ -383,6 +383,41 @@ console.log(JSON.stringify({ afterContinuous }, null, 2));
 await page.selectOption('#set-scale', 'blues');
 await page.waitForTimeout(400);
 
+// --- Demostracion: el instrumento tocandose solo, sin camara y sin permiso.
+// Es la puerta de entrada de quien todavia no ha dado permiso de camara, asi
+// que se prueba en una pestana limpia y sin pedirlo. Lo que hay que demostrar
+// no es que el rotulo cambie, es que sale sonido: la mano es de mentira, pero
+// pasa por el mapeador de verdad y tiene que abrir el gate.
+const demo = await browser.newContext({ viewport: { width: 1100, height: 720 } });
+const demoPage = await demo.newPage();
+const demoLogs = [];
+demoPage.on('pageerror', (e) => demoLogs.push(e.message));
+await demoPage.addInitScript(audioProbe);
+await demoPage.goto(url, { waitUntil: 'domcontentloaded' });
+await demoPage.waitForTimeout(700);
+const beforeDemo = await demoPage.evaluate(() => ({
+  boton: document.getElementById('demo-button')?.textContent,
+  rotulo: !document.getElementById('demo-banner')?.hidden,
+  picoDeAudio: Number((window.__peak ?? 0).toFixed(4)),
+}));
+await demoPage.click('#demo-button');
+// Entrada de nueve decimas mas dos notas: da tiempo a que suene mas de una.
+await demoPage.waitForTimeout(4500);
+const playing = await demoPage.evaluate(() => ({
+  rotulo: document.getElementById('demo-label')?.textContent,
+  pantallaInicial: document.getElementById('splash')?.hidden === false,
+  picoDeAudio: Number((window.__peak ?? 0).toFixed(4)),
+}));
+await demoPage.click('#demo-stop');
+await demoPage.waitForTimeout(600);
+const afterDemo = await demoPage.evaluate(() => ({
+  rotulo: !document.getElementById('demo-banner')?.hidden,
+  vuelveLaPantallaInicial: document.getElementById('splash')?.hidden === false,
+}));
+console.log(JSON.stringify({ beforeDemo, playing, afterDemo, erroresDemostracion: demoLogs }, null, 2));
+await demoPage.close();
+await demo.close();
+
 // --- Interpretacion en el enlace. Se abre uno guardado de la version 1, con
 // cuatro notas de theremin dentro, y se comprueba que suena sin camara: la
 // pantalla inicial cambia, escuchar arranca el audio y no aparece ningun error.
@@ -400,6 +435,9 @@ await invited.waitForTimeout(900);
 const beforeListening = await invited.evaluate(() => ({
   invitacion: !document.getElementById('splash-invite')?.hidden,
   botonEscuchar: !document.getElementById('listen-button')?.hidden,
+  // Con musica en el enlace, la demostracion se quita de en medio: quien llega
+  // asi viene a oir lo que le han mandado, no a que le ensenen el instrumento.
+  botonDemostracion: !document.getElementById('demo-button')?.hidden,
   textoEmpezar: document.getElementById('start-button')?.textContent,
   error: document.getElementById('splash-error')?.hidden === false,
   // Nada puede sonar antes de que alguien lo pida: sin esto, el pico de despues
@@ -584,6 +622,20 @@ if (loops.lanes !== 0 || loops.undoHidden !== true) {
   console.error('\nFALLO: una toma sin notas ha dejado una capa fantasma');
   process.exit(1);
 }
+if (beforeDemo.picoDeAudio > 0.01 || playing.picoDeAudio < 0.01) {
+  console.error(
+    `\nFALLO: la demostracion no suena cuando se pide, o suena antes (antes ${beforeDemo.picoDeAudio}, durante ${playing.picoDeAudio})`,
+  );
+  process.exit(1);
+}
+if (afterDemo.rotulo || !afterDemo.vuelveLaPantallaInicial || demoLogs.length > 0) {
+  console.error(`\nFALLO: salir de la demostracion no deja la pantalla inicial limpia (${demoLogs.join(' ')})`);
+  process.exit(1);
+}
+if (beforeListening.botonDemostracion) {
+  console.error('\nFALLO: con musica en el enlace, la demostracion deberia quitarse de en medio');
+  process.exit(1);
+}
 if (state.error || errors.length > 0) {
   console.error(`\nFALLO: ${state.error ?? errors.join('\n')}`);
   process.exit(1);
@@ -595,5 +647,5 @@ if (!state.splashHidden || !state.hudVisible) {
 console.log(
   `\nOK: arranque, modelo, audio, introduccion de ${coachStart.dots} pasos, ayuda, espanol e ingles, ` +
     `bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB, solo manos con clip de ` +
-    `${(handsClip.bytes / 1024).toFixed(0)} kB y enlace compartible.`,
+    `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion sin camara y enlace compartible.`,
 );

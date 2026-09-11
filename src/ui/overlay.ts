@@ -103,6 +103,16 @@ export class Overlay {
     this.visualizer.reset();
   }
 
+  /**
+   * Deja el lienzo limpio.
+   *
+   * Lo necesita la demostracion al terminar: el bucle de fotogramas para, y sin
+   * esto la ultima mano se queda dibujada encima de la pantalla inicial.
+   */
+  clear(): void {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
   /** Destino que representa el lienzo visible. */
   get screenTarget(): RenderTarget {
     return { ctx: this.ctx, width: this.canvas.width, height: this.canvas.height, unit: this.dpr };

@@ -30,6 +30,8 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
   el esqueleto sobre un fondo oscuro, sin cara ni habitación. Tecla **V**.
 - **Introducción interactiva** — seis pasos que se cierran cuando el gesto ocurre
   de verdad, no cuando se pulsa «siguiente». Repetible desde la ayuda.
+- **Demostración** — el instrumento se toca solo, con una mano dibujada, y
+  enseña de dónde sale cada nota. **Sin pedir la cámara.**
 - **Melodías guiadas** — diez secuencias que seguir, con el objetivo marcado
   sobre la rejilla: cinco canciones conocidas y cinco ejercicios. Sin presión de
   tiempo: se sigue el orden, no el compás.
@@ -272,6 +274,54 @@ al lado; además es como se ha tocado durante siglos.
 
 ---
 
+## Sobre la demostración
+
+La primera pregunta de quien llega no es cómo suena, es qué tiene que hacer con
+las manos. Contarlo con palabras cuesta un párrafo; enseñarlo cuesta quince
+segundos. El botón está en la pantalla inicial, debajo de empezar, y **no pide
+permiso de cámara**: se arranca solo el audio, igual que al escuchar un enlace.
+
+Lo que se ve no es un vídeo grabado ni una animación aparte. Es una mano de
+veintiún puntos colocados a mano —`tracking/phantom.ts`— que entra en el mapeador
+por la misma puerta que una mano detectada, y a partir de ahí todo ocurre solo:
+el gate, la cuantización a la escala, el portamento, la fuerza de cada nota, la
+rejilla, el anillo de la pinza y las partículas. **La demostración no simula el
+instrumento, lo toca.** Si algún día se desafina, se desafina con él; y no hay
+ningún vídeo que regrabar cada vez que cambia la pantalla.
+
+La coreografía —`mapping/demo.ts`— toca cada nota en cinco tiempos, que son los
+cinco que hace una mano: viajar hasta la zona con la pinza abierta (moverse no
+suena), esperar un momento, cerrar la pinza (ahí entra la nota), sostener y
+abrir. Mientras tanto la mano pasea despacio arriba y abajo, que es el eje del
+brillo, y se ladea un poco para no parecer una pegatina.
+
+Dos cosas que parecen detalles y no lo son:
+
+- **La espera antes de cerrar la pinza.** El filtro del tono tarda unas dos
+  décimas en asentarse con la mano quieta, así que después de un salto grande
+  todavía queda error suficiente para caer en la zona de al lado. Con una espera
+  corta, la tercera nota de «Estrellita» —que sube una quinta de golpe— sonaba un
+  grado por debajo. Una prueba toca las diez melodías enteras y compara nota a
+  nota: el fallo que vigila no es el silencio, es la nota equivocada, que se oye
+  perfectamente y está mal.
+- **La mano se dibuja un poco más lejos de la cámara de lo normal.** Con el
+  tamaño natural, la mano puesta en la nota más grave se sale del encuadre por la
+  izquierda, y lo que se sale es justo lo que hay que mirar: el pulgar y el
+  índice.
+
+La pinza se construye al revés que el resto de la mano. En vez de doblar los
+dedos y ver qué distancia queda, se decide primero dónde se encuentran las dos
+puntas y a qué distancia están, y después se rellenan los nudillos que faltan.
+Es la única forma de que una pose de 0,2 abra la nota y una de 0,5 no, sin
+depender de la proporción de la ventana: los puntos normalizados dividen x por el
+ancho e y por el alto, que en apaisado no son la misma unidad.
+
+Si hay una melodía elegida, se toca esa; si no, «Estrellita», que se reconoce en
+dos notas y cabe en una octava. En cualquier caso queda elegida al salir, así
+que quien entre después se encuentra guiada la que acaba de ver.
+
+---
+
 ## Sobre el enlace con lo que tocaste
 
 La estación de bucles no graba audio, graba gestos, y esa decisión es la que hace
@@ -447,6 +497,7 @@ src/
     landmarker.ts         envoltorio de HandLandmarker
     handedness.ts         asignación estable de rol a cada mano
     types.ts              Landmark, HandFrame, Role
+    phantom.ts            mano sintética para la demostración
   filter/
     oneEuro.ts            filtro One Euro escalar
     vectorFilter.ts       aplicación a los 21 puntos
@@ -455,6 +506,8 @@ src/
     scales.ts             escalas y cuantización
     mapper.ts             magnitudes a parámetros de audio
     gate.ts               histéresis de la pinza
+    melodies.ts           melodías guiadas y progreso
+    demo.ts               coreografía de la demostración
   audio/
     engine.ts             grafo de Tone.js, arranque, rampas
     presets.ts            cuatro timbres
@@ -549,6 +602,10 @@ Los que se pueden comprobar de forma automática están en `tests/`:
   en el dato para que la tarjeta pueda anunciarla antes de que nadie lo intente.
 - **Ningún paso de la introducción se cierra solo**: cada uno se prueba con la
   señal que le toca y con todo lo demás moviéndose menos esa señal.
+- **La demostración toca las diez melodías nota por nota**, con la mano de
+  mentira entrando por el mapeador de verdad, igual a 30 que a 60 fotogramas y
+  con la ventana apaisada o vertical. Y la mano cabe entera en el encuadre en los
+  dos extremos del recorrido.
 - **Una melodía guiada se puede completar en cualquier escala** que reparta el
   encuadre en zonas, y cambiar de escala a mitad no pierde el progreso. En modo
   continuo no hay zonas, así que la guía se retira sola en lugar de quedarse

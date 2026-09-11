@@ -53,6 +53,9 @@ export function applyStaticStrings(): void {
   setText('splash-invite', s.splash.invite);
   setText('listen-button', s.splash.listen);
   setText('splash-status', s.splash.permissionNote);
+  setText('demo-button', s.splash.demo);
+  setText('demo-hint', s.demo.hint);
+  setText('demo-stop', s.demo.stop);
 
   setText('hint', s.hud.hint);
   setAttr('volume-rail', 'title', s.hud.volume);

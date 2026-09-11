@@ -4,6 +4,7 @@ import { AudioEngine } from './audio/engine';
 import { Looper } from './audio/looper';
 import { getPreset } from './audio/presets';
 import { ClipRecorder, clipRecordingSupported, deliverClip } from './capture/recorder';
+import { DemoPerformance, HAND_SCALE } from './mapping/demo';
 import { GuideSession, getMelody } from './mapping/melodies';
 import { decodeSettings, hasShareableKeys, readPerformanceParam, shareUrl } from './state/share';
 import { decodePerformance, encodePerformance, type Performance } from './state/performance';
@@ -12,6 +13,8 @@ import { applyStaticStrings } from './ui/static';
 import { Camera, HIGH_RES, LOW_RES, attachStream, type CameraInfo } from './camera/stream';
 import { LandmarkFilter } from './filter/vectorFilter';
 import { Mapper } from './mapping/mapper';
+import { denormalize } from './mapping/features';
+import { phantomHand, phantomScale } from './tracking/phantom';
 import { RoleTracker } from './tracking/handedness';
 import { Landmarker } from './tracking/landmarker';
 import type { HandFrame, RoleAssignment } from './tracking/types';
@@ -51,6 +54,15 @@ const LOW_FPS_WINDOW_MS = 3000;
  */
 const CLIP_MAX_SECONDS = 60;
 
+/**
+ * Melodia de la demostracion cuando no hay ninguna elegida.
+ *
+ * "Estrellita" y no otra: la reconoce cualquiera en dos notas, cabe en una
+ * octava —asi que la mano recorre poco y se ve bien lo que hace— y no tiene
+ * ningun salto que obligue a cruzar la pantalla entera.
+ */
+const DEMO_MELODY = 'estrellita';
+
 function must<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
   if (!node) throw new Error(`Falta el elemento #${id} en el documento`);
@@ -79,6 +91,9 @@ class Theremano {
   private readonly splashError = must('splash-error');
   private readonly startButton = must<HTMLButtonElement>('start-button');
   private readonly listenButton = must<HTMLButtonElement>('listen-button');
+  private readonly demoButton = must<HTMLButtonElement>('demo-button');
+  private readonly demoBanner = must('demo-banner');
+  private readonly demoLabel = must('demo-label');
   private readonly splashInvite = must('splash-invite');
 
   /** Un filtro de overlay por rol: los puntos de cada mano tienen su historia. */
@@ -101,6 +116,11 @@ class Theremano {
   private brokenPerformance = false;
   /** Sonando el enlace sin haber arrancado la camara. */
   private listening = false;
+  /** La demostracion en marcha, o null. */
+  private demo: DemoPerformance | null = null;
+  private demoHandle: number | null = null;
+  private demoStartedAt = 0;
+  private splashHideHandle: number | null = null;
 
   constructor() {
     // Un enlace compartido trae escala, tonica y timbre. Se aplica antes de
@@ -162,6 +182,8 @@ class Theremano {
     this.store.subscribe((next, changed) => this.onSettingsChanged(next, changed));
     this.startButton.addEventListener('click', () => void this.start());
     this.listenButton.addEventListener('click', () => void this.toggleListening());
+    this.demoButton.addEventListener('click', () => void this.toggleDemo());
+    must('demo-stop').addEventListener('click', () => this.stopDemo());
     this.applyInvite();
     this.bindActions();
     // Al restaurar no se toca la escala: el interprete pudo cambiarla despues de
@@ -189,6 +211,10 @@ class Theremano {
     });
 
     document.addEventListener('keydown', (event) => {
+      if (this.demo) {
+        if (event.key === 'Escape') this.stopDemo();
+        return;
+      }
       if (!runtime.running || event.metaKey || event.ctrlKey || event.altKey) return;
       // Escribir en el panel de ajustes no debe disparar la grabacion.
       const target = event.target as HTMLElement | null;
@@ -364,6 +390,9 @@ class Theremano {
     const invited = this.pendingPerformance !== null;
     this.splashInvite.hidden = !invited;
     this.listenButton.hidden = !invited;
+    // Quien llega por un enlace viene a oir lo que le han mandado. Una tercera
+    // opcion ahi solo reparte la atencion entre tres sitios.
+    this.demoButton.hidden = invited;
     if (invited) {
       this.startButton.textContent = t().splash.playAlong;
       // La nota de siempre anuncia el permiso de camara, y aqui eso es falso:
@@ -404,6 +433,165 @@ class Theremano {
     } finally {
       this.listenButton.disabled = false;
     }
+  }
+
+  // ------------------------------------------------------------ demostracion
+
+  /**
+   * El instrumento tocandose solo, con una mano dibujada.
+   *
+   * Es la respuesta a la primera pregunta que tiene cualquiera que llega aqui,
+   * que no es "como suena" sino "que tengo que hacer con las manos". Contarlo
+   * con palabras cuesta un parrafo; ensenarlo cuesta quince segundos.
+   *
+   * No pide la camara, que es la puerta donde se queda media la gente, y no
+   * simula nada: la mano de mentira entra en el mapeador por la misma puerta que
+   * una de verdad, asi que el gate, la cuantizacion y la fuerza de cada nota son
+   * las del instrumento. Si algun dia se desafina, la demostracion se desafina
+   * con el.
+   */
+  private async toggleDemo(): Promise<void> {
+    if (this.demo) {
+      this.stopDemo();
+      return;
+    }
+
+    this.demoButton.disabled = true;
+    this.splashError.hidden = true;
+    try {
+      const chosen = this.store.get().melodyId || DEMO_MELODY;
+      // La melodia trae su escala y su rango, y aqui hay que aplicarlos igual
+      // que al elegirla a mano: sin eso se ensenaria la version aproximada de la
+      // cancion, con notas cayendo en la zona de al lado.
+      if (chosen === this.store.get().melodyId) this.syncGuide(chosen, { applySuggestedScale: true });
+      else this.store.set({ melodyId: chosen });
+
+      const melody = getMelody(chosen);
+      if (!melody) return;
+      const performance = new DemoPerformance(melody, this.mapper.currentLayout);
+      // Sin zonas no hay donde apuntar. No deberia pasar, porque ninguna melodia
+      // sugiere el modo continuo, pero una demostracion muda seria peor que un
+      // aviso.
+      if (performance.notes === 0) {
+        this.showSplashError(t().toast.guideNeedsScale);
+        return;
+      }
+
+      const settings = this.store.get();
+      await this.engine.start(settings.preset, settings.masterVolume);
+      this.engine.setMuted(false);
+
+      this.demo = performance;
+      this.demoStartedAt = 0;
+      this.lastEffectsTime = 0;
+      this.overlay.resize();
+      this.overlay.resetEffects();
+      this.demoLabel.textContent = t().demo.playing(t().melodies[melody.id]?.name ?? melody.id);
+      this.demoBanner.hidden = false;
+      this.hideSplash();
+      this.demoHandle = requestAnimationFrame(this.demoFrame);
+    } catch (error) {
+      this.stopDemo();
+      this.showStartError(error);
+    } finally {
+      this.demoButton.disabled = false;
+    }
+  }
+
+  private readonly demoFrame = (now: number): void => {
+    const performance = this.demo;
+    if (!performance) return;
+    if (this.demoStartedAt === 0) this.demoStartedAt = now;
+    const elapsed = (now - this.demoStartedAt) / 1000;
+    // Al mapeador se le da el reloj de verdad y no el de la coreografia: sus
+    // filtros miden segundos, y empezar el tiempo en cero en cada demostracion
+    // les daria un primer fotograma sin historia.
+    const seconds = now / 1000;
+
+    const target = this.overlay.screenTarget;
+    const aspect = target.height > 0 ? target.width / target.height : 1;
+    const pose = performance.poseAt(elapsed);
+    const landmarks = phantomHand({
+      // La pose viene en el encuadre util, que es el que recorta los bordes; los
+      // puntos van en el encuadre entero, que es donde vive una mano detectada.
+      x: denormalize(pose.x),
+      y: denormalize(pose.y),
+      pinch: pose.pinch,
+      tilt: pose.tilt,
+      aspect,
+      scale: phantomScale(aspect) * HAND_SCALE,
+    });
+    const hand: HandFrame = { landmarks, raw: landmarks };
+    const assignment: RoleAssignment = { melody: { hand, held: false, heldFor: 0 }, expression: null };
+
+    const output = this.mapper.update(assignment, seconds);
+    if (output.gateEvent === 'attack') this.engine.attack(output.freq);
+    else if (output.gateEvent === 'release') this.engine.release();
+    this.engine.setFrequency(output.freq, output.glide);
+    this.engine.setCutoffNorm(output.cutoffNorm);
+    this.engine.setVolume(output.gain);
+    this.engine.setSpace(output.space);
+
+    const frame: OverlayFrame = {
+      assignment,
+      layout: this.mapper.currentLayout,
+      pitchX: output.pitchX,
+      midi: output.midi,
+      gateOpen: output.gateOpen,
+      volume: output.volume,
+      loops: this.looper.state,
+      // La marca de la rejilla senala la nota a la que va la mano: se ve el
+      // destino antes que el movimiento, que es como se entiende el movimiento.
+      targetZone: performance.zoneAt(elapsed),
+      showRawTrace: false,
+    };
+
+    const dt = this.lastEffectsTime > 0 ? (now - this.lastEffectsTime) / 1000 : 1 / 60;
+    this.lastEffectsTime = now;
+    if (output.gateEvent === 'attack') this.overlay.attack(frame);
+    this.overlay.update(frame, dt);
+    // Con fondo propio y con la nota escrita: aqui no hay ni camara detras ni
+    // HUD delante que la pinte.
+    this.overlay.paint(target, frame, 0, 0, { backdrop: true, caption: true });
+
+    if (performance.finishedAt(elapsed)) {
+      this.stopDemo();
+      return;
+    }
+    this.demoHandle = requestAnimationFrame(this.demoFrame);
+  };
+
+  private stopDemo(): void {
+    if (this.demoHandle !== null) cancelAnimationFrame(this.demoHandle);
+    this.demoHandle = null;
+    if (!this.demo) return;
+    this.demo = null;
+    this.demoStartedAt = 0;
+    this.lastEffectsTime = 0;
+    // Parar a mitad de una nota deja el oscilador abierto: hay que cerrarlo por
+    // el mismo camino que lo cierra perder la pestana.
+    if (this.mapper.silence() === 'release') this.engine.release();
+    this.overlay.resetEffects();
+    this.overlay.clear();
+    this.demoBanner.hidden = true;
+    this.showSplash();
+  }
+
+  private hideSplash(): void {
+    if (this.splashHideHandle !== null) window.clearTimeout(this.splashHideHandle);
+    this.splash.classList.add('leaving');
+    this.splashHideHandle = window.setTimeout(() => {
+      this.splash.hidden = true;
+      this.splashHideHandle = null;
+    }, 340);
+  }
+
+  /** Vuelve a la pantalla inicial al salir de la demostracion. */
+  private showSplash(): void {
+    if (this.splashHideHandle !== null) window.clearTimeout(this.splashHideHandle);
+    this.splashHideHandle = null;
+    this.splash.hidden = false;
+    this.splash.classList.remove('leaving');
   }
 
   /**
@@ -453,8 +641,13 @@ class Theremano {
 
   private async start(): Promise<void> {
     if (this.starting || runtime.running) return;
+    // Por si acaso: dos bucles empujando el mismo mapeador se pisarian el tono.
+    this.stopDemo();
     this.starting = true;
     this.startButton.disabled = true;
+    // Mientras se abre la camara, la demostracion tambien queda fuera de juego:
+    // son dos cosas que no pueden estar arrancando a la vez.
+    this.demoButton.disabled = true;
     this.splashError.hidden = true;
 
     try {
@@ -498,10 +691,7 @@ class Theremano {
       // el enlace sin camara, y quien gobierna el silencio pasa a ser suspend().
       this.listening = false;
       if (!this.store.get().onboarded) this.startOnboarding();
-      this.splash.classList.add('leaving');
-      window.setTimeout(() => {
-        this.splash.hidden = true;
-      }, 340);
+      this.hideSplash();
 
       this.scheduleFrame();
     } catch (error) {
@@ -509,6 +699,7 @@ class Theremano {
     } finally {
       this.starting = false;
       this.startButton.disabled = false;
+      this.demoButton.disabled = false;
     }
   }
 
@@ -887,6 +1078,9 @@ class Theremano {
 
   private onVisibilityChange(): void {
     if (document.hidden) {
+      // Una demostracion no sobrevive a irse de la pestana: el bucle de
+      // fotogramas se para, asi que al volver saltaria media melodia de golpe.
+      this.stopDemo();
       this.suspend();
       // Escuchando no hay bucle de fotogramas que parar, pero el bucle de audio
       // sigue girando: una pestana en segundo plano no puede quedarse sonando.
