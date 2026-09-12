@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Onboarding, STEPS, type CoachSignals } from '../src/ui/onboarding';
+import { DRUM_STEPS, Onboarding, STEPS, type CoachSignals } from '../src/ui/onboarding';
 
 /**
  * Lo que se comprueba aqui es que ningun paso se cierre solo.
@@ -19,6 +19,7 @@ const idle: CoachSignals = {
   gateOpen: false,
   attack: false,
   presetChanged: false,
+  strikes: [],
   pitchX: -1,
   volume: 0.5,
   dt: 1 / FPS,
@@ -36,11 +37,30 @@ function feed(coach: Onboarding, signals: Partial<CoachSignals>, seconds: number
   return events;
 }
 
-function coachAt(stepId: string): Onboarding {
+function coachAt(stepId: string, drums = false): Onboarding {
   const coach = new Onboarding();
-  coach.start();
+  coach.start(drums);
   while (coach.step && coach.step.id !== stepId) coach.skipStep();
   return coach;
+}
+
+/** Un golpe en esa pieza, en el fotograma que toque. */
+const hit = (...pieces: string[]): Partial<CoachSignals> => ({ strikes: pieces.map((piece) => ({ piece })) });
+
+/**
+ * Un golpe y solo uno, cueste lo que cueste.
+ *
+ * Hace falta porque un "t < 0.02" abarca dos fotogramas a sesenta por segundo, y
+ * dos golpes donde la prueba queria uno cierran dos pasos y la prueba miente
+ * sobre lo que ha comprobado. Paso por ahi.
+ */
+function once(...pieces: string[]): (t: number) => Partial<CoachSignals> {
+  let spent = false;
+  return () => {
+    if (spent) return {};
+    spent = true;
+    return hit(...pieces);
+  };
 }
 
 describe('introduccion guiada', () => {
@@ -195,5 +215,128 @@ describe('introduccion guiada', () => {
     coach.skipStep();
     expect(coach.step?.id).toBe('volume');
     expect(feed(coach, { expressionVisible: true, volume: 0.5 }, 2)).toEqual([]);
+  });
+});
+
+/**
+ * El recorrido de la bateria.
+ *
+ * La trampa aqui no es que un paso no se cierre, es que se cierre por el motivo
+ * equivocado. El paso del reparto se cerraria contando golpes, y entonces cuatro
+ * porrazos seguidos en la caja lo darian por aprendido sin que nadie se haya
+ * enterado de que hay cuatro piezas. Lo mismo el de las dos manos: dos golpes
+ * seguidos no son dos manos, son una mano dos veces.
+ */
+describe('introduccion de la bateria', () => {
+  it('es otro recorrido, no el de la melodia con otros textos', () => {
+    const coach = new Onboarding();
+    coach.start(true);
+    const ids = [];
+    while (coach.step) {
+      ids.push(coach.step.id);
+      coach.skipStep();
+    }
+    expect(ids).toEqual(DRUM_STEPS.map((s) => s.id));
+    // Ni un solo paso de la pinza, que en bateria no hace nada.
+    expect(ids).not.toContain('pinch');
+    expect(ids).not.toContain('move');
+    expect(coach.total).toBe(DRUM_STEPS.length);
+  });
+
+  it('y la melodia sigue teniendo el suyo', () => {
+    const coach = new Onboarding();
+    coach.start();
+    expect(coach.total).toBe(STEPS.length);
+    expect(coach.step?.id).toBe('hand');
+  });
+
+  it('el primer golpe cierra su paso, y sin golpe no se cierra', () => {
+    const quieto = coachAt('drumHit', true);
+    expect(feed(quieto, { melodyVisible: true }, 5)).toEqual([]);
+    expect(quieto.step?.id).toBe('drumHit');
+
+    const coach = coachAt('drumHit', true);
+    expect(feed(coach, { melodyVisible: true }, 1, once('snare'))).toEqual(['advanced']);
+    expect(coach.step?.id).toBe('drumPieces');
+  });
+
+  it('el reparto no se aprende dando mas golpes en el mismo sitio', () => {
+    // Diez golpes en la caja: muchos golpes, ninguna pieza nueva.
+    const terco = coachAt('drumPieces', true);
+    expect(feed(terco, { melodyVisible: true }, 3, (t) => (Math.floor(t * 10) % 2 === 0 ? hit('snare') : {}))).toEqual([]);
+    expect(terco.step?.id).toBe('drumPieces');
+
+    const coach = coachAt('drumPieces', true);
+    feed(coach, { melodyVisible: true }, 0.2, () => hit('snare'));
+    expect(coach.step?.id, 'sigue esperando la segunda pieza').toBe('drumPieces');
+    expect(feed(coach, { melodyVisible: true }, 0.2, once('hat'))).toEqual(['advanced']);
+  });
+
+  it('dos manos son dos golpes en el mismo fotograma, no dos golpes seguidos', () => {
+    const alterno = coachAt('drumBoth', true);
+    // Golpes de uno en uno, muchos y en piezas distintas: no es lo que se pide.
+    expect(
+      feed(alterno, { melodyVisible: true }, 3, (t) => {
+        const tick = Math.floor(t * 8);
+        return t * 8 - tick < 0.1 ? hit(tick % 2 === 0 ? 'kick' : 'hat') : {};
+      }),
+    ).toEqual([]);
+    expect(alterno.step?.id).toBe('drumBoth');
+
+    const coach = coachAt('drumBoth', true);
+    expect(feed(coach, { melodyVisible: true }, 0.2, once('kick', 'hat'))).toEqual(['finished']);
+    expect(coach.isActive).toBe(false);
+  });
+
+  it('dos manos separadas por un par de fotogramas cuentan como juntas', () => {
+    /*
+     * El caso de verdad. Cada mano tiene su propio detector y cada uno dispara
+     * cuando su mano lleva sus centesimas de caida, asi que dos manos que uno
+     * baja a la vez no cruzan el umbral en el mismo fotograma: se separan uno o
+     * dos. Exigir el mismo fotograma dejaba el paso esperando algo que se estaba
+     * haciendo bien.
+     */
+    const coach = coachAt('drumBoth', true);
+    let frame = 0;
+    const events = feed(coach, { melodyVisible: true }, 0.5, () => {
+      const at = frame++;
+      if (at === 0) return hit('kick');
+      if (at === 2) return hit('hat');
+      return {};
+    });
+    expect(events).toEqual(['finished']);
+  });
+
+  it('pero dos golpes de la misma mano no, ni aunque sean rapidos', () => {
+    // El detector impone noventa milisegundos entre golpes de una mano, y la
+    // ventana de "juntos" es mas corta: lo que cae dentro son dos manos.
+    const coach = coachAt('drumBoth', true);
+    let frame = 0;
+    expect(
+      feed(coach, { melodyVisible: true }, 1, () => {
+        const at = frame++;
+        // Cada seis fotogramas: cien milisegundos, lo mas rapido que puede ir
+        // una mano sola.
+        return at % 6 === 0 ? hit('snare') : {};
+      }),
+    ).toEqual([]);
+    expect(coach.step?.id).toBe('drumBoth');
+  });
+
+  it('el paso de las dos manos se puede saltar, y es el unico', () => {
+    const optional = DRUM_STEPS.filter((step) => step.optional).map((step) => step.id);
+    expect(optional).toEqual(['drumBoth']);
+  });
+
+  it('los golpes de un paso no cuentan para el siguiente', () => {
+    // Cada paso reinicia su cuenta. Sin eso, los golpes del paso del reparto
+    // arrastrarian al de las dos manos y se cerraria sin haberlas juntado.
+    const coach = coachAt('drumHit', true);
+    feed(coach, { melodyVisible: true }, 0.2, once('kick', 'snare'));
+    expect(coach.step?.id, 'el golpe doble ha cerrado el primer paso').toBe('drumPieces');
+    // Y ese mismo golpe doble no debe haber cerrado tambien los dos siguientes.
+    expect(coach.isActive).toBe(true);
+    expect(feed(coach, { melodyVisible: true }, 1)).toEqual([]);
+    expect(coach.step?.id).toBe('drumPieces');
   });
 });

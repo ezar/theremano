@@ -406,6 +406,46 @@ console.log(JSON.stringify({ afterContinuous }, null, 2));
 await page.selectOption('#set-scale', 'blues');
 await page.waitForTimeout(400);
 
+/*
+ * --- La introduccion de la bateria.
+ *
+ * Es otro recorrido y se elige al empezar, asi que hace falta una pestana que
+ * arranque con la camara y con la bateria ya puesta: es la unica forma de
+ * comprobar el cableado que lo decide. Los pasos no se cierran solos porque
+ * delante de la camara falsa no hay manos, que es justo lo que permite
+ * recorrerlos con el boton de saltar y leer sus titulos.
+ */
+const drumCtx = await browser.newContext({ permissions: ['camera'], viewport: { width: 1100, height: 720 } });
+const drumPage = await drumCtx.newPage();
+const drumLogs = [];
+drumPage.on('pageerror', (e) => drumLogs.push(e.message));
+await drumPage.addInitScript(() => localStorage.setItem('theremano.settings.v1', JSON.stringify({ drums: true })));
+await drumPage.goto(url, { waitUntil: 'networkidle' });
+await drumPage.click('#start-button');
+await drumPage.waitForFunction(() => document.getElementById('splash')?.hidden === true, { timeout: 90000 }).catch(() => {});
+await drumPage.waitForTimeout(9000);
+
+const drumCoach = { dots: 0, steps: [] };
+drumCoach.dots = await drumPage.evaluate(() => document.querySelectorAll('#coach-dots span').length);
+let drumSkips = 0;
+while (await drumPage.evaluate(() => !document.getElementById('coach')?.hidden)) {
+  drumCoach.steps.push(
+    await drumPage.evaluate(() => ({
+      title: document.getElementById('coach-title')?.textContent,
+      optional: !document.getElementById('coach-optional')?.hidden,
+    })),
+  );
+  await drumPage.click('#coach-skip-step');
+  await drumPage.waitForTimeout(150);
+  if (++drumSkips > 10) break;
+}
+const drumEnd = await drumPage.evaluate(() => ({
+  sub: document.getElementById('note-sub')?.textContent ?? '',
+  bandas: [...document.querySelectorAll('#coach-dots span')].length,
+}));
+console.log(JSON.stringify({ drumCoach, drumEnd }, null, 2));
+await drumCtx.close();
+
 // --- Demostracion: el instrumento tocandose solo, sin camara y sin permiso.
 // Es la puerta de entrada de quien todavia no ha dado permiso de camara, asi
 // que se prueba en una pestana limpia y sin pedirlo. Lo que hay que demostrar
@@ -537,6 +577,86 @@ const withMetronome = Number((await pointerPage.evaluate(() => window.__peak)).t
 await pointerPage.keyboard.press('m');
 console.log(JSON.stringify({ layer, withoutMetronome, metronomeToast, withMetronome }, null, 2));
 
+/*
+ * --- Un ritmo grabado, y melodia encima.
+ *
+ * Es la razon de ser del modo bateria y toca todo lo que se acaba de anadir a la
+ * vez: que la toma guarde golpes, que la capa se reproduzca sola, que la tecla B
+ * cambie de instrumento sin parar el bucle, y que se pueda tocar encima de lo
+ * grabado. Va en la pestana del puntero porque ahi se puede dar un golpe a
+ * voluntad; delante de la camara falsa no hay manos que bajar.
+ *
+ * Se limpia lo anterior primero: esta pestana viene de grabar una capa de
+ * melodia y de silenciarla, y lo que hay que medir es un ritmo solo.
+ */
+await pointerPage.keyboard.press('z');
+// Sin ningun boton pendiente: este bloque viene de probar el pedal y una tecla
+// suelta con el raton pulsado grabaria una nota donde tiene que haber un golpe.
+await pointerPage.mouse.up().catch(() => {});
+await pointerPage.mouse.up({ button: 'right' }).catch(() => {});
+await pointerPage.waitForTimeout(400);
+await pointerPage.keyboard.press('b');
+await pointerPage.waitForTimeout(500);
+/*
+ * El subtitulo del panel es lo que distingue de verdad los dos modos: en
+ * bateria dice el kit y en melodia la escala. El aviso no sirve para eso -es el
+ * ultimo que se haya mostrado, y hay varios por el camino-, asi que comprobar
+ * solo el aviso daba por bueno un recorrido en el que la tecla B no hacia nada y
+ * lo que se grababa era una capa de melodia.
+ */
+const drumsOn = await pointerPage.evaluate(() => ({
+  aviso: document.getElementById('toast')?.textContent ?? '',
+  subtitulo: document.getElementById('note-sub')?.textContent ?? '',
+}));
+
+const strike = async (x) => {
+  await pointerPage.mouse.move(x, 150);
+  await pointerPage.waitForTimeout(60);
+  for (let step = 1; step <= 8; step += 1) {
+    await pointerPage.mouse.move(x, 150 + step * 30);
+    await pointerPage.waitForTimeout(8);
+  }
+  await pointerPage.mouse.move(x, 150);
+  await pointerPage.waitForTimeout(60);
+};
+await pointerPage.keyboard.press('Space');
+// La primera capa lleva claqueta: cuatro pulsos antes de que empiece a grabar.
+await pointerPage.waitForTimeout(2900);
+for (const x of [180, 351, 540, 351]) await strike(x);
+await pointerPage.keyboard.press('Space');
+await pointerPage.waitForTimeout(900);
+const drumLayer = await pointerPage.evaluate(() => ({
+  capas: document.querySelectorAll('.loop-lane').length,
+  aviso: document.getElementById('toast')?.textContent ?? '',
+}));
+
+// Sin manos encima: lo que suene ahora es la capa grabada y nada mas. La espera
+// larga antes de poner el contador a cero es por la sonda: el analizador guarda
+// casi un segundo de historia y medir justo despues leeria lo de antes.
+await pointerPage.mouse.move(450, 60);
+await pointerPage.waitForTimeout(1500);
+await pointerPage.evaluate(() => window.__resetPeak());
+await pointerPage.waitForTimeout(2500);
+const drumLoopAlone = Number((await pointerPage.evaluate(() => window.__peak)).toFixed(4));
+
+// Y de vuelta a la melodia sin parar, para tocar encima.
+await pointerPage.keyboard.press('b');
+await pointerPage.waitForTimeout(500);
+const backToMelody = await pointerPage.evaluate(() => ({
+  aviso: document.getElementById('toast')?.textContent ?? '',
+  subtitulo: document.getElementById('note-sub')?.textContent ?? '',
+  capas: document.querySelectorAll('.loop-lane').length,
+}));
+await pointerPage.mouse.move(500, 320);
+await pointerPage.mouse.down();
+await pointerPage.waitForTimeout(800);
+const overTheBeat = await pointerPage.evaluate(() => ({
+  nota: document.getElementById('note')?.textContent ?? '',
+  sonando: document.getElementById('note')?.classList.contains('sounding') ?? false,
+}));
+await pointerPage.mouse.up();
+console.log(JSON.stringify({ drumsOn, drumLayer, drumLoopAlone, backToMelody, overTheBeat }, null, 2));
+
 console.log(
   JSON.stringify(
     { beforePress, pressed, dragged, vibrato, soundingClass, droneToast, droning, afterDrone, released, erroresPuntero: pointerLogs },
@@ -647,6 +767,44 @@ if (spanish.lang !== 'es' || !/índice/.test(spanish.hint ?? '') || spanish.note
 const plainLabels = new Set(allSteps.filter((s) => !s.optional).map((s) => s.skipLabel));
 if (optionalSteps.length !== 2 || optionalSteps.some((s) => plainLabels.has(s.skipLabel))) {
   console.error('\nFALLO: los pasos de la segunda mano no se anuncian como opcionales');
+  process.exit(1);
+}
+if (drumLayer.capas !== 1) {
+  console.error('\nFALLO: grabar un ritmo no deja capa');
+  process.exit(1);
+}
+if (drumLoopAlone < 0.02) {
+  console.error('\nFALLO: la capa de bateria no suena sola, sin manos delante');
+  process.exit(1);
+}
+if (drumsOn.subtitulo === backToMelody.subtitulo) {
+  console.error('\nFALLO: la tecla B no cambia de instrumento');
+  process.exit(1);
+}
+if (backToMelody.capas !== 1) {
+  console.error('\nFALLO: cambiar de instrumento se lleva el bucle por delante');
+  process.exit(1);
+}
+if (!overTheBeat.sonando || overTheBeat.nota === '--') {
+  console.error('\nFALLO: no se puede tocar melodia encima del ritmo grabado');
+  process.exit(1);
+}
+if (drumCoach.dots !== 4 || drumCoach.steps.length !== 4) {
+  console.error('\nFALLO: la bateria no tiene su propia introduccion de cuatro pasos');
+  process.exit(1);
+}
+// Sin buscar un texto concreto: lo que importa es que los titulos no sean los de
+// la melodia y que solo el ultimo paso se anuncie como opcional.
+if (drumCoach.steps.filter((s) => s.optional).length !== 1 || !drumCoach.steps[3]?.optional) {
+  console.error('\nFALLO: en la introduccion de la bateria solo el ultimo paso debe ser opcional');
+  process.exit(1);
+}
+if (drumCoach.steps.slice(1).some((s) => allSteps.some((m) => m.title === s.title))) {
+  console.error('\nFALLO: la introduccion de la bateria repite pasos de la melodia');
+  process.exit(1);
+}
+if (drumLogs.length > 0) {
+  console.error('\nFALLO: errores en la introduccion de la bateria:', drumLogs.join(' | '));
   process.exit(1);
 }
 if (coachEnd.visible || coachEnd.onboarded !== true) {
@@ -814,7 +972,7 @@ if (!state.splashHidden || !state.hudVisible) {
   process.exit(1);
 }
 console.log(
-  `\nOK: mando de la portada, arranque, modelo, audio, introduccion de ${coachStart.dots} pasos, ayuda, espanol e ingles, ` +
+  `\nOK: mando de la portada, arranque, modelo, audio, introduccion de ${coachStart.dots} pasos y la de bateria de ${drumCoach.dots}, ayuda, espanol e ingles, ` +
     `bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB, solo manos con clip de ` +
-    `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion y puntero sin camara con vibrato, nota pedal y claqueta, y enlace compartible.`,
+    `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion y puntero sin camara con vibrato, nota pedal y claqueta, ritmo grabado con melodia encima, y enlace compartible.`,
 );

@@ -196,6 +196,9 @@ export interface Strings {
     drumPointerHint: string;
     /** Que nota se ha quedado sostenida con la otra mano. */
     drone: (note: string) => string;
+    /** El cambio de instrumento en caliente, con la tecla B. */
+    drumsOn: string;
+    drumsOff: string;
     metronomeOn: string;
     metronomeOff: string;
     countIn: string;
@@ -227,9 +230,16 @@ export interface Strings {
     guideNeedsScale: string;
     /** La guia no cabe en bateria: no hay notas que apuntar. */
     guideNeedsMelody: string;
-    /** Los bucles todavia no saben grabar golpes. */
-    loopNeedsMelody: string;
     onboardingDone: string;
+    /**
+     * El mismo final, para la bateria.
+     *
+     * Hace falta uno propio porque el de la melodia despide mandando grabar una
+     * capa, y ahi lo que toca aprender a continuacion es otra cosa: sostener el
+     * charles con una mano mientras la otra alterna. Lo de grabar viene despues
+     * y lo cuenta la ayuda.
+     */
+    onboardingDoneDrums: string;
     onboardingSkipped: string;
   };
 

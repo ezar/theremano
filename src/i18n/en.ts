@@ -122,6 +122,20 @@ export const en: Strings = {
           'One, two, three or four fingers held out: each count is a timbre. Keep the hand still for a moment ' +
           'and you will see the name appear at the bottom left. It is in Settings as well.',
       },
+      drumHit: {
+        title: 'Drop it sharply',
+        body: 'As if onto an invisible drum head: fall fast and stop. It sounds before your hand lands, and that is on purpose.',
+      },
+      drumPieces: {
+        title: 'Now hit somewhere else',
+        body: 'Each band is a piece: kick and snare on the left, hat and crash on the right. You can see them below, each in its colour.',
+      },
+      drumBoth: {
+        title: 'And both hands at once',
+        body:
+          'Each one plays the band under it. Kick and hat together is how almost every groove starts. ' +
+          'One hand is enough to play, so feel free to skip.',
+      },
     },
   },
 
@@ -158,6 +172,18 @@ export const en: Strings = {
         optional: true,
       },
       {
+        what: 'On drums: dropping your hand sharply',
+        does: 'Hits. It sounds during the fall, not when your hand lands, to get ahead of the camera delay.',
+      },
+      {
+        what: 'On drums: where that hand is',
+        does: 'Picks the piece. Four bands across: kick and snare on the left, hat and crash on the right.',
+      },
+      {
+        what: 'On drums: both hands',
+        does: 'Both hit, each in the band under it, and they can land at the same time.',
+      },
+      {
         what: 'Extended fingers on that hand (1 to 4)',
         does: 'Changes the timbre. A fist is ignored on purpose. Also available in Settings.',
         optional: true,
@@ -168,6 +194,7 @@ export const en: Strings = {
       'Loop records a layer. The first one sets the bar; the rest stack on top. Up to four.',
       'Record clip saves a vertical video with sound, ready to share. One minute maximum.',
       'Hands only hides the camera: on screen and in the video you get the skeleton over a dark backdrop, with no face and no room. Key V.',
+      'Layers record drums too: lay down a groove, press B to go back to the instrument, and play over it.',
       'In Settings you can copy a link carrying your scale, your tonic and your timbre.',
     ],
     keysTitle: 'Keyboard shortcuts',
@@ -176,6 +203,7 @@ export const en: Strings = {
       { key: 'C', does: 'start or finish a clip' },
       { key: 'Z', does: 'remove the last layer' },
       { key: 'M', does: 'turn the loop metronome on or off' },
+      { key: 'B', does: 'switch between instrument and drums without stopping' },
       { key: 'V', does: 'hide or show the camera image' },
       { key: 'H', does: 'open or close this help' },
       { key: 'Esc', does: 'close this panel or the settings' },
@@ -248,6 +276,8 @@ export const en: Strings = {
     pointerHint: 'Move the pointer to pick the note and hold to make it sound.',
     drumPointerHint: 'Drop the pointer sharply to hit. Each band is a piece of the kit.',
     drone: (note: string) => `Drone note: ${note}`,
+    drumsOn: 'Drums. Your hands hit',
+    drumsOff: 'Instrument. Your hands hold notes again',
     metronomeOn: 'Metronome on',
     metronomeOff: 'Metronome off',
     countIn: 'Four beats and recording starts. Press again to cancel',
@@ -278,8 +308,8 @@ export const en: Strings = {
     guideFinished: (accuracy) => `Melody finished with ${accuracy}% accuracy. Record a clip and show it off.`,
     guideNeedsScale: 'The guide needs a quantised scale, so it has been turned off',
     guideNeedsMelody: 'The guide points at notes, and drums have none, so it has been turned off',
-    loopNeedsMelody: 'Loops cannot record drums yet. Go back to melody to record a layer.',
     onboardingDone: 'You know how to play now. Try recording a layer with the Loop button.',
+    onboardingDoneDrums: 'You know how to play now. Try alternating kick and snare with one hand while the other keeps the hat going.',
     onboardingSkipped: 'You can replay it any time from the help panel.',
   },
 

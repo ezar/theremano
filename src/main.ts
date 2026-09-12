@@ -278,11 +278,34 @@ class Theremano {
         this.looper.undo();
       } else if (event.key.toLowerCase() === 'm') {
         this.toggleMetronome();
+      } else if (event.key.toLowerCase() === 'b') {
+        this.toggleDrums();
       } else if (event.key.toLowerCase() === 'v' && this.mode === 'camera') {
         // Sin camara no hay nada que ocultar: el fondo ya es el propio.
         this.toggleStageMode();
       }
     });
+  }
+
+  /**
+   * Cambia de instrumento sin parar.
+   *
+   * Es lo que convierte los dos modos en uno solo: se graba un ritmo con la
+   * bateria, se pasa a la melodia y se toca encima de lo grabado. Con el
+   * interruptor en la portada eso pedia parar y volver a entrar, y volver a
+   * entrar vacia los bucles.
+   *
+   * Atajo y no boton, como la camara y la claqueta: la razon para usarlo aparece
+   * un segundo antes de tocar, y abrir los ajustes ahi es abrirlos a mitad de una
+   * vuelta.
+   */
+  private toggleDrums(): void {
+    const drums = !this.store.get().drums;
+    // El aviso se resuelve antes de la llamada, como en el modo de escena: la
+    // guarda de textos revisa lo que entra en toast().
+    const message = drums ? t().toast.drumsOn : t().toast.drumsOff;
+    this.store.set({ drums });
+    this.hud.toast(message);
   }
 
   /**
@@ -315,24 +338,12 @@ class Theremano {
   }
 
   private toggleLoop(): void {
-    /*
-     * Los bucles guardan gestos de melodia -ataque, suelta, tono, brillo- y un
-     * golpe no es ninguna de esas cosas. Una capa grabada en bateria sale sin un
-     * solo ataque, asi que la toma se descarta sola al cerrarla: lo que se
-     * llevaria uno es una claqueta entera y un "capa descartada" sin explicacion.
-     * Mejor decirlo antes de contar.
-     *
-     * Solo se corta al empezar: si ya hay algo en marcha -porque se encendio la
-     * bateria a media toma o a media claqueta- hay que dejar cerrarlo o
-     * cancelarlo, o el boton se quedaria sin forma de parar.
-     */
-    const loops = this.looper.state;
-    if (this.store.get().drums && !loops.recording && loops.countInBeats === 0) {
-      this.hud.toast(t().toast.loopNeedsMelody);
-      return;
-    }
+    const settings = this.store.get();
     const hadCycle = this.looper.state.cycleSeconds > 0;
-    switch (this.looper.toggle(this.store.get().preset)) {
+    // El modo se fija al empezar la toma y no cambia a mitad: se puede grabar un
+    // ritmo, pasar a la melodia en caliente y tocar encima de lo grabado, que es
+    // justo para lo que existe el cambio en caliente.
+    switch (this.looper.toggle(settings.preset, settings.drums)) {
       case 'rejected':
         this.hud.toast(t().toast.layersFull);
         return;
@@ -431,7 +442,10 @@ class Theremano {
   }
 
   private startOnboarding(): void {
-    this.onboarding.start();
+    // Cada modo tiene su recorrido, y el de la melodia no sirve para el otro: sus
+    // cuatro primeros pasos giran alrededor de una pinza que en bateria no hace
+    // nada. Se elige al empezar y no cambia a mitad.
+    this.onboarding.start(this.store.get().drums);
     this.coach.render(this.onboarding.step, this.onboarding.index, this.onboarding.total);
     this.hud.dismissHint();
   }
@@ -439,7 +453,10 @@ class Theremano {
   private advanceCoach(event: 'advanced' | 'finished' | null): void {
     if (event === null) return;
     this.coach.render(this.onboarding.step, this.onboarding.index, this.onboarding.total);
-    if (event === 'finished') this.finishOnboarding(t().toast.onboardingDone);
+    if (event === 'finished') {
+      const strings = t().toast;
+      this.finishOnboarding(this.store.get().drums ? strings.onboardingDoneDrums : strings.onboardingDone);
+    }
   }
 
   private finishOnboarding(message: string): void {
@@ -827,7 +844,12 @@ class Theremano {
     }
     const encoded = encodePerformance({
       cycleSeconds,
-      tracks: tracks.map((track) => ({ presetId: track.presetId, events: track.events })),
+      tracks: tracks.map((track) => ({
+        presetId: track.presetId,
+        events: track.events,
+        hits: track.hits,
+        drums: track.drums,
+      })),
     });
     if (!encoded) {
       this.hud.toast(t().toast.performanceTooBig);
@@ -930,7 +952,7 @@ class Theremano {
       // expresion: con el puntero no hay nada de eso, y un paso que no se puede
       // completar es peor que no tener introduccion. Se queda sin ver, asi que
       // aparecera entera el dia que se entre con camara.
-      if (mode === 'camera' && !this.store.get().onboarded && !this.store.get().drums) this.startOnboarding();
+      if (mode === 'camera' && !this.store.get().onboarded) this.startOnboarding();
       else if (mode === 'pointer') {
         this.hud.toast(this.store.get().drums ? t().toast.drumPointerHint : t().toast.pointerHint, 6000);
       }
@@ -1100,6 +1122,7 @@ class Theremano {
       freq: output.freq,
       cutoffNorm: output.cutoffNorm,
       gain: output.gain,
+      strikes: output.strikes,
     });
 
     const loops = this.looper.state;
@@ -1165,6 +1188,7 @@ class Theremano {
           gateOpen: output.gateOpen,
           attack: output.gateEvent === 'attack',
           presetChanged: output.preset !== null,
+          strikes: output.strikes,
           pitchX: output.pitchX,
           volume: output.volume,
           dt,

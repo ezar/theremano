@@ -179,7 +179,7 @@ export class Mapper {
     this.spaceFilter = new OneEuroFilter({ ...control, minCutoff: control.minCutoff * SPACE_SMOOTHING });
     this.volume = settings.masterVolume;
     this.currentPreset = getPreset(settings.preset);
-    this.setDrums(settings.drums);
+    this.setDrums(settings.drums, settings.masterVolume);
   }
 
   /** Se llama solo cuando cambian los ajustes, no por fotograma. */
@@ -191,7 +191,7 @@ export class Mapper {
     this.volumeFilter.setParams(control);
     this.spaceFilter.setParams({ ...control, minCutoff: control.minCutoff * SPACE_SMOOTHING });
     this.currentPreset = getPreset(settings.preset);
-    this.setDrums(settings.drums);
+    this.setDrums(settings.drums, settings.masterVolume);
   }
 
   /**
@@ -203,9 +203,22 @@ export class Mapper {
    * cerrase la pinza hace un rato. En bateria el volumen lo pone el ajuste y la
    * dinamica la pone el golpe.
    */
-  private setDrums(drums: boolean): void {
+  private setDrums(drums: boolean, volume: number): void {
     this.drums = drums;
-    if (drums) this.velocity = 1;
+    if (!drums) return;
+    this.velocity = 1;
+    /*
+     * Y el volumen vuelve al del ajuste.
+     *
+     * En bateria esta mano golpea y deja de mandar el volumen, asi que el que
+     * haya queda congelado. Mientras el modo se elegia antes de empezar eso era
+     * el ajuste y ya esta; con el cambio en caliente puede ser el que dejo la
+     * mano de expresion, que a media pantalla es la mitad y abajo es casi nada:
+     * se pasaba a bateria y los golpes salian susurrando, sin nada en pantalla
+     * que lo explicara y sin forma de arreglarlo salvo el mando de los ajustes.
+     */
+    this.volume = volume;
+    this.volumeFilter.reset();
   }
 
   get currentLayout(): PitchLayout {
