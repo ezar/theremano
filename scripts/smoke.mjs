@@ -88,6 +88,29 @@ page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
 
 await page.goto(url, { waitUntil: 'networkidle' });
+
+/*
+ * El mando de la portada, antes de dar permiso de camara: es lo primero que se
+ * decide y lo unico que cambia la pantalla inicial entera. Se comprueba que los
+ * dos lados escriben cosas distintas -si el lema no cambiara, el mando seria un
+ * adorno- y se deja donde estaba, porque el resto de la prueba es de melodia.
+ */
+const splashMelody = await page.evaluate(() => ({
+  lema: document.getElementById('splash-tagline')?.textContent ?? '',
+  encendido: document.getElementById('mode-melody')?.getAttribute('aria-checked'),
+}));
+await page.click('#mode-drums');
+await page.waitForTimeout(200);
+const splashDrums = await page.evaluate(() => ({
+  lema: document.getElementById('splash-tagline')?.textContent ?? '',
+  encendido: document.getElementById('mode-drums')?.getAttribute('aria-checked'),
+  promesas: [...document.querySelectorAll('#splash-bullets li')].map((n) => n.textContent),
+}));
+await page.click('#mode-melody');
+await page.waitForTimeout(200);
+const splashBack = await page.evaluate(() => document.getElementById('splash-tagline')?.textContent ?? '');
+console.log(JSON.stringify({ portada: { melodia: splashMelody.lema, bateria: splashDrums.lema } }, null, 2));
+
 await page.click('#start-button');
 
 // Espera a que el bucle este girando de verdad.
@@ -594,6 +617,14 @@ console.log('--- consola ---');
 console.log(logs.slice(-25).join('\n'));
 await browser.close();
 
+if (splashMelody.encendido !== 'true' || splashDrums.encendido !== 'true') {
+  console.error('\nFALLO: el mando de la portada no enciende el lado elegido');
+  process.exit(1);
+}
+if (splashDrums.lema === splashMelody.lema || splashDrums.promesas.length !== 3 || splashBack !== splashMelody.lema) {
+  console.error('\nFALLO: elegir bateria en la portada no cambia lo que la portada promete');
+  process.exit(1);
+}
 if (!coachStart.visible || coachStart.dots !== 6 || coachStart.current !== 1) {
   console.error('\nFALLO: la introduccion no aparece al llegar por primera vez');
   process.exit(1);
@@ -783,7 +814,7 @@ if (!state.splashHidden || !state.hudVisible) {
   process.exit(1);
 }
 console.log(
-  `\nOK: arranque, modelo, audio, introduccion de ${coachStart.dots} pasos, ayuda, espanol e ingles, ` +
+  `\nOK: mando de la portada, arranque, modelo, audio, introduccion de ${coachStart.dots} pasos, ayuda, espanol e ingles, ` +
     `bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB, solo manos con clip de ` +
     `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion y puntero sin camara con vibrato, nota pedal y claqueta, y enlace compartible.`,
 );

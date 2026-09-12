@@ -116,6 +116,7 @@ class Theremano {
   private readonly startButton = must<HTMLButtonElement>('start-button');
   private readonly listenButton = must<HTMLButtonElement>('listen-button');
   private readonly demoButton = must<HTMLButtonElement>('demo-button');
+  private readonly modeSwitch = must('mode-switch');
   private readonly pointerButton = must<HTMLButtonElement>('pointer-button');
   private readonly demoBanner = must('demo-banner');
   private readonly demoLabel = must('demo-label');
@@ -176,7 +177,7 @@ class Theremano {
     // Antes que nada: el idioma decide el texto de todo lo que se construye a
     // continuacion, incluido el HTML estatico de la pantalla inicial.
     i18n.init(settings.locale);
-    applyStaticStrings();
+    applyStaticStrings(settings.drums);
 
     this.mapper = new Mapper(settings);
     this.overlay = new Overlay(must<HTMLCanvasElement>('overlay'));
@@ -201,7 +202,7 @@ class Theremano {
       localePreference: () => this.store.get().locale,
     });
     i18n.subscribe(() => {
-      applyStaticStrings();
+      applyStaticStrings(this.store.get().drums);
       // applyStaticStrings devuelve el aviso a su version con camara.
       this.applyHint();
       // applyStaticStrings devuelve los rotulos a su version normal, asi que la
@@ -221,6 +222,8 @@ class Theremano {
     this.listenButton.addEventListener('click', () => void this.toggleListening());
     this.demoButton.addEventListener('click', () => void this.toggleDemo());
     this.pointerButton.addEventListener('click', () => void this.start('pointer'));
+    must('mode-melody').addEventListener('click', () => this.store.set({ drums: false }));
+    must('mode-drums').addEventListener('click', () => this.store.set({ drums: true }));
     this.bindPointer();
     must('demo-stop').addEventListener('click', () => this.stopDemo());
     this.applyInvite();
@@ -463,6 +466,9 @@ class Theremano {
     // Quien llega por un enlace viene a oir lo que le han mandado. Una tercera
     // opcion ahi solo reparte la atencion entre tres sitios.
     this.demoButton.hidden = invited;
+    // Y elegir bateria no significa nada todavia: lo que hay que escuchar es una
+    // melodia grabada por otra persona. El mando reaparece al tocar encima.
+    this.modeSwitch.hidden = invited;
     if (invited) {
       this.startButton.textContent = t().splash.playAlong;
       // La nota de siempre anuncia el permiso de camara, y aqui eso es falso:
@@ -1385,6 +1391,17 @@ class Theremano {
     if (changed.has('drums')) {
       this.mapper.syncSettings(settings);
       this.engine.setDrums(settings.drums);
+      /*
+       * La portada entera habla de lo elegido: el lema, lo que promete y el lado
+       * encendido del mando. Solo se repinta si esta a la vista: esa funcion
+       * reescribe tambien rotulos que ahora mismo estan vivos -el aviso del HUD,
+       * el boton de bucle, que puede estar diciendo "Parar"- y con el
+       * instrumento en marcha eso no arregla nada y si estropea.
+       */
+      if (!this.splash.hidden) {
+        applyStaticStrings(settings.drums);
+        this.applyInvite();
+      }
       // La guia apunta a zonas de la escala, y en bateria la rejilla ya no es
       // esa: el objetivo no se dibuja en ninguna parte y solo puntua un ataque,
       // que ahi no existe. Se quedaria en 0/N para siempre. Se retira igual que

@@ -125,6 +125,16 @@
           <p class="tagline" id="splash-tagline"></p>
           <p class="invite" id="splash-invite" hidden></p>
           <ul class="howto" id="splash-bullets"></ul>
+          <!--
+            Que se va a tocar. Va pegado a Empezar y no en los ajustes porque es
+            lo primero que hay que decidir, no un detalle que se afina despues:
+            de el dependen las manos que hacen falta, lo que se ve en pantalla y
+            hasta si hay introduccion.
+          -->
+          <div id="mode-switch" role="radiogroup">
+            <button id="mode-melody" type="button" role="radio" aria-checked="true"></button>
+            <button id="mode-drums" type="button" role="radio" aria-checked="false"></button>
+          </div>
           <button id="listen-button" hidden></button>
           <button id="start-button"></button>
           <!--

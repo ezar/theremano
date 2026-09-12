@@ -35,6 +35,13 @@ export interface Strings {
   splash: {
     tagline: string;
     bullets: readonly string[];
+    /** Lo mismo, cuando lo elegido es la bateria. */
+    drumTagline: string;
+    drumBullets: readonly string[];
+    /** El mando que elige que se va a tocar, y sus dos lados. */
+    modeLabel: string;
+    modeMelody: string;
+    modeDrums: string;
     start: string;
     starting: string;
     permissionNote: string;

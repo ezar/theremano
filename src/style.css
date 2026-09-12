@@ -1033,3 +1033,47 @@ kbd {
 }
 
 .help-table th em { color: rgba(6, 214, 160, 0.9); font-style: normal; font-weight: 500; }
+
+/*
+ * El mando que elige que se va a tocar.
+ *
+ * Pegado a Empezar y no en los ajustes: es lo primero que hay que decidir, no
+ * un detalle que se afina despues. De el dependen las manos que hacen falta, lo
+ * que se dibuja en pantalla y hasta si hay introduccion.
+ *
+ * Dos lados y no un interruptor de encendido, porque no hay un modo normal y
+ * otro raro: son dos instrumentos, y el que no esta elegido tiene que seguir
+ * leyendose como una opcion y no como algo apagado.
+ */
+#mode-switch {
+  /* En su propia linea y centrado: en la misma que Empezar competiria con el,
+     y a ancho de movil los dos juntos se parten por donde no deben. */
+  display: flex;
+  width: fit-content;
+  gap: 3px;
+  padding: 3px;
+  margin: 0 auto 18px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+#mode-switch button {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+#mode-switch button:hover { color: var(--fg); }
+
+#mode-switch button[aria-checked='true'] {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--fg);
+}
