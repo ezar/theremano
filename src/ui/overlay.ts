@@ -36,6 +36,8 @@ export interface OverlayFrame {
   loops: LoopState;
   /** Zona que la melodia guiada pide ahora, o null. */
   targetZone: number | null;
+  /** Nota que sostiene el pedal, en MIDI, o null si no hay ninguna. */
+  drone: number | null;
   showRawTrace: boolean;
 }
 
@@ -138,6 +140,7 @@ export class Overlay {
     if (expression) {
       this.drawHand(target, rect, expression.hand.landmarks, expression.held, 0.5);
       this.drawRoleTag(target, rect, expression.hand.landmarks, t().overlay.expressionTag, expression.held);
+      if (frame.drone !== null) this.drawDrone(target, rect, expression.hand.landmarks, frame.drone);
     }
     if (melody) {
       if (frame.showRawTrace) this.drawRawTrace(target, rect, melody.hand.raw);
@@ -328,6 +331,42 @@ export class Overlay {
       ctx.arc(p.x, p.y, 2.3 * target.unit, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.restore();
+  }
+
+  /**
+   * La nota pedal, en la mano que la sostiene.
+   *
+   * Un anillo del color de esa nota entre los dos dedos que la sujetan, y el
+   * nombre debajo. Es el unico sitio donde se ve: la nota grande del HUD es la
+   * que se esta tocando, y la del pedal es otra.
+   */
+  private drawDrone(target: RenderTarget, rect: Rect2, landmarks: readonly Landmark[], midi: number): void {
+    if (landmarks.length < 21) return;
+    const { ctx } = target;
+    const thumb = this.toCanvas(rect, point(landmarks, 4));
+    const index = this.toCanvas(rect, point(landmarks, 8));
+    const mid = { x: (thumb.x + index.x) / 2, y: (thumb.y + index.y) / 2 };
+    const hue = pitchHue(midi);
+    const radius = 13 * target.unit;
+
+    ctx.save();
+    ctx.strokeStyle = `hsla(${hue}, 95%, 70%, 0.9)`;
+    ctx.lineWidth = 2.4 * target.unit;
+    ctx.beginPath();
+    ctx.arc(mid.x, mid.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    const halo = ctx.createRadialGradient(mid.x, mid.y, 0, mid.x, mid.y, radius * 2.4);
+    halo.addColorStop(0, `hsla(${hue}, 95%, 70%, 0.5)`);
+    halo.addColorStop(1, `hsla(${hue}, 95%, 60%, 0)`);
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(mid.x, mid.y, radius * 2.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = `600 ${11 * target.unit}px ui-monospace, monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = `hsla(${hue}, 95%, 78%, 0.95)`;
+    ctx.fillText(midiToName(midi, t().notes), mid.x, mid.y + radius * 2.2);
     ctx.restore();
   }
 

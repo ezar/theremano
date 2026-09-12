@@ -134,6 +134,11 @@ export const es: Strings = {
         optional: true,
       },
       {
+        what: 'Segunda mano: pulgar contra índice',
+        does: 'Nota pedal. La nota que esté sonando se queda sostenida mientras aguantes la pinza, y la mano que toca queda libre para hacer una melodía encima. Sin cámara, el botón derecho o un segundo dedo.',
+        optional: true,
+      },
+      {
         what: 'Segunda mano: pulgar contra corazón, medio segundo',
         does: 'Graba una capa de bucle sin tocar nada. El botón se va llenando mientras lo mantienes, y se cancela abriendo la mano.',
         optional: true,
@@ -222,6 +227,7 @@ export const es: Strings = {
 
   toast: {
     pointerHint: 'Mueve el puntero para elegir la nota y mantén pulsado para que suene.',
+    drone: (note: string) => `Nota pedal: ${note}`,
     countIn: 'Cuatro pulsos y empieza a grabar. Pulsa otra vez para cancelar',
     countInCancelled: 'Claqueta cancelada',
     layerRecording: 'Grabando capa sobre el bucle',

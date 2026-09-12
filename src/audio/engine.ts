@@ -40,6 +40,26 @@ const VIBRATO_RAMP = 0.08;
  */
 const HAND_VIBRATO = 0.35;
 
+/**
+ * La nota pedal suena por debajo de la melodia.
+ *
+ * Es un acompanamiento, no una segunda melodia: si entrara al mismo volumen, las
+ * dos voces se pelearian por la atencion y ademas sumarian hasta hacer trabajar
+ * al limitador en cada nota.
+ */
+const DRONE_GAIN = 0.45;
+
+/**
+ * Entra y sale mas despacio que una nota.
+ *
+ * Un pedal que aparece de golpe suena a error; uno que entra en una decima y se
+ * apaga en medio segundo suena a que alguien lo ha puesto ahi. Se toma lo mas
+ * lento entre esto y lo que pida el timbre, para no acortar un timbre que ya sea
+ * mas lento de por si.
+ */
+const DRONE_ATTACK = 0.12;
+const DRONE_RELEASE = 0.5;
+
 /** Zonas muertas: por debajo de esto no se reprograma nada. */
 const FREQ_EPSILON_CENTS = 0.5;
 const GAIN_EPSILON = 0.002;
@@ -63,8 +83,11 @@ export class AudioEngine {
   private lastFreq = 0;
   private lastCutoff = 0;
   private lastSpace = -1;
+  private droneGain: Tone.Gain | null = null;
   private lastVibrato = -1;
   private lastVibratoRate = -1;
+  private drone: Tone.Synth | null = null;
+  private droneFreq = 0;
   private lastGain = 0;
   private targetVolume = 0.75;
   private muted = false;
@@ -129,6 +152,15 @@ export class AudioEngine {
       envelope: this.preset.envelope,
       portamento: 0,
     }).connect(this.vibrato);
+    // El pedal entra por el mismo sitio que la melodia: mismo vibrato, mismo
+    // filtro, mismo espacio y mismo volumen maestro. Es la misma voz sostenida,
+    // no otro instrumento pegado al lado.
+    this.droneGain = new Tone.Gain(DRONE_GAIN).connect(this.vibrato);
+    this.drone = new Tone.Synth({
+      oscillator: this.preset.oscillator as Tone.SynthOptions['oscillator'],
+      envelope: this.droneEnvelope(),
+      portamento: 0,
+    }).connect(this.droneGain);
 
     this.lastCutoff = 2000;
     this.lastSpace = -1;
@@ -180,6 +212,10 @@ export class AudioEngine {
       this.synth?.set({
         oscillator: preset.oscillator as Tone.SynthOptions['oscillator'],
         envelope: preset.envelope,
+      });
+      this.drone?.set({
+        oscillator: preset.oscillator as Tone.SynthOptions['oscillator'],
+        envelope: this.droneEnvelope(),
       });
       this.filter?.Q.rampTo(preset.filter.q, 0.05);
       this.reverb?.wet.rampTo(preset.reverbWet, 0.05);
@@ -273,6 +309,39 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * La nota pedal: una segunda voz que se queda sonando.
+   *
+   * Es lo que convierte el instrumento de monofonico a "una melodia encima de
+   * algo". La sostiene la mano, no el bucle, asi que no hay nada que arrancar ni
+   * que parar: mientras se pida, suena.
+   *
+   * @param hz la nota que se sostiene, o 0 para soltarla.
+   */
+  setDrone(hz: number): void {
+    if (!this.drone || hz === this.droneFreq) return;
+    if (hz <= 0) {
+      this.droneFreq = 0;
+      this.drone.triggerRelease();
+      return;
+    }
+    // Cambiar de nota con la voz abierta suena a glissando de sirena: se suelta
+    // y se vuelve a atacar, que es lo que hace una mano al cambiar de pedal.
+    if (this.droneFreq > 0) this.drone.triggerRelease();
+    this.droneFreq = hz;
+    this.drone.triggerAttack(hz, undefined, 1);
+  }
+
+  /** Envolvente del pedal: la del timbre, pero nunca mas rapida que esto. */
+  private droneEnvelope(): Tone.SynthOptions['envelope'] {
+    const envelope = this.preset.envelope;
+    return {
+      ...envelope,
+      attack: Math.max(envelope.attack as number, DRONE_ATTACK),
+      release: Math.max(envelope.release as number, DRONE_RELEASE),
+    } as Tone.SynthOptions['envelope'];
+  }
+
   setVolume(volume: number): void {
     this.targetVolume = Math.min(1, Math.max(0, volume));
     this.applyGain(VOLUME_RAMP);
@@ -309,6 +378,7 @@ export class AudioEngine {
   /** Corta todo de forma segura. */
   panic(): void {
     this.release();
+    this.setDrone(0);
     this.master?.gain.rampTo(0, 0.03);
     this.loopBus?.gain.rampTo(0, 0.03);
     this.lastGain = 0;

@@ -164,6 +164,8 @@ export interface Strings {
   toast: {
     /** Como se toca con el puntero. Se dice una vez, al entrar. */
     pointerHint: string;
+    /** Que nota se ha quedado sostenida con la otra mano. */
+    drone: (note: string) => string;
     countIn: string;
     countInCancelled: string;
     layerRecording: string;

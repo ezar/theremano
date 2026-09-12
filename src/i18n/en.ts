@@ -134,6 +134,11 @@ export const en: Strings = {
         optional: true,
       },
       {
+        what: 'Second hand: thumb against index finger',
+        does: 'Drone note. Whatever note is sounding stays held while you keep the pinch, and the playing hand is free to put a melody over it. Without a camera, the right mouse button or a second finger.',
+        optional: true,
+      },
+      {
         what: 'Second hand: thumb against middle finger, half a second',
         does: 'Records a loop layer without touching anything. The button fills while you hold it, and opening your hand cancels.',
         optional: true,
@@ -222,6 +227,7 @@ export const en: Strings = {
 
   toast: {
     pointerHint: 'Move the pointer to pick the note and hold to make it sound.',
+    drone: (note: string) => `Drone note: ${note}`,
     countIn: 'Four beats and recording starts. Press again to cancel',
     countInCancelled: 'Count-in cancelled',
     layerRecording: 'Recording a layer over the loop',

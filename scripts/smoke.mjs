@@ -458,6 +458,23 @@ for (let step = 0; step < 34; step += 1) {
 }
 const vibrato = await pointerPage.evaluate(() => document.getElementById('diagnostics')?.textContent ?? '');
 const soundingClass = await pointerPage.evaluate(() => document.getElementById('note')?.classList.contains('sounding'));
+// Nota pedal: con la nota sonando, el boton derecho la deja sostenida. Al
+// levantar el izquierdo la melodia calla y el pedal sigue; al levantar el
+// derecho, se va tambien.
+await pointerPage.mouse.down({ button: 'right' });
+await pointerPage.waitForTimeout(500);
+const droneToast = await pointerPage.textContent('#toast');
+await pointerPage.mouse.up();
+await pointerPage.waitForTimeout(500);
+await pointerPage.evaluate(() => window.__resetPeak());
+await pointerPage.waitForTimeout(700);
+const droning = Number((await pointerPage.evaluate(() => window.__peak)).toFixed(4));
+await pointerPage.mouse.up({ button: 'right' });
+// La cola de reverberacion del pedal dura un par de segundos largos.
+await pointerPage.waitForTimeout(2500);
+await pointerPage.evaluate(() => window.__resetPeak());
+await pointerPage.waitForTimeout(900);
+const afterDrone = Number((await pointerPage.evaluate(() => window.__peak)).toFixed(4));
 await pointerPage.mouse.up();
 await pointerPage.waitForTimeout(500);
 // Que la nota se cierra se mira en el gate y no en el pico de audio: detras hay
@@ -466,7 +483,13 @@ await pointerPage.waitForTimeout(500);
 const released = await pointerPage.evaluate(() => ({
   sonando: document.getElementById('note')?.classList.contains('sounding'),
 }));
-console.log(JSON.stringify({ beforePress, pressed, dragged, vibrato, soundingClass, released, erroresPuntero: pointerLogs }, null, 2));
+console.log(
+  JSON.stringify(
+    { beforePress, pressed, dragged, vibrato, soundingClass, droneToast, droning, afterDrone, released, erroresPuntero: pointerLogs },
+    null,
+    2,
+  ),
+);
 await pointerPage.close();
 await pointer.close();
 
@@ -706,6 +729,10 @@ if (!/vib (0\.[1-9]|1\.00)/.test(vibrato)) {
   console.error(`\nFALLO: oscilar el puntero sobre la nota deberia dar vibrato (${vibrato.replace(/\n/g, ' | ')})`);
   process.exit(1);
 }
+if (droning < 0.05 || afterDrone > 0.05) {
+  console.error(`\nFALLO: la nota pedal deberia seguir sonando sola (${droning}) y callarse al soltarla (${afterDrone})`);
+  process.exit(1);
+}
 if (!soundingClass || released.sonando || pointerLogs.length > 0) {
   console.error(`\nFALLO: con el puntero, pulsar deberia abrir la nota y soltar cerrarla ${pointerLogs.join(' ')}`);
   process.exit(1);
@@ -721,5 +748,5 @@ if (!state.splashHidden || !state.hudVisible) {
 console.log(
   `\nOK: arranque, modelo, audio, introduccion de ${coachStart.dots} pasos, ayuda, espanol e ingles, ` +
     `bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB, solo manos con clip de ` +
-    `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion y puntero sin camara con vibrato, y enlace compartible.`,
+    `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion y puntero sin camara con vibrato y nota pedal, y enlace compartible.`,
 );
