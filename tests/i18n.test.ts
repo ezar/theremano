@@ -3,7 +3,7 @@ import { LOCALES, detectLocale, resolveLocale } from '../src/i18n';
 import { PRESETS } from '../src/audio/presets';
 import { SCALES } from '../src/mapping/scales';
 import { MELODIES } from '../src/mapping/melodies';
-import { STEPS } from '../src/ui/onboarding';
+import { DRUM_STEPS, STEPS } from '../src/ui/onboarding';
 
 /**
  * El tipo ya obliga a que los dos idiomas tengan las mismas claves, pero no a
@@ -49,7 +49,10 @@ describe('diccionarios de idioma', () => {
       expect(strings.melodies[melody.id]?.name, melody.id).toBeTruthy();
       expect(strings.melodies[melody.id]?.hint, melody.id).toBeTruthy();
     }
-    for (const step of STEPS) {
+    // Los dos recorridos, no solo el de la melodia: un paso de bateria sin texto
+    // sale en pantalla como un cuadro vacio esperando un gesto que nadie ha
+    // pedido, y el compilador no puede cazarlo porque las claves son libres.
+    for (const step of [...STEPS, ...DRUM_STEPS]) {
       expect(strings.coach.steps[step.id]?.title, step.id).toBeTruthy();
       expect(strings.coach.steps[step.id]?.body, step.id).toBeTruthy();
     }

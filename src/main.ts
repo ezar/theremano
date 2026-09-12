@@ -431,7 +431,10 @@ class Theremano {
   }
 
   private startOnboarding(): void {
-    this.onboarding.start();
+    // Cada modo tiene su recorrido, y el de la melodia no sirve para el otro: sus
+    // cuatro primeros pasos giran alrededor de una pinza que en bateria no hace
+    // nada. Se elige al empezar y no cambia a mitad.
+    this.onboarding.start(this.store.get().drums);
     this.coach.render(this.onboarding.step, this.onboarding.index, this.onboarding.total);
     this.hud.dismissHint();
   }
@@ -439,7 +442,10 @@ class Theremano {
   private advanceCoach(event: 'advanced' | 'finished' | null): void {
     if (event === null) return;
     this.coach.render(this.onboarding.step, this.onboarding.index, this.onboarding.total);
-    if (event === 'finished') this.finishOnboarding(t().toast.onboardingDone);
+    if (event === 'finished') {
+      const strings = t().toast;
+      this.finishOnboarding(this.store.get().drums ? strings.onboardingDoneDrums : strings.onboardingDone);
+    }
   }
 
   private finishOnboarding(message: string): void {
@@ -930,7 +936,7 @@ class Theremano {
       // expresion: con el puntero no hay nada de eso, y un paso que no se puede
       // completar es peor que no tener introduccion. Se queda sin ver, asi que
       // aparecera entera el dia que se entre con camara.
-      if (mode === 'camera' && !this.store.get().onboarded && !this.store.get().drums) this.startOnboarding();
+      if (mode === 'camera' && !this.store.get().onboarded) this.startOnboarding();
       else if (mode === 'pointer') {
         this.hud.toast(this.store.get().drums ? t().toast.drumPointerHint : t().toast.pointerHint, 6000);
       }
@@ -1165,6 +1171,7 @@ class Theremano {
           gateOpen: output.gateOpen,
           attack: output.gateEvent === 'attack',
           presetChanged: output.preset !== null,
+          strikes: output.strikes,
           pitchX: output.pitchX,
           volume: output.volume,
           dt,

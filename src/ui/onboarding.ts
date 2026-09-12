@@ -31,6 +31,14 @@ export interface CoachSignals {
   volume: number;
   /** true solo en el fotograma en que se confirma un cambio de timbre. */
   presetChanged: boolean;
+  /**
+   * Golpes entrados en este fotograma, y sobre que pieza. Casi siempre vacio.
+   *
+   * Se pide en lugar de un simple contador porque los pasos de bateria no
+   * preguntan cuantos golpes van, sino sobre cuantas piezas distintas y si dos
+   * han caido juntos: eso es lo que ensena el reparto y las dos manos.
+   */
+  strikes: readonly { piece: string }[];
   /** Segundos transcurridos desde el fotograma anterior. */
   dt: number;
 }
@@ -43,6 +51,12 @@ interface StepProgress {
   max: number;
   attacks: number;
   changes: number;
+  /** Golpes dados en el paso. */
+  hits: number;
+  /** Piezas distintas golpeadas en el paso. */
+  pieces: Set<string>;
+  /** Fotogramas en que han caido dos golpes a la vez, uno por mano. */
+  pairs: number;
 }
 
 export interface OnboardingStep {
@@ -97,19 +111,53 @@ export const STEPS: readonly OnboardingStep[] = [
   },
 ];
 
+/**
+ * Los pasos de la bateria. No se parecen a los de la melodia porque no hay nada
+ * en comun que ensenar mas alla de ensenar la mano.
+ *
+ * Lo unico que no se puede adivinar es el reparto: que golpear a la izquierda y
+ * golpear a la derecha son dos piezas distintas. Por eso el tercer paso no pide
+ * mas golpes, pide golpes en DOS sitios: contar golpes se cerraria con cuatro
+ * seguidos en la caja sin haber aprendido nada.
+ *
+ * Y el ultimo es el que convierte esto en una bateria: dos manos cayendo juntas.
+ * Va opcional porque con una se toca, y porque quien tenga una mano ocupada
+ * tiene que poder pasar de largo sin que parezca que la introduccion se ha roto.
+ */
+export const DRUM_STEPS: readonly OnboardingStep[] = [
+  {
+    id: 'hand',
+    isDone: (p) => p.held >= 0.5,
+  },
+  {
+    id: 'drumHit',
+    isDone: (p) => p.hits >= 1,
+  },
+  {
+    id: 'drumPieces',
+    isDone: (p) => p.pieces.size >= 2,
+  },
+  {
+    id: 'drumBoth',
+    optional: true,
+    isDone: (p) => p.pairs >= 1,
+  },
+];
+
 export type CoachEvent = 'advanced' | 'finished' | null;
 
 export class Onboarding {
   private cursor = 0;
   private progress: StepProgress = blank();
   private active = false;
+  private steps: readonly OnboardingStep[] = STEPS;
 
   get isActive(): boolean {
     return this.active;
   }
 
   get step(): OnboardingStep | null {
-    return this.active ? (STEPS[this.cursor] ?? null) : null;
+    return this.active ? (this.steps[this.cursor] ?? null) : null;
   }
 
   get index(): number {
@@ -117,10 +165,12 @@ export class Onboarding {
   }
 
   get total(): number {
-    return STEPS.length;
+    return this.steps.length;
   }
 
-  start(): void {
+  /** @param drums cual de los dos recorridos. Se fija al empezar y no cambia. */
+  start(drums = false): void {
+    this.steps = drums ? DRUM_STEPS : STEPS;
     this.active = true;
     this.cursor = 0;
     this.progress = blank();
@@ -144,6 +194,11 @@ export class Onboarding {
     p.elapsed += signals.dt;
     if (signals.attack) p.attacks += 1;
     if (signals.presetChanged) p.changes += 1;
+    // Los golpes se acumulan siempre, como los ataques: en modo melodia la lista
+    // llega vacia en todos los fotogramas y esto no cuesta nada.
+    p.hits += signals.strikes.length;
+    if (signals.strikes.length >= 2) p.pairs += 1;
+    for (const strike of signals.strikes) p.pieces.add(strike.piece);
 
     // Cada paso mide lo suyo. Meter todas las medidas en el mismo acumulador
     // haria que el recorrido de la mano contase para el paso del volumen.
@@ -174,9 +229,9 @@ export class Onboarding {
   private advance(): CoachEvent {
     this.cursor += 1;
     this.progress = blank();
-    if (this.cursor >= STEPS.length) {
+    if (this.cursor >= this.steps.length) {
       this.active = false;
-      this.cursor = STEPS.length;
+      this.cursor = this.steps.length;
       return 'finished';
     }
     return 'advanced';
@@ -189,7 +244,7 @@ function seesMelody(signals: CoachSignals): boolean {
 }
 
 function blank(): StepProgress {
-  return { elapsed: 0, held: 0, min: Infinity, max: -Infinity, attacks: 0, changes: 0 };
+  return { elapsed: 0, held: 0, min: Infinity, max: -Infinity, attacks: 0, changes: 0, hits: 0, pieces: new Set(), pairs: 0 };
 }
 
 function track(p: StepProgress, value: number): void {

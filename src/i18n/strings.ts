@@ -230,6 +230,14 @@ export interface Strings {
     /** Los bucles todavia no saben grabar golpes. */
     loopNeedsMelody: string;
     onboardingDone: string;
+    /**
+     * El mismo final, para la bateria.
+     *
+     * Hace falta uno propio porque el de la melodia manda grabar una capa, y en
+     * bateria los bucles todavia no graban golpes: seria despedir la
+     * introduccion mandando hacer lo unico que la aplicacion va a rechazar.
+     */
+    onboardingDoneDrums: string;
     onboardingSkipped: string;
   };
 

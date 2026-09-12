@@ -406,6 +406,46 @@ console.log(JSON.stringify({ afterContinuous }, null, 2));
 await page.selectOption('#set-scale', 'blues');
 await page.waitForTimeout(400);
 
+/*
+ * --- La introduccion de la bateria.
+ *
+ * Es otro recorrido y se elige al empezar, asi que hace falta una pestana que
+ * arranque con la camara y con la bateria ya puesta: es la unica forma de
+ * comprobar el cableado que lo decide. Los pasos no se cierran solos porque
+ * delante de la camara falsa no hay manos, que es justo lo que permite
+ * recorrerlos con el boton de saltar y leer sus titulos.
+ */
+const drumCtx = await browser.newContext({ permissions: ['camera'], viewport: { width: 1100, height: 720 } });
+const drumPage = await drumCtx.newPage();
+const drumLogs = [];
+drumPage.on('pageerror', (e) => drumLogs.push(e.message));
+await drumPage.addInitScript(() => localStorage.setItem('theremano.settings.v1', JSON.stringify({ drums: true })));
+await drumPage.goto(url, { waitUntil: 'networkidle' });
+await drumPage.click('#start-button');
+await drumPage.waitForFunction(() => document.getElementById('splash')?.hidden === true, { timeout: 90000 }).catch(() => {});
+await drumPage.waitForTimeout(9000);
+
+const drumCoach = { dots: 0, steps: [] };
+drumCoach.dots = await drumPage.evaluate(() => document.querySelectorAll('#coach-dots span').length);
+let drumSkips = 0;
+while (await drumPage.evaluate(() => !document.getElementById('coach')?.hidden)) {
+  drumCoach.steps.push(
+    await drumPage.evaluate(() => ({
+      title: document.getElementById('coach-title')?.textContent,
+      optional: !document.getElementById('coach-optional')?.hidden,
+    })),
+  );
+  await drumPage.click('#coach-skip-step');
+  await drumPage.waitForTimeout(150);
+  if (++drumSkips > 10) break;
+}
+const drumEnd = await drumPage.evaluate(() => ({
+  sub: document.getElementById('note-sub')?.textContent ?? '',
+  bandas: [...document.querySelectorAll('#coach-dots span')].length,
+}));
+console.log(JSON.stringify({ drumCoach, drumEnd }, null, 2));
+await drumCtx.close();
+
 // --- Demostracion: el instrumento tocandose solo, sin camara y sin permiso.
 // Es la puerta de entrada de quien todavia no ha dado permiso de camara, asi
 // que se prueba en una pestana limpia y sin pedirlo. Lo que hay que demostrar
@@ -649,6 +689,24 @@ if (optionalSteps.length !== 2 || optionalSteps.some((s) => plainLabels.has(s.sk
   console.error('\nFALLO: los pasos de la segunda mano no se anuncian como opcionales');
   process.exit(1);
 }
+if (drumCoach.dots !== 4 || drumCoach.steps.length !== 4) {
+  console.error('\nFALLO: la bateria no tiene su propia introduccion de cuatro pasos');
+  process.exit(1);
+}
+// Sin buscar un texto concreto: lo que importa es que los titulos no sean los de
+// la melodia y que solo el ultimo paso se anuncie como opcional.
+if (drumCoach.steps.filter((s) => s.optional).length !== 1 || !drumCoach.steps[3]?.optional) {
+  console.error('\nFALLO: en la introduccion de la bateria solo el ultimo paso debe ser opcional');
+  process.exit(1);
+}
+if (drumCoach.steps.slice(1).some((s) => allSteps.some((m) => m.title === s.title))) {
+  console.error('\nFALLO: la introduccion de la bateria repite pasos de la melodia');
+  process.exit(1);
+}
+if (drumLogs.length > 0) {
+  console.error('\nFALLO: errores en la introduccion de la bateria:', drumLogs.join(' | '));
+  process.exit(1);
+}
 if (coachEnd.visible || coachEnd.onboarded !== true) {
   console.error('\nFALLO: la introduccion no se cierra ni se recuerda como vista');
   process.exit(1);
@@ -814,7 +872,7 @@ if (!state.splashHidden || !state.hudVisible) {
   process.exit(1);
 }
 console.log(
-  `\nOK: mando de la portada, arranque, modelo, audio, introduccion de ${coachStart.dots} pasos, ayuda, espanol e ingles, ` +
+  `\nOK: mando de la portada, arranque, modelo, audio, introduccion de ${coachStart.dots} pasos y la de bateria de ${drumCoach.dots}, ayuda, espanol e ingles, ` +
     `bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB, solo manos con clip de ` +
     `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion y puntero sin camara con vibrato, nota pedal y claqueta, y enlace compartible.`,
 );

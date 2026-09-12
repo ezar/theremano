@@ -122,6 +122,20 @@ export const en: Strings = {
           'One, two, three or four fingers held out: each count is a timbre. Keep the hand still for a moment ' +
           'and you will see the name appear at the bottom left. It is in Settings as well.',
       },
+      drumHit: {
+        title: 'Drop it sharply',
+        body: 'As if onto an invisible drum head: fall fast and stop. It sounds before your hand lands, and that is on purpose.',
+      },
+      drumPieces: {
+        title: 'Now hit somewhere else',
+        body: 'Each band is a piece: kick and snare on the left, hat and crash on the right. You can see them below, each in its colour.',
+      },
+      drumBoth: {
+        title: 'And both hands at once',
+        body:
+          'Each one plays the band under it. Kick and hat together is how almost every groove starts. ' +
+          'One hand is enough to play, so feel free to skip.',
+      },
     },
   },
 
@@ -280,6 +294,7 @@ export const en: Strings = {
     guideNeedsMelody: 'The guide points at notes, and drums have none, so it has been turned off',
     loopNeedsMelody: 'Loops cannot record drums yet. Go back to melody to record a layer.',
     onboardingDone: 'You know how to play now. Try recording a layer with the Loop button.',
+    onboardingDoneDrums: 'You know how to play now. Try alternating kick and snare with one hand while the other keeps the hat going.',
     onboardingSkipped: 'You can replay it any time from the help panel.',
   },
 

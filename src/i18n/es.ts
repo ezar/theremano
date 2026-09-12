@@ -122,6 +122,20 @@ export const es: Strings = {
           'Uno, dos, tres o cuatro dedos estirados: cada número es un timbre. Mantén la mano quieta un momento ' +
           'y verás el nombre asomar abajo a la izquierda. También se cambia en Ajustes.',
       },
+      drumHit: {
+        title: 'Bájala de golpe',
+        body: 'Como sobre un parche invisible: cae rápido y frena. Suena antes de que llegues abajo, y es a propósito.',
+      },
+      drumPieces: {
+        title: 'Ahora golpea en otro sitio',
+        body: 'Cada banda es una pieza: bombo y caja a la izquierda, charles y plato a la derecha. Se ven abajo, con su color.',
+      },
+      drumBoth: {
+        title: 'Y las dos manos a la vez',
+        body:
+          'Cada una golpea la banda que tiene debajo. Bombo y charles juntos es como empieza casi cualquier ritmo. ' +
+          'Con una mano también se toca, así que puedes pasar de largo.',
+      },
     },
   },
 
@@ -280,6 +294,7 @@ export const es: Strings = {
     guideNeedsMelody: 'La guía apunta a notas, y en batería no las hay, así que se ha desactivado',
     loopNeedsMelody: 'Los bucles todavía no graban batería. Vuelve a la melodía para grabar una capa.',
     onboardingDone: 'Ya sabes tocar. Prueba a grabar una capa con el botón Bucle.',
+    onboardingDoneDrums: 'Ya sabes tocar. Prueba a alternar bombo y caja con una mano mientras la otra lleva el charles.',
     onboardingSkipped: 'Puedes repetirla cuando quieras desde la ayuda.',
   },
 
