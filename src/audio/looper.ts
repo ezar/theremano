@@ -1,7 +1,7 @@
 import * as Tone from 'tone';
 import { getPreset, type Preset, type PresetId } from './presets';
 import { LoopTake, MAX_TRACKS, type LiveSnapshot, type LoopEvent } from './loopTake';
-import { beatsLeft, isAccent, isDue, isMissed, planCountIn, type CountInPlan } from './countIn';
+import { beatsInCycle, beatsLeft, isAccent, isDue, isMissed, planCountIn, type CountInPlan } from './countIn';
 
 export type { LoopEvent } from './loopTake';
 export { MAX_CYCLE_SECONDS, MAX_TRACKS, MIN_CYCLE_SECONDS } from './loopTake';
@@ -189,6 +189,8 @@ export class Looper {
   private nextId = 1;
   private countIn: { plan: CountInPlan; presetId: PresetId } | null = null;
   private click: ClickVoice | null = null;
+  private metronome = false;
+  private beatId: number | null = null;
 
   attach(output: Tone.InputNode): void {
     this.output = output;
@@ -247,12 +249,62 @@ export class Looper {
     return 'started';
   }
 
+  /**
+   * Claqueta continua mientras hay bucle.
+   *
+   * Es lo que falta para grabar una segunda capa encima de la primera: sin un
+   * pulso que oir, entrar a tiempo es adivinar. Solo suena si hay vuelta; sin
+   * bucle no hay compas que marcar.
+   */
+  setMetronome(on: boolean): void {
+    if (this.metronome === on) return;
+    this.metronome = on;
+    if (on) this.scheduleBeats();
+    else {
+      const transport = Tone.getTransport();
+      if (this.beatId !== null) transport.clear(this.beatId);
+      this.beatId = null;
+      this.releaseClick();
+    }
+  }
+
   private startCountIn(presetId: PresetId): void {
     if (!this.output) return;
     const plan = planCountIn(Tone.now());
     this.countIn = { plan, presetId };
-    this.click = new ClickVoice(this.output);
-    for (let i = 0; i < plan.clicks.length; i += 1) this.click.at(plan.clicks[i]!, isAccent(i));
+    const click = this.ensureClick();
+    for (let i = 0; i < plan.clicks.length; i += 1) click?.at(plan.clicks[i]!, isAccent(i));
+  }
+
+  /**
+   * El pulso va enganchado al mismo transporte que las capas y arranca en cero,
+   * asi que el uno cae donde empieza la vuelta sin tener que sincronizar nada.
+   * El acento se decide por la posicion del propio transporte y no contando
+   * pulsos: encender la claqueta a mitad de vuelta pondria el acento donde no va.
+   */
+  private scheduleBeats(): void {
+    if (!this.metronome || this.beatId !== null || this.cycleSeconds <= 0) return;
+    if (!this.ensureClick()) return;
+    const cycle = this.cycleSeconds;
+    const beats = beatsInCycle(cycle);
+    const beatSeconds = cycle / beats;
+    const transport = Tone.getTransport();
+    this.beatId = transport.scheduleRepeat((time) => {
+      const position = transport.getSecondsAtTime(time) % cycle;
+      this.click?.at(time, Math.round(position / beatSeconds) % beats === 0);
+    }, beatSeconds, 0);
+  }
+
+  private ensureClick(): ClickVoice | null {
+    if (!this.click && this.output) this.click = new ClickVoice(this.output);
+    return this.click;
+  }
+
+  /** La voz del chasquido la comparten claqueta y cuenta atras. */
+  private releaseClick(): void {
+    if (this.countIn || this.metronome) return;
+    this.click?.dispose();
+    this.click = null;
   }
 
   private startTake(presetId: PresetId, startedAt: number): void {
@@ -266,8 +318,7 @@ export class Looper {
 
   private stopCountIn(): void {
     this.countIn = null;
-    this.click?.dispose();
-    this.click = null;
+    this.releaseClick();
   }
 
   /**
@@ -424,6 +475,7 @@ export class Looper {
         this.voices.get(track.id)?.schedule(track.events, time);
       }
     }, this.cycleSeconds, 0);
+    this.scheduleBeats();
     transport.start();
   }
 
@@ -431,6 +483,8 @@ export class Looper {
     const transport = Tone.getTransport();
     if (this.repeatId !== null) transport.clear(this.repeatId);
     this.repeatId = null;
+    if (this.beatId !== null) transport.clear(this.beatId);
+    this.beatId = null;
     transport.stop();
     transport.seconds = 0;
     this.cycleSeconds = 0;

@@ -273,6 +273,8 @@ class Theremano {
         void this.toggleClip();
       } else if (event.key.toLowerCase() === 'z') {
         this.looper.undo();
+      } else if (event.key.toLowerCase() === 'm') {
+        this.toggleMetronome();
       } else if (event.key.toLowerCase() === 'v' && this.mode === 'camera') {
         // Sin camara no hay nada que ocultar: el fondo ya es el propio.
         this.toggleStageMode();
@@ -294,6 +296,18 @@ class Theremano {
     // dispara aunque no sea texto que nadie vaya a leer.
     const message = handsOnly ? t().toast.stageHands : t().toast.stageCamera;
     this.store.set({ stageMode: handsOnly ? 'hands' : 'camera' });
+    this.hud.toast(message);
+  }
+
+  /**
+   * La claqueta continua, que es la que permite entrar a tiempo en la capa
+   * siguiente. Tiene tecla propia porque se enciende y se apaga en mitad de una
+   * grabacion, y abrir los ajustes ahi es abrir los ajustes en mitad de una toma.
+   */
+  private toggleMetronome(): void {
+    const on = !this.store.get().metronome;
+    const message = on ? t().toast.metronomeOn : t().toast.metronomeOff;
+    this.store.set({ metronome: on });
     this.hud.toast(message);
   }
 
@@ -462,6 +476,9 @@ class Theremano {
       // instante en vez de despues de descargar catorce megas de modelo.
       await this.engine.start(settings.preset, settings.masterVolume);
       this.looper.attach(this.engine.loopOutput);
+      // La claqueta se guarda entre sesiones, y el bucle de fotogramas solo
+      // entera al looper de los cambios: la primera vez hay que decirselo.
+      this.looper.setMetronome(settings.metronome);
       if (!this.looper.load(performance.tracks, performance.cycleSeconds)) {
         this.showSplashError(t().toast.performanceBroken);
         return;
@@ -840,6 +857,9 @@ class Theremano {
       await this.engine.start(settings.preset, settings.masterVolume);
 
       this.looper.attach(this.engine.loopOutput);
+      // La claqueta se guarda entre sesiones, y el bucle de fotogramas solo
+      // entera al looper de los cambios: la primera vez hay que decirselo.
+      this.looper.setMetronome(settings.metronome);
       // Si no se escucho antes, la interpretacion del enlace entra ahora: quien
       // pulsa "tocar encima" espera encontrarse el bucle girando, no un silencio.
       if (this.pendingPerformance && !this.listening) {
@@ -1303,6 +1323,7 @@ class Theremano {
     if (this.guide && (changed.has('scale') || changed.has('tonicPc') || changed.has('octaves') || changed.has('baseOctave'))) {
       this.guide.relayout(this.mapper.currentLayout);
     }
+    if (changed.has('metronome')) this.looper.setMetronome(settings.metronome);
     if (changed.has('preset')) this.engine.setPreset(getPreset(settings.preset));
     if (changed.has('masterVolume')) this.mapper.setVolume(settings.masterVolume);
     if (changed.has('stageMode')) this.applyStageMode(settings.stageMode);

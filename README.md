@@ -23,7 +23,8 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
   mano y una nota pedal que se deja sostenida para tocar encima.
 - **Estación de bucles** — hasta cuatro capas superpuestas, con cuatro pulsos de
   claqueta por delante de la primera. Esa marca el compás; las siguientes se
-  graban encima sin esperar a que la vuelta termine.
+  graban encima sin esperar a que la vuelta termine, y con una claqueta continua
+  que reparte la propia vuelta para poder entrar a tiempo. Tecla **M**.
 - **Clip para compartir** — graba imagen y sonido en 9:16, hasta un minuto, con
   la nota y la marca sobreimpresas, y lo entrega por la hoja de compartir del
   móvil o como descarga.
@@ -525,6 +526,26 @@ encontrar la nota, que es justo para lo que existe esto.
 Volver a pulsar durante la cuenta la cancela. Sin eso, quien se arrepiente o
 pulsa sin querer se queda esperando a que termine para poder deshacerlo.
 
+### La claqueta que no se para
+
+Los cuatro pulsos de entrada resuelven la primera capa y dejan a medias la
+segunda: grabar encima de una vuelta que ya gira, sin un pulso que oír, es
+adivinar. La claqueta continua se enciende con **M** y marca el pulso mientras
+haya bucle.
+
+**El compás no lo pone la claqueta: lo pone la vuelta.** Una toma se cierra
+cuando quien toca la cierra, así que su duración no es un número redondo de
+pulsos de 90 por minuto, y una claqueta a 90 fijos se iría separando del bucle
+vuelta a vuelta hasta sonar a dos músicos distintos. Se reparte la vuelta en el
+número entero de pulsos más cercano: el pulso cae siempre en el mismo sitio *por
+construcción*, y el tempo que sale se queda a un palmo de 90 —entre 60 y 120,
+según lo corta que sea la vuelta—. Funciona igual con las tomas grabadas sin
+claqueta, que no tienen más compás de referencia que ellas mismas.
+
+El acento se decide por la posición del transporte y no contando pulsos:
+encenderla a mitad de vuelta pondría el uno donde no va. Y la voz del chasquido
+la comparten las dos claquetas, que nunca suenan a la vez.
+
 Dos detalles que costaron encontrarse:
 
 - **El primer pulso no se puede programar en el instante del pulsado.** Para
@@ -745,6 +766,9 @@ Los que se pueden comprobar de forma automática están en `tests/`:
   en el dato para que la tarjeta pueda anunciarla antes de que nadie lo intente.
 - **Ningún paso de la introducción se cierra solo**: cada uno se prueba con la
   señal que le toca y con todo lo demás moviéndose menos esa señal.
+- **La claqueta continua reparte la vuelta en partes iguales**, de la vuelta más
+  corta que se admite a la más larga, y el pulso que sale sigue siendo un pulso
+  que se puede seguir.
 - **La nota pedal sostiene lo que suena y nada más.** Sin nota no hace nada, no
   se enciende al pedir un bucle aunque las dos pinzas caigan bajo el umbral a la
   vez, no cambia el timbre de paso, y se suelta al perder la mano o la pestaña.

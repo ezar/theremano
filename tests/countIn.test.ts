@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BEAT_SECONDS, COUNT_IN_BEATS, beatsLeft, isAccent, isDue, isMissed, planCountIn } from '../src/audio/countIn';
+import { BEAT_SECONDS, COUNT_IN_BEATS, beatsInCycle, beatsLeft, isAccent, isDue, isMissed, planCountIn } from '../src/audio/countIn';
+import { MAX_CYCLE_SECONDS, MIN_CYCLE_SECONDS } from '../src/audio/loopTake';
 
 /**
  * La claqueta es aritmetica de instantes, y por eso se puede comprobar sin
@@ -76,6 +77,34 @@ describe('claqueta', () => {
   it('solo el primer pulso lleva acento: es el que marca donde cae el uno', () => {
     expect(isAccent(0)).toBe(true);
     for (let i = 1; i < COUNT_IN_BEATS; i += 1) expect(isAccent(i)).toBe(false);
+  });
+
+  it('el pulso de la claqueta continua reparte la vuelta en partes iguales', () => {
+    // Lo que la hace util: el pulso sale de la propia vuelta, asi que cae
+    // siempre en el mismo sitio por construccion. Una claqueta a noventa fijos
+    // se iria separando del bucle vuelta a vuelta.
+    for (let cycle = MIN_CYCLE_SECONDS; cycle <= MAX_CYCLE_SECONDS; cycle += 0.13) {
+      const beats = beatsInCycle(cycle);
+      expect(Number.isInteger(beats), `ciclo ${cycle}`).toBe(true);
+      expect(beats).toBeGreaterThanOrEqual(1);
+      // Y el tempo que sale sigue siendo un pulso que se puede seguir. Los
+      // extremos salen de las vueltas de alrededor de un segundo, donde solo
+      // caben uno o dos pulsos enteros y por tanto o van lentos o van deprisa;
+      // en una vuelta larga la desviacion respecto a noventa es un pellizco.
+      const bpm = (60 * beats) / cycle;
+      expect(bpm, `ciclo ${cycle}`).toBeGreaterThanOrEqual(58);
+      expect(bpm, `ciclo ${cycle}`).toBeLessThanOrEqual(122);
+    }
+  });
+
+  it('una vuelta de cuatro segundos son seis pulsos, y el doble el doble', () => {
+    expect(beatsInCycle(4)).toBe(6);
+    expect(beatsInCycle(8)).toBe(12);
+    expect(beatsInCycle(COUNT_IN_BEATS * BEAT_SECONDS)).toBe(COUNT_IN_BEATS);
+    // Una vuelta minuscula sigue teniendo un pulso: cero seria una division
+    // entre cero en el programador del transporte.
+    expect(beatsInCycle(0.1)).toBe(1);
+    expect(beatsInCycle(0)).toBe(1);
   });
 
   it('el tiempo es comodo para colocar una mano en el aire', () => {
