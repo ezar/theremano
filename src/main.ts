@@ -312,6 +312,22 @@ class Theremano {
   }
 
   private toggleLoop(): void {
+    /*
+     * Los bucles guardan gestos de melodia -ataque, suelta, tono, brillo- y un
+     * golpe no es ninguna de esas cosas. Una capa grabada en bateria sale sin un
+     * solo ataque, asi que la toma se descarta sola al cerrarla: lo que se
+     * llevaria uno es una claqueta entera y un "capa descartada" sin explicacion.
+     * Mejor decirlo antes de contar.
+     *
+     * Solo se corta al empezar: si ya hay algo en marcha -porque se encendio la
+     * bateria a media toma o a media claqueta- hay que dejar cerrarlo o
+     * cancelarlo, o el boton se quedaria sin forma de parar.
+     */
+    const loops = this.looper.state;
+    if (this.store.get().drums && !loops.recording && loops.countInBeats === 0) {
+      this.hud.toast(t().toast.loopNeedsMelody);
+      return;
+    }
     const hadCycle = this.looper.state.cycleSeconds > 0;
     switch (this.looper.toggle(this.store.get().preset)) {
       case 'rejected':
@@ -537,6 +553,14 @@ class Theremano {
       const settings = this.store.get();
       await this.engine.start(settings.preset, settings.masterVolume);
       this.engine.setMuted(false);
+      /*
+       * La demostracion toca una melodia, y comparte mapeador con el
+       * instrumento. Si los ajustes se quedaron en bateria, ese mapeador cierra
+       * la pinza a la fuerza y la demostracion sale muda: la mano dibujada se
+       * pasea por la rejilla sin que suene nada. Se le pide melodia mientras
+       * dura, y al salir se devuelven los ajustes de verdad.
+       */
+      this.mapper.syncSettings({ ...settings, drums: false });
 
       this.demo = performance;
       this.demoStartedAt = 0;
@@ -757,6 +781,9 @@ class Theremano {
     // Parar a mitad de una nota deja el oscilador abierto: hay que cerrarlo por
     // el mismo camino que lo cierra perder la pestana.
     if (this.mapper.silence() === 'release') this.engine.release();
+    // Y se le devuelve el modo que tenian los ajustes, que la demostracion le
+    // habia quitado para poder sonar.
+    this.mapper.syncSettings(this.store.get());
     this.overlay.resetEffects();
     this.overlay.clear();
     this.demoBanner.hidden = true;
@@ -1358,6 +1385,14 @@ class Theremano {
     if (changed.has('drums')) {
       this.mapper.syncSettings(settings);
       this.engine.setDrums(settings.drums);
+      // La guia apunta a zonas de la escala, y en bateria la rejilla ya no es
+      // esa: el objetivo no se dibuja en ninguna parte y solo puntua un ataque,
+      // que ahi no existe. Se quedaria en 0/N para siempre. Se retira igual que
+      // con el modo continuo, y por el mismo motivo.
+      if (settings.drums && settings.melodyId) {
+        this.store.set({ melodyId: '' });
+        this.hud.toast(t().toast.guideNeedsMelody);
+      }
       // Al salir del modo bateria, la nota que hubiera quedado abierta no existe;
       // al entrar, la que este sonando se cierra sola en el fotograma siguiente.
       if (this.mapper.silence() === 'release') this.engine.release();

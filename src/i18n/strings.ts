@@ -218,6 +218,10 @@ export interface Strings {
     guideStart: (name: string, hint: string) => string;
     guideFinished: (accuracy: number) => string;
     guideNeedsScale: string;
+    /** La guia no cabe en bateria: no hay notas que apuntar. */
+    guideNeedsMelody: string;
+    /** Los bucles todavia no saben grabar golpes. */
+    loopNeedsMelody: string;
     onboardingDone: string;
     onboardingSkipped: string;
   };

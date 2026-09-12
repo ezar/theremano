@@ -91,6 +91,18 @@ export class AudioEngine {
   private drone: Tone.Synth | null = null;
   private droneFreq = 0;
   private drum: DrumKit | null = null;
+  /**
+   * Bus propio de la bateria, hermano del de los bucles y por el mismo motivo.
+   *
+   * No pasa por el maestro porque el maestro lo mueve la mano de expresion, y
+   * en bateria esa mano golpea: cada golpe se bajaria a si mismo. Pero salirse
+   * del maestro no puede significar salirse de todo, que es lo que pasaba antes
+   * de existir este nodo: esconder la pestana dejaba la bateria viva, el corte
+   * de emergencia no la cortaba, y el volumen de los ajustes -que ahi es el
+   * unico que queda- no hacia nada.
+   */
+  private drumBus: Tone.Gain | null = null;
+  private lastDrumGain = 0;
   private lastGain = 0;
   private targetVolume = 0.75;
   private muted = false;
@@ -136,6 +148,8 @@ export class AudioEngine {
     // de expresion apagaria tambien lo ya grabado, que no es lo que hace un
     // pedal de bucles ni lo que espera nadie.
     this.loopBus = new Tone.Gain(1).connect(this.limiter);
+    this.drumBus = new Tone.Gain(volume).connect(this.limiter);
+    this.lastDrumGain = volume;
     this.reverb = new Tone.Freeverb({ roomSize: 0.7, dampening: 2600, wet: this.preset.reverbWet }).connect(
       this.master,
     );
@@ -346,10 +360,10 @@ export class AudioEngine {
    * importa. Se monta al encender el modo, que es cuando sobra tiempo.
    */
   setDrums(on: boolean): void {
-    if (!this.started || !this.limiter) return;
+    if (!this.started || !this.drumBus) return;
     if (on === (this.drum !== null)) return;
     if (on) {
-      this.drum = new DrumKit(this.limiter);
+      this.drum = new DrumKit(this.drumBus);
       return;
     }
     this.drum?.dispose();
@@ -410,12 +424,19 @@ export class AudioEngine {
     this.setDrone(0);
     this.master?.gain.rampTo(0, 0.03);
     this.loopBus?.gain.rampTo(0, 0.03);
+    this.drumBus?.gain.rampTo(0, 0.03);
     this.lastGain = 0;
+    this.lastDrumGain = 0;
   }
 
   dispose(): void {
     this.panic();
-    for (const node of [this.synth, this.vibrato, this.filter, this.delay, this.reverb, this.master, this.loopBus, this.limiter]) {
+    // La bateria tambien, y sobre todo poniendola a null: sin eso, un ciclo de
+    // parada y arranque dejaba a setDrums creyendo que el kit seguia montado, y
+    // la bateria muda para siempre.
+    this.drum?.dispose();
+    this.drum = null;
+    for (const node of [this.synth, this.vibrato, this.filter, this.delay, this.reverb, this.master, this.loopBus, this.drumBus, this.limiter]) {
       node?.dispose();
     }
     this.synth = null;
@@ -425,16 +446,33 @@ export class AudioEngine {
     this.reverb = null;
     this.master = null;
     this.loopBus = null;
+    this.drumBus = null;
     this.limiter = null;
     this.captureTap = null;
     this.started = false;
   }
 
   private applyGain(ramp: number): void {
+    this.applyDrumGain(ramp);
     if (!this.master) return;
     const target = this.muted ? 0 : this.targetVolume * this.preset.trim;
     if (Math.abs(target - this.lastGain) < GAIN_EPSILON) return;
     this.lastGain = target;
     this.master.gain.rampTo(target, ramp);
+  }
+
+  /**
+   * El volumen de la bateria, que sigue al mismo mando pero no al mismo camino.
+   *
+   * Sin el ajuste del timbre: ese numero compensa lo que sube o baja cada
+   * oscilador de la melodia y no tiene nada que ver con un golpe. Y con la misma
+   * banda muerta que el maestro, porque esto se llama en cada fotograma.
+   */
+  private applyDrumGain(ramp: number): void {
+    if (!this.drumBus) return;
+    const target = this.muted ? 0 : this.targetVolume;
+    if (Math.abs(target - this.lastDrumGain) < GAIN_EPSILON) return;
+    this.lastDrumGain = target;
+    this.drumBus.gain.rampTo(target, ramp);
   }
 }

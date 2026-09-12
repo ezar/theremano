@@ -79,6 +79,36 @@ class Session {
     }
   }
 
+  /**
+   * La mano que el seguimiento ya no ve y sigue sirviendo congelada.
+   *
+   * No es lo mismo que no haber mano: el asignador de roles la recuerda medio
+   * segundo con los ultimos puntos que vio, asi que al mapeador le sigue
+   * llegando una mano, con los mismos puntos fotograma tras fotograma.
+   */
+  held(frames: number, melody: HandPose | null): void {
+    for (let frame = 0; frame < frames; frame += 1) {
+      this.seconds += DT;
+      const hand = melody ? swing(melody, 0) : null;
+      this.last = this.mapper.update(
+        { melody: hand ? { hand: { landmarks: hand, raw: hand }, held: true, heldFor: 100 } : null, expression: null },
+        this.seconds,
+      );
+      this.collect();
+    }
+  }
+
+  /** Un fotograma con la mano de expresion recordada y la otra ausente. */
+  heldExpression(pose: HandPose): void {
+    this.seconds += DT;
+    const hand = swing(pose, 0);
+    this.last = this.mapper.update(
+      { melody: null, expression: { hand: { landmarks: hand, raw: hand }, held: true, heldFor: 100 } },
+      this.seconds,
+    );
+    this.collect();
+  }
+
   private collect(): void {
     for (const hit of this.last.strikes) this.hits.push({ ...hit, t: this.seconds });
     if (this.last.preset) this.presetChanges += 1;
@@ -179,6 +209,68 @@ describe('modo bateria', () => {
     // anuncia una vez y mirar solo el final no veria ninguno.
     expect(session.presetChanges).toBe(0);
     expect(session.last.presetCandidate).toBe(null);
+  });
+
+  it('una mano recordada no golpea al reaparecer en otro sitio', () => {
+    /*
+     * El caso que de verdad pasa con una camara. Cuando el modelo pierde la
+     * mano, el asignador de roles no la borra: la recuerda medio segundo con los
+     * ultimos puntos que vio. Asi que al mapeador le llega una mano quieta, y
+     * cuando la de verdad reaparece —normalmente en otro sitio, porque se ha
+     * movido mientras no se la veia— ese salto se lee como una caida
+     * instantanea. Es un golpe que nadie ha dado, y suena solo.
+     *
+     * Distinto del caso de perder la mano del todo: ahi el mapeador recibe null
+     * y reinicia. Aqui nunca recibe null.
+     */
+    const session = new Session();
+    session.still(10, { x: 0.5, y: 0.3 }, null);
+    const before = session.hits.length;
+    session.held(6, { x: 0.5, y: 0.3 });
+    session.still(4, { x: 0.5, y: 0.75 }, null);
+    expect(session.hits.length).toBe(before);
+  });
+
+  it('y tampoco la otra mano', () => {
+    const session = new Session();
+    session.still(10, null, { x: 0.7, y: 0.3 });
+    const before = session.hits.length;
+    for (let frame = 0; frame < 6; frame += 1) {
+      session.heldExpression({ x: 0.7, y: 0.3 });
+    }
+    session.still(4, null, { x: 0.7, y: 0.75 });
+    expect(session.hits.length).toBe(before);
+  });
+
+  it('la fuerza de la ultima nota de melodia no se cuela en el volumen', () => {
+    /*
+     * La fuerza se fija en el ataque de una nota y dura toda la nota. En bateria
+     * no hay ataques, asi que se quedaria la de la ultima nota que se toco antes
+     * de cambiar de modo: los golpes sonarian mas o menos fuertes segun lo
+     * deprisa que uno cerrase la pinza hace un rato. Ahi el volumen lo pone el
+     * ajuste y la dinamica la pone el golpe.
+     */
+    const melodic = new Mapper(DEFAULT_SETTINGS);
+    let seconds = 0;
+    // Una nota entrada muy despacio: fuerza baja, y se queda puesta.
+    for (let frame = 0; frame < 40; frame += 1) {
+      seconds += DT;
+      const pinch = Math.max(0.1, 1 - frame * 0.03);
+      const hand = makeHand(0.5, 0.4, { pinch });
+      melodic.update({ melody: tracked(hand), expression: tracked(makeHand(0.2, 0.5)) }, seconds);
+    }
+    const soft = melodic.update(
+      { melody: tracked(makeHand(0.5, 0.4, { pinch: 0.1 })), expression: tracked(makeHand(0.2, 0.5)) },
+      (seconds += DT),
+    );
+    expect(soft.gain, 'la nota ha entrado floja').toBeLessThan(soft.volume);
+
+    melodic.syncSettings(SETTINGS);
+    const drumming = melodic.update(
+      { melody: tracked(makeHand(0.5, 0.4)), expression: null },
+      (seconds += DT),
+    );
+    expect(drumming.gain).toBeCloseTo(drumming.volume, 6);
   });
 
   it('sin modo bateria no hay golpes por mucho que se baje la mano', () => {

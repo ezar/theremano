@@ -268,6 +268,8 @@ export const en: Strings = {
     guideStart: (name, hint) => `${name}. ${hint}`,
     guideFinished: (accuracy) => `Melody finished with ${accuracy}% accuracy. Record a clip and show it off.`,
     guideNeedsScale: 'The guide needs a quantised scale, so it has been turned off',
+    guideNeedsMelody: 'The guide points at notes, and drums have none, so it has been turned off',
+    loopNeedsMelody: 'Loops cannot record drums yet. Go back to melody to record a layer.',
     onboardingDone: 'You know how to play now. Try recording a layer with the Loop button.',
     onboardingSkipped: 'You can replay it any time from the help panel.',
   },

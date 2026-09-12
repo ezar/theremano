@@ -8,7 +8,7 @@ import { pieceAt, type DrumPiece } from './kit';
 import { PinchGate, type GateEvent } from './gate';
 import { createLayout, isContinuous, pitchAt, type PitchLayout } from './scales';
 import { getPreset, presetForFingerCount, type Preset, type PresetId } from '../audio/presets';
-import type { Landmark, RoleAssignment } from '../tracking/types';
+import type { RoleAssignment, TrackedHand } from '../tracking/types';
 import type { Settings } from '../state/store';
 
 /**
@@ -155,7 +155,7 @@ export class Mapper {
   private readonly melodyStrike = new StrikeDetector();
   private readonly expressionStrike = new StrikeDetector();
   private readonly strikes: DrumHit[] = [];
-  private drums: boolean;
+  private drums = false;
   private lastTimestamp = -1;
   /** Fuerza de la nota que suena ahora, fijada en su ataque. */
   private velocity = 1;
@@ -179,7 +179,7 @@ export class Mapper {
     this.spaceFilter = new OneEuroFilter({ ...control, minCutoff: control.minCutoff * SPACE_SMOOTHING });
     this.volume = settings.masterVolume;
     this.currentPreset = getPreset(settings.preset);
-    this.drums = settings.drums;
+    this.setDrums(settings.drums);
   }
 
   /** Se llama solo cuando cambian los ajustes, no por fotograma. */
@@ -191,7 +191,21 @@ export class Mapper {
     this.volumeFilter.setParams(control);
     this.spaceFilter.setParams({ ...control, minCutoff: control.minCutoff * SPACE_SMOOTHING });
     this.currentPreset = getPreset(settings.preset);
-    this.drums = settings.drums;
+    this.setDrums(settings.drums);
+  }
+
+  /**
+   * En bateria la fuerza de la nota deja de tener sentido y tiene que valer uno.
+   *
+   * Se fija en el ataque de una nota, y ahi no hay ataques: se quedaria la de la
+   * ultima nota de melodia que se toco, de modo que la ganancia que sale de aqui
+   * -y con ella el volumen de los golpes- dependeria de lo fuerte que uno
+   * cerrase la pinza hace un rato. En bateria el volumen lo pone el ajuste y la
+   * dinamica la pone el golpe.
+   */
+  private setDrums(drums: boolean): void {
+    this.drums = drums;
+    if (drums) this.velocity = 1;
   }
 
   get currentLayout(): PitchLayout {
@@ -259,7 +273,7 @@ export class Mapper {
        */
       if (this.drums) {
         gateEvent = this.gate.forceClose();
-        this.pushStrike(this.melodyStrike, melody.hand.raw, timestamp);
+        this.pushStrike(this.melodyStrike, melody, timestamp);
       } else {
         gateEvent = this.gate.update(pinch);
       }
@@ -301,7 +315,7 @@ export class Mapper {
        * ajuste, que ademas es lo unico coherente con que golpear mas fuerte sea
        * ya la forma de sonar mas fuerte.
        */
-      if (this.drums) this.pushStrike(this.expressionStrike, expression.hand.raw, timestamp);
+      if (this.drums) this.pushStrike(this.expressionStrike, expression, timestamp);
       else this.volume = 1 - this.volumeFilter.filter(f.y, timestamp);
 
       // El gesto de grabar no se acepta sobre una mano que solo se esta
@@ -406,8 +420,27 @@ export class Mapper {
    * en el que se dibujan las bandas, para que la pieza que suene sea la que se
    * ve debajo de la mano y no una vecina.
    */
-  private pushStrike(detector: StrikeDetector, landmarks: readonly Landmark[], timestamp: number): void {
-    const palm = palmCenter(landmarks);
+  private pushStrike(detector: StrikeDetector, tracked: TrackedHand, timestamp: number): void {
+    /*
+     * Una mano que solo se esta recordando no golpea, y ademas hay que olvidar
+     * lo que llevaba medida.
+     *
+     * Perder la mano del todo ya se atiende mas arriba, pero eso tarda medio
+     * segundo en pasar: antes de eso el asignador de roles sigue entregando la
+     * mano con los ultimos puntos que vio, congelados. El problema no son esos
+     * fotogramas quietos, es el de despues: la mano de verdad reaparece donde
+     * este ahora, y ese salto dentro de la ventana se lee como una caida
+     * instantanea. Un golpe que nadie ha dado, y encima fuerte.
+     *
+     * Reiniciar cuesta que el primer golpe tras recuperar la mano necesite unas
+     * centesimas de historia. Es el precio correcto: mejor un golpe que llega
+     * tarde que uno que no se ha dado.
+     */
+    if (tracked.held) {
+      detector.reset();
+      return;
+    }
+    const palm = palmCenter(tracked.hand.raw);
     const force = detector.push(timestamp, palm.y);
     if (force > 0) this.strikes.push({ piece: pieceAt(normalize(palm.x)), force, x: palm.x, y: palm.y });
   }

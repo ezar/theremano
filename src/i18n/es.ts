@@ -61,7 +61,7 @@ export const es: Strings = {
     layer: (index) => `Capa ${index}`,
     layerMuted: 'Capa silenciada. Pulsa para activarla.',
     layerActive: 'Pulsa para silenciar esta capa.',
-    kit: 'bateria · 4 piezas',
+    kit: 'batería · 4 piezas',
   },
 
   actions: {
@@ -268,6 +268,8 @@ export const es: Strings = {
     guideStart: (name, hint) => `${name}. ${hint}`,
     guideFinished: (accuracy) => `Melodía completada con un ${accuracy}% de acierto. Graba un clip y enséñalo.`,
     guideNeedsScale: 'La guía necesita una escala cuantizada, así que se ha desactivado',
+    guideNeedsMelody: 'La guía apunta a notas, y en batería no las hay, así que se ha desactivado',
+    loopNeedsMelody: 'Los bucles todavía no graban batería. Vuelve a la melodía para grabar una capa.',
     onboardingDone: 'Ya sabes tocar. Prueba a grabar una capa con el botón Bucle.',
     onboardingSkipped: 'Puedes repetirla cuando quieras desde la ayuda.',
   },
