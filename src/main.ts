@@ -860,6 +860,9 @@ class Theremano {
       await this.engine.start(settings.preset, settings.masterVolume);
 
       this.looper.attach(this.engine.loopOutput);
+      // El kit tampoco se monta solo: el motor no lee los ajustes, y esto se
+      // guarda entre sesiones igual que la claqueta.
+      this.engine.setDrums(settings.drums);
       // La claqueta se guarda entre sesiones, y el bucle de fotogramas solo
       // entera al looper de los cambios: la primera vez hay que decirselo.
       this.looper.setMetronome(settings.metronome);
@@ -1328,23 +1331,10 @@ class Theremano {
       changed.has('pitchBeta') ||
       changed.has('controlMinCutoff') ||
       changed.has('controlBeta') ||
-      changed.has('preset') ||
-      // Sin esto, encender la bateria con el instrumento ya en marcha no llegaba
-      // al mapeador: solo funcionaba si la casilla estaba puesta antes de
-      // empezar, porque entonces lo leia el constructor.
-      changed.has('drums')
+      changed.has('preset')
     ) {
       this.mapper.syncSettings(settings);
       this.hud.setSubtitle(settings);
-    }
-    if (changed.has('drums')) {
-      this.applyHint();
-      // La ultima pieza es de la sesion anterior de bateria: al volver a la
-      // melodia y regresar, el panel no debe abrir con un golpe que no se ha
-      // dado.
-      runtime.piece = null;
-      runtime.strikeForce = 0;
-      this.overlay.resetEffects();
     }
     if (changed.has('locale')) i18n.set(settings.locale);
     if (changed.has('melodyId')) this.syncGuide(settings.melodyId, { applySuggestedScale: true });
@@ -1366,11 +1356,20 @@ class Theremano {
     }
     if (changed.has('metronome')) this.looper.setMetronome(settings.metronome);
     if (changed.has('drums')) {
-      this.applyHint();
       this.mapper.syncSettings(settings);
+      this.engine.setDrums(settings.drums);
       // Al salir del modo bateria, la nota que hubiera quedado abierta no existe;
       // al entrar, la que este sonando se cierra sola en el fotograma siguiente.
       if (this.mapper.silence() === 'release') this.engine.release();
+      // Cambia todo lo que la pantalla dice del instrumento: el subtitulo pasa de
+      // la escala al kit y el aviso deja de hablar de juntar los dedos.
+      this.hud.setSubtitle(settings);
+      this.applyHint();
+      // Y la ultima pieza es de la sesion anterior de bateria: al volver a la
+      // melodia y regresar, el panel no debe abrir con un golpe que no se ha dado.
+      runtime.piece = null;
+      runtime.strikeForce = 0;
+      this.overlay.resetEffects();
     }
     if (changed.has('preset')) this.engine.setPreset(getPreset(settings.preset));
     if (changed.has('masterVolume')) this.mapper.setVolume(settings.masterVolume);

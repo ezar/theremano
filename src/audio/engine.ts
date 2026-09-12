@@ -165,8 +165,6 @@ export class AudioEngine {
       portamento: 0,
     }).connect(this.droneGain);
 
-    this.drum = new DrumKit(this.limiter);
-
     this.lastCutoff = 2000;
     this.lastSpace = -1;
     this.lastGain = 0;
@@ -335,6 +333,27 @@ export class AudioEngine {
     if (this.droneFreq > 0) this.drone.triggerRelease();
     this.droneFreq = hz;
     this.drone.triggerAttack(hz, undefined, 1);
+  }
+
+  /**
+   * Monta o desmonta la bateria.
+   *
+   * No se monta en el arranque porque son siete nodos —cuatro voces, tres
+   * filtros— que el navegador procesa en cada bloque aunque no suene nada, y
+   * quien nunca toca la bateria no tiene por que pagarlos. Y no se monta en el
+   * primer golpe, que seria lo comodo: construir cuatro sintetizadores es
+   * justamente lo que no se puede hacer en el instante en que la latencia
+   * importa. Se monta al encender el modo, que es cuando sobra tiempo.
+   */
+  setDrums(on: boolean): void {
+    if (!this.started || !this.limiter) return;
+    if (on === (this.drum !== null)) return;
+    if (on) {
+      this.drum = new DrumKit(this.limiter);
+      return;
+    }
+    this.drum?.dispose();
+    this.drum = null;
   }
 
   /** Un golpe de percusion. @param force de 0 a 1. */
