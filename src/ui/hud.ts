@@ -3,7 +3,7 @@ import { i18n, t } from '../i18n';
 import type { LoopState } from '../audio/looper';
 import type { PresetId } from '../audio/presets';
 import type { Runtime, Settings } from '../state/store';
-import { pitchHue } from './target';
+import { PIECE_HUE, pitchHue } from './target';
 
 /**
  * HUD: nota, volumen, timbre, manos y diagnostico.
@@ -204,7 +204,13 @@ export class Hud {
     const strings = t();
     const scale = getScale(settings.scale);
     const name = strings.scales[scale.id];
-    const sub = scale.degrees.length === 0 ? name : `${name} · ${strings.notes[settings.tonicPc] ?? '?'}`;
+    // En bateria no hay escala ni tonica que anunciar: lo que hay debajo de las
+    // manos son cuatro piezas, y eso es lo que tiene que decir el subtitulo.
+    const sub = settings.drums
+      ? strings.hud.kit
+      : scale.degrees.length === 0
+        ? name
+        : `${name} · ${strings.notes[settings.tonicPc] ?? '?'}`;
     if (sub !== this.last.sub) {
       this.noteSub.textContent = sub;
       this.last.sub = sub;
@@ -212,16 +218,31 @@ export class Hud {
   }
 
   update(runtime: Runtime, settings: Readonly<Settings>): void {
-    const noteName = runtime.melodyVisible || runtime.gateOpen ? midiToName(runtime.midi, t().notes) : '--';
+    // El nombre grande lo ocupa la pieza en bateria. Es el mismo sitio y la
+    // misma funcion —donde estoy— y por eso no se anade un panel aparte: dos
+    // rotulos grandes, uno de ellos siempre vacio, serian dos sitios donde
+    // mirar para una sola pregunta.
+    const noteName = settings.drums
+      ? runtime.piece
+        ? t().pieces[runtime.piece]
+        : '--'
+      : runtime.melodyVisible || runtime.gateOpen
+        ? midiToName(runtime.midi, t().notes)
+        : '--';
     if (noteName !== this.last.note) {
       this.note.textContent = noteName;
       this.last.note = noteName;
     }
-    if (runtime.gateOpen !== this.last.sounding) {
-      this.note.classList.toggle('sounding', runtime.gateOpen);
-      this.last.sounding = runtime.gateOpen;
+    // En bateria no hay nota abierta que encender: el golpe ya se ve en la
+    // salpicadura, y un rotulo que parpadea con cada corchea es un estorbo.
+    const sounding = settings.drums ? false : runtime.gateOpen;
+    if (sounding !== this.last.sounding) {
+      this.note.classList.toggle('sounding', sounding);
+      this.last.sounding = sounding;
     }
-    const hue = Math.round(pitchHue(runtime.midi));
+    const hue = Math.round(
+      settings.drums ? (runtime.piece ? PIECE_HUE[runtime.piece] : PIECE_HUE.snare) : pitchHue(runtime.midi),
+    );
     if (hue !== this.last.hue) {
       document.documentElement.style.setProperty('--note-hue', String(hue));
       this.last.hue = hue;
@@ -233,6 +254,11 @@ export class Hud {
       this.volumeValue.textContent = String(volumePct);
       this.last.volume = volumePct;
     }
+
+    // El timbre no existe en bateria: ni se elige con los dedos ni cambia nada
+    // de lo que suena. Un chip que anuncia "Theremin" debajo de un bombo es
+    // ruido, y encima invita a un gesto que ahi no hace nada.
+    if (this.presetChip.hidden !== settings.drums) this.presetChip.hidden = settings.drums;
 
     const presetName = t().presets[settings.preset];
     if (presetName !== this.last.preset) {
@@ -277,7 +303,11 @@ export class Hud {
       const text =
         `${runtime.fps.toFixed(0)} fps · ~${runtime.latencyMs.toFixed(0)} ms\n` +
         `inferencia ${runtime.inferenceMs.toFixed(1)} ms\n` +
-        `pinza ${runtime.pinchRatio.toFixed(2)} · ${runtime.freq.toFixed(1)} Hz` +
+        // La pinza y la frecuencia son de la nota, y en bateria no hay nota.
+        // Lo que importa ahi es el golpe: que pieza y con cuanta fuerza.
+        (settings.drums
+          ? `golpe ${runtime.piece ?? '--'} ${runtime.strikeForce.toFixed(2)}`
+          : `pinza ${runtime.pinchRatio.toFixed(2)} · ${runtime.freq.toFixed(1)} Hz`) +
         // El vibrato solo se escribe cuando lo hay: una linea que dice 0.00
         // durante toda la sesion es una linea que nadie vuelve a leer.
         (runtime.vibrato > 0.02 ? ` · vib ${runtime.vibrato.toFixed(2)}` : '') +

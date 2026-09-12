@@ -1,3 +1,4 @@
+import type { DrumPiece } from '../mapping/kit';
 import type { ScaleId } from '../mapping/scales';
 import type { PresetId } from '../audio/presets';
 import type { ClipAspect } from '../capture/recorder';
@@ -182,6 +183,16 @@ export interface Runtime {
   vibrato: number;
   /** MIDI de la nota actual. El HUD lo usa para colorear. */
   midi: number;
+  /**
+   * Ultima pieza golpeada en modo bateria, o null si aun no ha sonado ninguna.
+   *
+   * Se queda puesta despues del golpe en vez de volver a vacio, igual que el
+   * nombre de la nota se queda despues de soltarla: el panel dice en que estas,
+   * no lo que suena en este milisegundo.
+   */
+  piece: DrumPiece | null;
+  /** Fuerza del ultimo golpe, de 0 a 1. Solo para el panel de diagnostico. */
+  strikeForce: number;
   /** Timbre al que apuntan los dedos, aun sin confirmar. */
   presetCandidate: string | null;
   /** Lo que le falta a ese candidato para confirmarse, de 0 a 1. */
@@ -209,6 +220,8 @@ export const runtime: Runtime = {
   pinchRatio: 1,
   vibrato: 0,
   midi: 69,
+  piece: null,
+  strikeForce: 0,
   presetCandidate: null,
   presetProgress: 0,
   notice: null,

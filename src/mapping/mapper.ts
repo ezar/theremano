@@ -1,13 +1,14 @@
 import { OneEuroFilter, DEFAULT_D_CUTOFF } from '../filter/oneEuro';
-import { attackVelocity, depthFromSize, expressionFeatures, melodyFeatures, middlePinchRatio, palmCenter, palmSize, pinchRatio } from './features';
+import { attackVelocity, depthFromSize, expressionFeatures, melodyFeatures, middlePinchRatio, normalize, palmCenter, palmSize, pinchRatio } from './features';
 import { HoldGesture } from './holdGesture';
 import { ClosingSpeed } from './closingSpeed';
 import { VibratoDetector } from './vibrato';
 import { StrikeDetector } from './strike';
+import { pieceAt, type DrumPiece } from './kit';
 import { PinchGate, type GateEvent } from './gate';
 import { createLayout, isContinuous, pitchAt, type PitchLayout } from './scales';
 import { getPreset, presetForFingerCount, type Preset, type PresetId } from '../audio/presets';
-import type { RoleAssignment } from '../tracking/types';
+import type { Landmark, RoleAssignment } from '../tracking/types';
 import type { Settings } from '../state/store';
 
 /**
@@ -51,6 +52,15 @@ const SPACE_SMOOTHING = 0.6;
 const GATE_MIN_CUTOFF = 2.0;
 const GATE_BETA = 6.0;
 
+export interface DrumHit {
+  piece: DrumPiece;
+  /** Lo fuerte que ha entrado, de 0 a 1. */
+  force: number;
+  /** Donde ha caido, en espacio de vista y sin normalizar: la salpicadura va ahi. */
+  x: number;
+  y: number;
+}
+
 export interface MappingOutput {
   gateEvent: GateEvent;
   gateOpen: boolean;
@@ -88,12 +98,17 @@ export interface MappingOutput {
   /** Vibrato que pide el temblor de la mano, de 0 a 1. */
   vibrato: number;
   /**
-   * Fuerza del golpe de percusion en este fotograma, de 0 a 1, o 0 si no hay.
+   * Golpes de percusion entrados en este fotograma. Casi siempre vacio.
    *
-   * Solo en modo bateria. Es un evento y no un estado: vale mas que cero en el
-   * fotograma en que el golpe entra y en ninguno mas.
+   * Solo en modo bateria, y son eventos y no estado: existen en el fotograma en
+   * que el golpe entra y en ninguno mas. Van en lista porque las dos manos
+   * pueden caer a la vez, que no es un caso raro sino el principio de casi
+   * cualquier compas.
+   *
+   * El array se reutiliza entre fotogramas: a sesenta por segundo, devolver uno
+   * nuevo cada vez seria basura para el recolector a cambio de nada.
    */
-  strike: number;
+  strikes: readonly DrumHit[];
   /** Nota que sostiene el pedal, en Hz, o 0 si no hay ninguna. */
   drone: number;
   /** La misma, en MIDI, para escribirla y para colorearla. */
@@ -136,7 +151,10 @@ export class Mapper {
   private space = 0.5;
   private readonly closing = new ClosingSpeed();
   private readonly vibrato = new VibratoDetector();
-  private readonly strike = new StrikeDetector();
+  /** Un detector por mano: cada una golpea por su cuenta y en su banda. */
+  private readonly melodyStrike = new StrikeDetector();
+  private readonly expressionStrike = new StrikeDetector();
+  private readonly strikes: DrumHit[] = [];
   private drums: boolean;
   private lastTimestamp = -1;
   /** Fuerza de la nota que suena ahora, fijada en su ataque. */
@@ -209,7 +227,7 @@ export class Mapper {
     let gateEvent: GateEvent = null;
     let space = this.space;
     let loopGesture = false;
-    let strike = 0;
+    this.strikes.length = 0;
 
     if (melody) {
       const f = melodyFeatures(melody.hand.raw);
@@ -241,10 +259,7 @@ export class Mapper {
        */
       if (this.drums) {
         gateEvent = this.gate.forceClose();
-        // La altura sin recortar, no la del encuadre util: este ultimo se topa
-        // en los bordes, y un golpe que termina abajo del todo se quedaria sin
-        // velocidad justo en el unico momento que importa.
-        strike = this.strike.push(timestamp, palmCenter(melody.hand.raw).y);
+        this.pushStrike(this.melodyStrike, melody.hand.raw, timestamp);
       } else {
         gateEvent = this.gate.update(pinch);
       }
@@ -268,7 +283,7 @@ export class Mapper {
       this.spaceFilter.reset();
       this.closing.reset();
       this.vibrato.reset();
-      this.strike.reset();
+      this.melodyStrike.reset();
       this.lastTimestamp = -1;
     }
     this.space = space;
@@ -279,7 +294,15 @@ export class Mapper {
     if (expression) {
       const f = expressionFeatures(expression.hand.raw);
       fingerCount = f.fingers;
-      this.volume = 1 - this.volumeFilter.filter(f.y, timestamp);
+      /*
+       * En modo bateria esta mano tambien golpea, y entonces su altura no puede
+       * seguir mandando el volumen: bajarla es dar un golpe, asi que cada golpe
+       * subiria el volumen de todo lo demas. Se queda en el que haya puesto el
+       * ajuste, que ademas es lo unico coherente con que golpear mas fuerte sea
+       * ya la forma de sonar mas fuerte.
+       */
+      if (this.drums) this.pushStrike(this.expressionStrike, expression.hand.raw, timestamp);
+      else this.volume = 1 - this.volumeFilter.filter(f.y, timestamp);
 
       // El gesto de grabar no se acepta sobre una mano que solo se esta
       // sosteniendo: medio segundo de mano recordada bastaria para dispararlo.
@@ -302,7 +325,9 @@ export class Mapper {
        * puede hacer esto.
        */
       const droneEvent =
-        expression.held || this.loopHold.engaged
+        // Y en modo bateria no hay pedal: lo que sostendria es una nota de la
+        // melodia, que ahi no existe.
+        expression.held || this.loopHold.engaged || this.drums
           ? this.droneGate.forceClose()
           : this.droneGate.update(pinchRatio(expression.hand.raw));
       if (droneEvent === 'attack') {
@@ -323,8 +348,11 @@ export class Mapper {
        * de dedos extendidos baja uno, y sin esto pedir un bucle o poner un pedal
        * cambiaria el instrumento de paso.
        */
-      preset = this.loopHold.engaged || this.droneGate.isOpen ? null : this.confirmPreset(f.fingers, expression.held);
-      if (this.loopHold.engaged || this.droneGate.isOpen) this.candidateStreak = 0;
+      // Y en modo bateria tampoco: el timbre es el de la melodia, y ahi lo que
+      // hace la mano con los dedos mientras golpea no significa nada.
+      const busy = this.loopHold.engaged || this.droneGate.isOpen || this.drums;
+      preset = busy ? null : this.confirmPreset(f.fingers, expression.held);
+      if (busy) this.candidateStreak = 0;
     } else {
       // Sin mano de expresion se conservan volumen y timbre. Perder una mano
       // nunca debe silenciar el instrumento.
@@ -335,6 +363,7 @@ export class Mapper {
       this.droneGate.forceClose();
       this.droneFreq = 0;
       this.droneMidi = 0;
+      this.expressionStrike.reset();
     }
     this.lastTimestamp = timestamp;
 
@@ -351,7 +380,7 @@ export class Mapper {
       space,
       vibrato: this.vibrato.depth,
       vibratoRate: this.vibrato.rate,
-      strike,
+      strikes: this.strikes,
       drone: this.droneFreq,
       droneMidi: this.droneMidi,
       loopGesture,
@@ -365,6 +394,22 @@ export class Mapper {
       pinch,
       fingerCount,
     };
+  }
+
+  /**
+   * Mira si esa mano acaba de golpear, y sobre que pieza.
+   *
+   * Las dos coordenadas de la palma se tratan distinto a proposito. La altura va
+   * cruda, sin recortar al encuadre util: ese recorte se topa en los bordes, y
+   * un golpe que termina abajo del todo se quedaria sin velocidad justo en el
+   * unico momento que importa. La horizontal va normalizada, que es el espacio
+   * en el que se dibujan las bandas, para que la pieza que suene sea la que se
+   * ve debajo de la mano y no una vecina.
+   */
+  private pushStrike(detector: StrikeDetector, landmarks: readonly Landmark[], timestamp: number): void {
+    const palm = palmCenter(landmarks);
+    const force = detector.push(timestamp, palm.y);
+    if (force > 0) this.strikes.push({ piece: pieceAt(normalize(palm.x)), force, x: palm.x, y: palm.y });
   }
 
   /**

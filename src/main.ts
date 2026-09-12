@@ -203,7 +203,7 @@ class Theremano {
     i18n.subscribe(() => {
       applyStaticStrings();
       // applyStaticStrings devuelve el aviso a su version con camara.
-      if (this.mode === 'pointer') this.hud.setHint(t().hud.pointerHint);
+      this.applyHint();
       // applyStaticStrings devuelve los rotulos a su version normal, asi que la
       // invitacion hay que volver a ponerla despues de cada cambio de idioma.
       this.applyInvite();
@@ -588,6 +588,9 @@ class Theremano {
       gateOpen: output.gateOpen,
       volume: output.volume,
       loops: this.looper.state,
+      // La demostracion toca la melodia: ensena la escala aunque los ajustes
+      // esten en bateria, porque lo que se esta viendo es lo otro.
+      drums: false,
       // La marca de la rejilla senala la nota a la que va la mano: se ve el
       // destino antes que el movimiento, que es como se entiende el movimiento.
       targetZone: performance.zoneAt(elapsed),
@@ -891,13 +894,13 @@ class Theremano {
       // expresion: con el puntero no hay nada de eso, y un paso que no se puede
       // completar es peor que no tener introduccion. Se queda sin ver, asi que
       // aparecera entera el dia que se entre con camara.
-      if (mode === 'camera' && !this.store.get().onboarded) this.startOnboarding();
+      if (mode === 'camera' && !this.store.get().onboarded && !this.store.get().drums) this.startOnboarding();
       else if (mode === 'pointer') {
-        // El aviso de siempre habla de juntar los dedos: aqui no hay dedos que
-        // juntar.
-        this.hud.setHint(t().hud.pointerHint);
-        this.hud.toast(t().toast.pointerHint, 6000);
+        this.hud.toast(this.store.get().drums ? t().toast.drumPointerHint : t().toast.pointerHint, 6000);
       }
+      // El aviso de siempre habla de juntar los dedos, y en bateria no hay nada
+      // que juntar ni dedos con los que hacerlo.
+      this.applyHint();
       this.hideSplash();
 
       this.scheduleFrame();
@@ -1011,7 +1014,7 @@ class Theremano {
     else if (output.gateEvent === 'release') this.engine.release();
     // El golpe no espera a nada: es lo unico de este bucle que se oye tarde si
     // se atiende un fotograma despues.
-    if (output.strike > 0) this.engine.hit(output.strike);
+    for (const hit of output.strikes) this.engine.hit(hit.piece, hit.force);
 
     this.engine.setFrequency(output.freq, output.glide);
     this.engine.setCutoffNorm(output.cutoffNorm);
@@ -1074,6 +1077,7 @@ class Theremano {
       loops,
       targetZone: this.guide && !this.guide.finished ? this.guide.targetZone : null,
       drone: output.drone > 0 ? output.droneMidi : null,
+      drums: settings.drums,
       showRawTrace: settings.showRawTrace,
     };
 
@@ -1086,8 +1090,10 @@ class Theremano {
     }
     // El golpe tambien salpica: sin nada que ver, no hay forma de saber si lo
     // que llega tarde es el sonido o la deteccion.
-    if (output.strike > 0) {
-      this.overlay.attack(frame);
+    for (const hit of output.strikes) {
+      this.overlay.splash(hit.x, hit.y, hit.piece);
+      runtime.piece = hit.piece;
+      runtime.strikeForce = hit.force;
       this.hud.dismissHint();
     }
     this.overlay.update(frame, dt);
@@ -1295,6 +1301,19 @@ class Theremano {
    * lienzo que aun no se ha redimensionado tras girar el movil, deje ver la
    * habitacion por un borde.
    */
+  /**
+   * El aviso de abajo, que depende de dos cosas a la vez: de con que se toca
+   * —camara o puntero— y de si se esta golpeando o sosteniendo notas.
+   */
+  private applyHint(): void {
+    const strings = t().hud;
+    const drums = this.store.get().drums;
+    const pointer = this.mode === 'pointer';
+    this.hud.setHint(
+      drums ? (pointer ? strings.drumPointerHint : strings.drumHint) : pointer ? strings.pointerHint : strings.hint,
+    );
+  }
+
   private applyStageMode(mode: StageMode): void {
     this.video.classList.toggle('camera-hidden', mode === 'hands');
   }
@@ -1309,10 +1328,23 @@ class Theremano {
       changed.has('pitchBeta') ||
       changed.has('controlMinCutoff') ||
       changed.has('controlBeta') ||
-      changed.has('preset')
+      changed.has('preset') ||
+      // Sin esto, encender la bateria con el instrumento ya en marcha no llegaba
+      // al mapeador: solo funcionaba si la casilla estaba puesta antes de
+      // empezar, porque entonces lo leia el constructor.
+      changed.has('drums')
     ) {
       this.mapper.syncSettings(settings);
       this.hud.setSubtitle(settings);
+    }
+    if (changed.has('drums')) {
+      this.applyHint();
+      // La ultima pieza es de la sesion anterior de bateria: al volver a la
+      // melodia y regresar, el panel no debe abrir con un golpe que no se ha
+      // dado.
+      runtime.piece = null;
+      runtime.strikeForce = 0;
+      this.overlay.resetEffects();
     }
     if (changed.has('locale')) i18n.set(settings.locale);
     if (changed.has('melodyId')) this.syncGuide(settings.melodyId, { applySuggestedScale: true });
@@ -1334,6 +1366,7 @@ class Theremano {
     }
     if (changed.has('metronome')) this.looper.setMetronome(settings.metronome);
     if (changed.has('drums')) {
+      this.applyHint();
       this.mapper.syncSettings(settings);
       // Al salir del modo bateria, la nota que hubiera quedado abierta no existe;
       // al entrar, la que este sonando se cierra sola en el fotograma siguiente.

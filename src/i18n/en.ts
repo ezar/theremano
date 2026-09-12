@@ -5,6 +5,8 @@ export const en: Strings = {
   htmlLang: 'en',
   notes: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'],
 
+  pieces: { kick: 'kick', snare: 'snare', hat: 'hat', crash: 'crash' },
+
   splash: {
     tagline: 'An instrument you play with your hands in the air.',
     bullets: [
@@ -47,6 +49,8 @@ export const en: Strings = {
 
   hud: {
     hint: 'Pinch thumb and index finger to make it sound',
+    drumHint: 'Drop your hand sharply to hit. Each band is a piece',
+    drumPointerHint: 'Drop the pointer sharply to hit. Each band is a piece',
     pointerHint: 'Hold to make it sound',
     melodyDot: 'Melody hand',
     expressionDot: 'Expression hand',
@@ -57,6 +61,7 @@ export const en: Strings = {
     layer: (index) => `Layer ${index}`,
     layerMuted: 'Layer muted. Tap to bring it back.',
     layerActive: 'Tap to mute this layer.',
+    kit: 'drums · 4 pieces',
   },
 
   actions: {
@@ -221,8 +226,8 @@ export const en: Strings = {
     overlayCutoff: 'Overlay · minCutoff',
     overlayBeta: 'Overlay · beta',
     hudSection: 'HUD',
-    drums: 'Drum mode (testing)',
-    drumsHint: 'The hand stops holding notes and starts hitting: drop it sharply, as if onto an invisible drum head. One voice only, to measure whether the hit lands on time.',
+    drums: 'Drum mode',
+    drumsHint: 'Your hands stop holding notes and start hitting: drop one sharply, as if onto an invisible drum head. Four pieces spread across the frame — kick, snare, hat and crash — and each hand plays whichever is under it.',
     metronome: 'Metronome',
     metronomeHint: 'Keeps the beat while the loop goes round, so you can come in on time on the next layer. The loop divides its own beats, so it never drifts away from it. Key M.',
     showDiagnostics: 'Show fps and latency',
@@ -232,6 +237,7 @@ export const en: Strings = {
 
   toast: {
     pointerHint: 'Move the pointer to pick the note and hold to make it sound.',
+    drumPointerHint: 'Drop the pointer sharply to hit. Each band is a piece of the kit.',
     drone: (note: string) => `Drone note: ${note}`,
     metronomeOn: 'Metronome on',
     metronomeOff: 'Metronome off',

@@ -5,6 +5,8 @@ export const es: Strings = {
   htmlLang: 'es',
   notes: ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'],
 
+  pieces: { kick: 'bombo', snare: 'caja', hat: 'charles', crash: 'plato' },
+
   splash: {
     tagline: 'Un instrumento que se toca con las manos en el aire.',
     bullets: [
@@ -47,6 +49,8 @@ export const es: Strings = {
 
   hud: {
     hint: 'Junta el pulgar y el índice para que suene',
+    drumHint: 'Baja la mano de golpe para golpear. Cada banda es una pieza',
+    drumPointerHint: 'Baja el puntero de golpe para golpear. Cada banda es una pieza',
     pointerHint: 'Mantén pulsado para que suene',
     melodyDot: 'Mano de melodía',
     expressionDot: 'Mano de expresión',
@@ -57,6 +61,7 @@ export const es: Strings = {
     layer: (index) => `Capa ${index}`,
     layerMuted: 'Capa silenciada. Pulsa para activarla.',
     layerActive: 'Pulsa para silenciar esta capa.',
+    kit: 'bateria · 4 piezas',
   },
 
   actions: {
@@ -221,8 +226,8 @@ export const es: Strings = {
     overlayCutoff: 'Overlay · minCutoff',
     overlayBeta: 'Overlay · beta',
     hudSection: 'HUD',
-    drums: 'Modo batería (en pruebas)',
-    drumsHint: 'La mano deja de sostener notas y golpea: baja de golpe, como sobre un parche invisible. Una sola voz, para medir si el golpe llega a tiempo.',
+    drums: 'Modo batería',
+    drumsHint: 'Las manos dejan de sostener notas y golpean: baja de golpe, como sobre un parche invisible. Cuatro piezas repartidas a lo ancho —bombo, caja, charles y plato— y golpea cada mano la que tiene debajo.',
     metronome: 'Claqueta continua',
     metronomeHint: 'Marca el pulso mientras gira el bucle, para poder entrar a tiempo en la capa siguiente. La vuelta reparte sus propios pulsos, así que nunca se separa de ella. Tecla M.',
     showDiagnostics: 'Mostrar fps y latencia',
@@ -232,6 +237,7 @@ export const es: Strings = {
 
   toast: {
     pointerHint: 'Mueve el puntero para elegir la nota y mantén pulsado para que suene.',
+    drumPointerHint: 'Baja el puntero de golpe para golpear. Cada banda es una pieza de la batería.',
     drone: (note: string) => `Nota pedal: ${note}`,
     metronomeOn: 'Claqueta activada',
     metronomeOff: 'Claqueta desactivada',
