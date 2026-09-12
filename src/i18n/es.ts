@@ -221,6 +221,8 @@ export const es: Strings = {
     overlayCutoff: 'Overlay · minCutoff',
     overlayBeta: 'Overlay · beta',
     hudSection: 'HUD',
+    drums: 'Modo batería (en pruebas)',
+    drumsHint: 'La mano deja de sostener notas y golpea: baja de golpe, como sobre un parche invisible. Una sola voz, para medir si el golpe llega a tiempo.',
     metronome: 'Claqueta continua',
     metronomeHint: 'Marca el pulso mientras gira el bucle, para poder entrar a tiempo en la capa siguiente. La vuelta reparte sus propios pulsos, así que nunca se separa de ella. Tecla M.',
     showDiagnostics: 'Mostrar fps y latencia',

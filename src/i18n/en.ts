@@ -221,6 +221,8 @@ export const en: Strings = {
     overlayCutoff: 'Overlay · minCutoff',
     overlayBeta: 'Overlay · beta',
     hudSection: 'HUD',
+    drums: 'Drum mode (testing)',
+    drumsHint: 'The hand stops holding notes and starts hitting: drop it sharply, as if onto an invisible drum head. One voice only, to measure whether the hit lands on time.',
     metronome: 'Metronome',
     metronomeHint: 'Keeps the beat while the loop goes round, so you can come in on time on the next layer. The loop divides its own beats, so it never drifts away from it. Key M.',
     showDiagnostics: 'Show fps and latency',

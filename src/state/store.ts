@@ -47,6 +47,13 @@ export interface Settings {
   stageMode: StageMode;
   /** Claqueta continua mientras gira el bucle. */
   metronome: boolean;
+  /**
+   * Modo bateria: la mano golpea en lugar de sostener notas.
+   *
+   * De momento una sola voz y un tanteo: lo que se esta midiendo es si un golpe
+   * dado en el aire llega a tiempo al altavoz.
+   */
+  drums: boolean;
   /** Melodia guiada activa. Cadena vacia si no hay ninguna. */
   melodyId: string;
   /** true en cuanto se ha visto la introduccion, se complete o se salte. */
@@ -75,6 +82,7 @@ export const DEFAULT_SETTINGS: Settings = {
   clipAspect: 'vertical',
   stageMode: 'camera',
   metronome: false,
+  drums: false,
   melodyId: '',
   onboarded: false,
   locale: 'auto',

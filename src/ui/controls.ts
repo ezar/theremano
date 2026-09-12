@@ -217,6 +217,8 @@ export class Controls {
     );
     this.hint(s.baseVolumeHint);
 
+    this.checkbox('drums', s.drums, (x) => x.drums, (v) => this.deps.store.set({ drums: v }));
+    this.hint(s.drumsHint);
     this.checkbox('metronome', s.metronome, (x) => x.metronome, (v) => this.deps.store.set({ metronome: v }));
     this.hint(s.metronomeHint);
 

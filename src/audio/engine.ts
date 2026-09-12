@@ -1,4 +1,5 @@
 import * as Tone from 'tone';
+import { DrumVoice } from './drums';
 import { getPreset, type Preset, type PresetId } from './presets';
 
 /**
@@ -88,6 +89,7 @@ export class AudioEngine {
   private lastVibratoRate = -1;
   private drone: Tone.Synth | null = null;
   private droneFreq = 0;
+  private drum: DrumVoice | null = null;
   private lastGain = 0;
   private targetVolume = 0.75;
   private muted = false;
@@ -161,6 +163,8 @@ export class AudioEngine {
       envelope: this.droneEnvelope(),
       portamento: 0,
     }).connect(this.droneGain);
+
+    this.drum = new DrumVoice(this.limiter);
 
     this.lastCutoff = 2000;
     this.lastSpace = -1;
@@ -330,6 +334,11 @@ export class AudioEngine {
     if (this.droneFreq > 0) this.drone.triggerRelease();
     this.droneFreq = hz;
     this.drone.triggerAttack(hz, undefined, 1);
+  }
+
+  /** Un golpe de percusion. @param force de 0 a 1. */
+  hit(force: number): void {
+    this.drum?.hit(force);
   }
 
   /** Envolvente del pedal: la del timbre, pero nunca mas rapida que esto. */

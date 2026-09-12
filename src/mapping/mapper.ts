@@ -1,8 +1,9 @@
 import { OneEuroFilter, DEFAULT_D_CUTOFF } from '../filter/oneEuro';
-import { attackVelocity, depthFromSize, expressionFeatures, melodyFeatures, middlePinchRatio, palmSize, pinchRatio } from './features';
+import { attackVelocity, depthFromSize, expressionFeatures, melodyFeatures, middlePinchRatio, palmCenter, palmSize, pinchRatio } from './features';
 import { HoldGesture } from './holdGesture';
 import { ClosingSpeed } from './closingSpeed';
 import { VibratoDetector } from './vibrato';
+import { StrikeDetector } from './strike';
 import { PinchGate, type GateEvent } from './gate';
 import { createLayout, isContinuous, pitchAt, type PitchLayout } from './scales';
 import { getPreset, presetForFingerCount, type Preset, type PresetId } from '../audio/presets';
@@ -86,6 +87,13 @@ export interface MappingOutput {
   space: number;
   /** Vibrato que pide el temblor de la mano, de 0 a 1. */
   vibrato: number;
+  /**
+   * Fuerza del golpe de percusion en este fotograma, de 0 a 1, o 0 si no hay.
+   *
+   * Solo en modo bateria. Es un evento y no un estado: vale mas que cero en el
+   * fotograma en que el golpe entra y en ninguno mas.
+   */
+  strike: number;
   /** Nota que sostiene el pedal, en Hz, o 0 si no hay ninguna. */
   drone: number;
   /** La misma, en MIDI, para escribirla y para colorearla. */
@@ -128,6 +136,8 @@ export class Mapper {
   private space = 0.5;
   private readonly closing = new ClosingSpeed();
   private readonly vibrato = new VibratoDetector();
+  private readonly strike = new StrikeDetector();
+  private drums: boolean;
   private lastTimestamp = -1;
   /** Fuerza de la nota que suena ahora, fijada en su ataque. */
   private velocity = 1;
@@ -151,6 +161,7 @@ export class Mapper {
     this.spaceFilter = new OneEuroFilter({ ...control, minCutoff: control.minCutoff * SPACE_SMOOTHING });
     this.volume = settings.masterVolume;
     this.currentPreset = getPreset(settings.preset);
+    this.drums = settings.drums;
   }
 
   /** Se llama solo cuando cambian los ajustes, no por fotograma. */
@@ -162,6 +173,7 @@ export class Mapper {
     this.volumeFilter.setParams(control);
     this.spaceFilter.setParams({ ...control, minCutoff: control.minCutoff * SPACE_SMOOTHING });
     this.currentPreset = getPreset(settings.preset);
+    this.drums = settings.drums;
   }
 
   get currentLayout(): PitchLayout {
@@ -197,6 +209,7 @@ export class Mapper {
     let gateEvent: GateEvent = null;
     let space = this.space;
     let loopGesture = false;
+    let strike = 0;
 
     if (melody) {
       const f = melodyFeatures(melody.hand.raw);
@@ -221,7 +234,20 @@ export class Mapper {
        */
       this.vibrato.push(timestamp, f.x);
 
-      gateEvent = this.gate.update(pinch);
+      /*
+       * En modo bateria la pinza no abre ninguna nota: lo que suena es el golpe,
+       * y una nota sostenida por debajo seria una segunda cosa sonando sin que
+       * nadie la haya pedido. El gate se fuerza cerrado en cuanto se entra.
+       */
+      if (this.drums) {
+        gateEvent = this.gate.forceClose();
+        // La altura sin recortar, no la del encuadre util: este ultimo se topa
+        // en los bordes, y un golpe que termina abajo del todo se quedaria sin
+        // velocidad justo en el unico momento que importa.
+        strike = this.strike.push(timestamp, palmCenter(melody.hand.raw).y);
+      } else {
+        gateEvent = this.gate.update(pinch);
+      }
       // La fuerza se fija en el ataque y dura toda la nota. Recalcularla por
       // fotograma convertiria un matiz de entrada en un temblor de volumen.
       if (gateEvent === 'attack') this.velocity = attackVelocity(this.closing.speed);
@@ -242,6 +268,7 @@ export class Mapper {
       this.spaceFilter.reset();
       this.closing.reset();
       this.vibrato.reset();
+      this.strike.reset();
       this.lastTimestamp = -1;
     }
     this.space = space;
@@ -324,6 +351,7 @@ export class Mapper {
       space,
       vibrato: this.vibrato.depth,
       vibratoRate: this.vibrato.rate,
+      strike,
       drone: this.droneFreq,
       droneMidi: this.droneMidi,
       loopGesture,

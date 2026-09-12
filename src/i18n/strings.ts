@@ -156,6 +156,9 @@ export interface Strings {
     overlayCutoff: string;
     overlayBeta: string;
     hudSection: string;
+    /** Tanteo del modo bateria: una voz y un gesto. */
+    drums: string;
+    drumsHint: string;
     /** Claqueta continua mientras gira el bucle. */
     metronome: string;
     metronomeHint: string;

@@ -1009,6 +1009,9 @@ class Theremano {
     // de este bucle que el oido percibe como instantaneo o como tarde.
     if (output.gateEvent === 'attack') this.engine.attack(output.freq);
     else if (output.gateEvent === 'release') this.engine.release();
+    // El golpe no espera a nada: es lo unico de este bucle que se oye tarde si
+    // se atiende un fotograma despues.
+    if (output.strike > 0) this.engine.hit(output.strike);
 
     this.engine.setFrequency(output.freq, output.glide);
     this.engine.setCutoffNorm(output.cutoffNorm);
@@ -1080,6 +1083,12 @@ class Theremano {
       this.overlay.attack(frame);
       this.hud.dismissHint();
       this.scoreGuide(output.zoneIndex);
+    }
+    // El golpe tambien salpica: sin nada que ver, no hay forma de saber si lo
+    // que llega tarde es el sonido o la deteccion.
+    if (output.strike > 0) {
+      this.overlay.attack(frame);
+      this.hud.dismissHint();
     }
     this.overlay.update(frame, dt);
 
@@ -1324,6 +1333,12 @@ class Theremano {
       this.guide.relayout(this.mapper.currentLayout);
     }
     if (changed.has('metronome')) this.looper.setMetronome(settings.metronome);
+    if (changed.has('drums')) {
+      this.mapper.syncSettings(settings);
+      // Al salir del modo bateria, la nota que hubiera quedado abierta no existe;
+      // al entrar, la que este sonando se cierra sola en el fotograma siguiente.
+      if (this.mapper.silence() === 'release') this.engine.release();
+    }
     if (changed.has('preset')) this.engine.setPreset(getPreset(settings.preset));
     if (changed.has('masterVolume')) this.mapper.setVolume(settings.masterVolume);
     if (changed.has('stageMode')) this.applyStageMode(settings.stageMode);
