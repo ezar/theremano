@@ -86,6 +86,10 @@ export interface MappingOutput {
   space: number;
   /** Vibrato que pide el temblor de la mano, de 0 a 1. */
   vibrato: number;
+  /** Nota que sostiene el pedal, en Hz, o 0 si no hay ninguna. */
+  drone: number;
+  /** La misma, en MIDI, para escribirla y para colorearla. */
+  droneMidi: number;
   /** A que ritmo oscila esa mano, en hercios, o 0 si no oscila. */
   vibratoRate: number;
   /** true en el fotograma en que el gesto de grabar se completa. */
@@ -112,6 +116,14 @@ export class Mapper {
   private candidateFingers = 0;
   private candidateStreak = 0;
   private readonly loopHold = new HoldGesture();
+  /**
+   * El pedal usa la misma pinza que la nota —pulgar contra indice— pero en la
+   * otra mano, con la misma histeresis y la misma confirmacion. Es el mismo
+   * gesto y tiene que costar lo mismo.
+   */
+  private readonly droneGate = new PinchGate();
+  private droneFreq = 0;
+  private droneMidi = 0;
   private readonly spaceFilter: OneEuroFilter;
   private space = 0.5;
   private readonly closing = new ClosingSpeed();
@@ -161,8 +173,15 @@ export class Mapper {
     this.volumeFilter.reset();
   }
 
-  /** Cierra el gate de inmediato. Para perdida de foco o parada del instrumento. */
+  /**
+   * Cierra el gate de inmediato, y con el la nota pedal. Para perdida de foco o
+   * parada del instrumento: una nota sostenida por una mano que ya no esta
+   * mirando nadie es exactamente lo que no puede quedarse sonando.
+   */
   silence(): GateEvent {
+    this.droneGate.forceClose();
+    this.droneFreq = 0;
+    this.droneMidi = 0;
     return this.gate.forceClose();
   }
 
@@ -250,20 +269,45 @@ export class Mapper {
       }
 
       /*
+       * La nota pedal. Se ignora mientras el gesto de grabar esta en marcha: el
+       * pulgar pasa cerca del indice de camino al corazon, y un pedal que se
+       * enciende solo al pedir un bucle es de las cosas mas desconcertantes que
+       * puede hacer esto.
+       */
+      const droneEvent =
+        expression.held || this.loopHold.engaged
+          ? this.droneGate.forceClose()
+          : this.droneGate.update(pinchRatio(expression.hand.raw));
+      if (droneEvent === 'attack') {
+        // Se sostiene lo que esta sonando, no lo que hay debajo de la otra mano:
+        // si no hay nota, no hay nada que sostener y el gesto no hace nada.
+        this.droneFreq = this.gate.isOpen ? this.lastFreq : 0;
+        this.droneMidi = this.gate.isOpen ? this.lastMidi : 0;
+      } else if (droneEvent === 'release') {
+        this.droneFreq = 0;
+        this.droneMidi = 0;
+      }
+
+      /*
        * Mientras el gesto esta en marcha no se cambia de timbre.
        *
-       * Al juntar pulgar y corazon, el corazon se dobla y el recuento de dedos
-       * extendidos baja uno. Sin esto, pedir un bucle cambiaria el instrumento
-       * de paso, que es de las cosas mas desconcertantes que puede hacer.
+       * Vale para los dos: al juntar pulgar y corazon el corazon se dobla, y al
+       * juntar pulgar e indice se dobla el indice. En los dos casos el recuento
+       * de dedos extendidos baja uno, y sin esto pedir un bucle o poner un pedal
+       * cambiaria el instrumento de paso.
        */
-      preset = this.loopHold.engaged ? null : this.confirmPreset(f.fingers, expression.held);
-      if (this.loopHold.engaged) this.candidateStreak = 0;
+      preset = this.loopHold.engaged || this.droneGate.isOpen ? null : this.confirmPreset(f.fingers, expression.held);
+      if (this.loopHold.engaged || this.droneGate.isOpen) this.candidateStreak = 0;
     } else {
       // Sin mano de expresion se conservan volumen y timbre. Perder una mano
       // nunca debe silenciar el instrumento.
       this.volumeFilter.reset();
       this.candidateStreak = 0;
       this.loopHold.reset();
+      // El pedal lo sostiene esa mano: si la mano se va del todo, se va con ella.
+      this.droneGate.forceClose();
+      this.droneFreq = 0;
+      this.droneMidi = 0;
     }
     this.lastTimestamp = timestamp;
 
@@ -280,6 +324,8 @@ export class Mapper {
       space,
       vibrato: this.vibrato.depth,
       vibratoRate: this.vibrato.rate,
+      drone: this.droneFreq,
+      droneMidi: this.droneMidi,
       loopGesture,
       loopGestureProgress: this.loopHold.progress,
       preset,

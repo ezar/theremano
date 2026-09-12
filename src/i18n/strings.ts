@@ -156,6 +156,9 @@ export interface Strings {
     overlayCutoff: string;
     overlayBeta: string;
     hudSection: string;
+    /** Claqueta continua mientras gira el bucle. */
+    metronome: string;
+    metronomeHint: string;
     showDiagnostics: string;
     showRawTrace: string;
     reset: string;
@@ -164,6 +167,10 @@ export interface Strings {
   toast: {
     /** Como se toca con el puntero. Se dice una vez, al entrar. */
     pointerHint: string;
+    /** Que nota se ha quedado sostenida con la otra mano. */
+    drone: (note: string) => string;
+    metronomeOn: string;
+    metronomeOff: string;
     countIn: string;
     countInCancelled: string;
     layerRecording: string;

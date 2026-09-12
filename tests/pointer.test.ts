@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { JUMP, PRESS_SECONDS, PointerPlayer } from '../src/mapping/pointer';
-import { CLOSED_PINCH, OPEN_PINCH, drawnScale, phantomHand } from '../src/tracking/phantom';
+import { CLOSED_PINCH, OPEN_PINCH, drawnScale, phantomHand, type HandPose } from '../src/tracking/phantom';
 import { PINCH_CLOSE, PINCH_OPEN } from '../src/mapping/gate';
 import { Mapper } from '../src/mapping/mapper';
 import { denormalize } from '../src/mapping/features';
@@ -28,6 +28,7 @@ class Session {
   readonly attacks: number[] = [];
   releases = 0;
   gain = 0;
+  drone = 0;
   private seconds = 0;
 
   /** Donde cae una zona de la escala en el encuadre, en espacio de vista. */
@@ -46,25 +47,22 @@ class Session {
     for (let frame = 0; frame < Math.round(seconds * fps); frame += 1) {
       this.seconds += dt;
       const pose = this.player.update(dt);
-      const assignment: RoleAssignment = pose
-        ? {
-            melody: {
-              hand: (() => {
-                const landmarks = phantomHand({ ...pose, aspect: ASPECT, scale: drawnScale(ASPECT) });
-                return { landmarks, raw: landmarks };
-              })(),
-              held: false,
-              heldFor: 0,
-            },
-            expression: null,
-          }
-        : { melody: null, expression: null };
+      const second = this.player.expression;
+      const drawn = (hand: HandPose) => {
+        const landmarks = phantomHand({ ...hand, aspect: ASPECT, scale: drawnScale(ASPECT) });
+        return { hand: { landmarks, raw: landmarks }, held: false, heldFor: 0 };
+      };
+      const assignment: RoleAssignment = {
+        melody: pose ? drawn(pose) : null,
+        expression: second ? drawn(second) : null,
+      };
       const output = this.mapper.update(assignment, this.seconds);
       if (output.gateEvent === 'attack') {
         this.attacks.push(output.midi);
         this.gain = output.gain;
       }
       if (output.gateEvent === 'release') this.releases += 1;
+      this.drone = output.drone;
     }
   }
 }
@@ -177,6 +175,44 @@ describe('puntero', () => {
     player.release();
     for (let frame = 0; frame < 20; frame += 1) player.update(1 / 60);
     expect(player.update(1 / 60)?.pinch).toBe(OPEN_PINCH);
+  });
+
+  it('un segundo dedo deja la nota sostenida de pedal', () => {
+    // Con camara son dos manos; aqui son dos dedos, y hacen lo mismo: la segunda
+    // mano entra por el mismo sitio y el pedal lo decide el mismo gesto.
+    const session = new Session();
+    session.player.press(session.zone(3), 0.5);
+    session.advance(0.3);
+    const sounding = session.attacks[0]!;
+    expect(session.drone).toBe(0);
+
+    session.player.pressSecond(0.2, 0.5);
+    session.advance(0.2);
+    expect(session.drone).toBeGreaterThan(0);
+
+    // Y sigue puesta cuando el primer dedo se levanta y se va a otra nota.
+    session.player.release();
+    session.advance(0.2);
+    session.player.press(session.zone(8), 0.5);
+    session.advance(0.3);
+    expect(session.attacks).toEqual([sounding, session.midi(8)]);
+    expect(session.drone, 'el pedal no se mueve con la melodia').toBeGreaterThan(0);
+
+    session.player.releaseSecond();
+    session.advance(0.2);
+    expect(session.drone).toBe(0);
+  });
+
+  it('el segundo dedo es una mano con la pinza ya cerrada', () => {
+    const player = new PointerPlayer();
+    expect(player.expression).toBeNull();
+    player.pressSecond(0.3, 0.7);
+    expect(player.expression?.pinch).toBe(CLOSED_PINCH);
+    expect(player.expression?.x).toBe(0.3);
+    player.moveSecond(0.4, 0.6);
+    expect(player.expression?.x).toBe(0.4);
+    player.releaseSecond();
+    expect(player.expression).toBeNull();
   });
 
   it('la mano cabe en el encuadre en la nota mas grave', () => {

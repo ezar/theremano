@@ -14,10 +14,12 @@ import { applyStaticStrings } from './ui/static';
 import { Camera, HIGH_RES, LOW_RES, attachStream, type CameraInfo } from './camera/stream';
 import { LandmarkFilter } from './filter/vectorFilter';
 import { Mapper } from './mapping/mapper';
+import { midiToName } from './mapping/scales';
+import { denormalize } from './mapping/features';
 import { drawnScale, phantomHand, type HandPose } from './tracking/phantom';
 import { RoleTracker } from './tracking/handedness';
 import { Landmarker } from './tracking/landmarker';
-import type { HandFrame, RoleAssignment } from './tracking/types';
+import type { HandFrame, RoleAssignment, TrackedHand } from './tracking/types';
 import { CoachView } from './ui/coach';
 import { Controls } from './ui/controls';
 import { Help } from './ui/help';
@@ -42,6 +44,19 @@ import { SettingsStore, runtime, type Settings, type StageMode } from './state/s
  * el raton o el dedo en lugar de una detectada por la camara.
  */
 type PlayMode = 'camera' | 'pointer';
+
+/** El boton derecho del raton dentro del mapa de botones de PointerEvent. */
+const RIGHT_BUTTONS = 2;
+
+/**
+ * Lo que se separa la segunda mano del raton de la primera.
+ *
+ * Con un raton hay un solo puntero para dos manos, asi que la de expresion se
+ * dibuja al lado en vez de encima: dos esqueletos superpuestos en el mismo punto
+ * no se leen como dos manos, se leen como un error de dibujo. Se pone al lado
+ * que tenga sitio.
+ */
+const MOUSE_HAND_GAP = 0.2;
 
 /** Debajo de esto, de forma sostenida, se baja la resolucion pedida. */
 const LOW_FPS_THRESHOLD = 20;
@@ -128,8 +143,13 @@ class Theremano {
   private listening = false;
   private mode: PlayMode = 'camera';
   private readonly pointer = new PointerPlayer();
-  /** El dedo o el boton que manda ahora mismo. Solo uno a la vez. */
+  /** El dedo o el boton que toca la melodia. */
   private activePointer: number | null = null;
+  /** El segundo dedo, que hace de mano de expresion. */
+  private secondPointer: number | null = null;
+
+  /** Nota pedal que suena ahora mismo, en Hz. */
+  private drone = 0;
 
   /** La demostracion en marcha, o null. */
   private demo: DemoPerformance | null = null;
@@ -253,6 +273,8 @@ class Theremano {
         void this.toggleClip();
       } else if (event.key.toLowerCase() === 'z') {
         this.looper.undo();
+      } else if (event.key.toLowerCase() === 'm') {
+        this.toggleMetronome();
       } else if (event.key.toLowerCase() === 'v' && this.mode === 'camera') {
         // Sin camara no hay nada que ocultar: el fondo ya es el propio.
         this.toggleStageMode();
@@ -274,6 +296,18 @@ class Theremano {
     // dispara aunque no sea texto que nadie vaya a leer.
     const message = handsOnly ? t().toast.stageHands : t().toast.stageCamera;
     this.store.set({ stageMode: handsOnly ? 'hands' : 'camera' });
+    this.hud.toast(message);
+  }
+
+  /**
+   * La claqueta continua, que es la que permite entrar a tiempo en la capa
+   * siguiente. Tiene tecla propia porque se enciende y se apaga en mitad de una
+   * grabacion, y abrir los ajustes ahi es abrir los ajustes en mitad de una toma.
+   */
+  private toggleMetronome(): void {
+    const on = !this.store.get().metronome;
+    const message = on ? t().toast.metronomeOn : t().toast.metronomeOff;
+    this.store.set({ metronome: on });
     this.hud.toast(message);
   }
 
@@ -442,6 +476,9 @@ class Theremano {
       // instante en vez de despues de descargar catorce megas de modelo.
       await this.engine.start(settings.preset, settings.masterVolume);
       this.looper.attach(this.engine.loopOutput);
+      // La claqueta se guarda entre sesiones, y el bucle de fotogramas solo
+      // entera al looper de los cambios: la primera vez hay que decirselo.
+      this.looper.setMetronome(settings.metronome);
       if (!this.looper.load(performance.tracks, performance.cycleSeconds)) {
         this.showSplashError(t().toast.performanceBroken);
         return;
@@ -529,7 +566,10 @@ class Theremano {
     const seconds = now / 1000;
 
     const target = this.overlay.screenTarget;
-    const assignment = this.drawnHand(performance.poseAt(elapsed), target.width / target.height);
+    const assignment: RoleAssignment = {
+      melody: this.drawnHand(performance.poseAt(elapsed), target.width / target.height),
+      expression: null,
+    };
 
     const output = this.mapper.update(assignment, seconds);
     if (output.gateEvent === 'attack') this.engine.attack(output.freq);
@@ -551,6 +591,7 @@ class Theremano {
       // La marca de la rejilla senala la nota a la que va la mano: se ve el
       // destino antes que el movimiento, que es como se entiende el movimiento.
       targetZone: performance.zoneAt(elapsed),
+      drone: null,
       showRawTrace: false,
     };
 
@@ -576,13 +617,13 @@ class Theremano {
    * el puntero, que la mueve quien toca. Que compartan esta funcion es lo que
    * garantiza que las dos suenan igual.
    */
-  private drawnHand(pose: HandPose, aspect: number): RoleAssignment {
+  private drawnHand(pose: HandPose, aspect: number): TrackedHand {
     // El lienzo puede no estar medido todavia, y una proporcion de cero o de
     // infinito deja la mano en coordenadas que no existen.
     const safe = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
     const landmarks = phantomHand({ ...pose, aspect: safe, scale: drawnScale(safe) });
     const hand: HandFrame = { landmarks, raw: landmarks };
-    return { melody: { hand, held: false, heldFor: 0 }, expression: null };
+    return { hand, held: false, heldFor: 0 };
   }
 
   // --------------------------------------------------------------- puntero
@@ -592,8 +633,12 @@ class Theremano {
    *
    * Se escucha en el lienzo y no en la pantalla entera para que los botones del
    * HUD, que estan por encima, sigan siendo botones: pulsar "grabar" no puede
-   * tocar una nota de paso. Y solo un puntero a la vez: un segundo dedo apoyado
-   * en la pantalla no mueve la mano.
+   * tocar una nota de paso.
+   *
+   * Dos punteros, no uno: el primero toca la melodia y el segundo hace de mano
+   * de expresion, que es la que pone la nota pedal. Con raton, el segundo es el
+   * boton derecho; con los dedos, el segundo dedo. Es la misma reparticion que
+   * con camara, con dedos en lugar de manos.
    */
   private bindPointer(): void {
     const canvas = must<HTMLCanvasElement>('overlay');
@@ -604,34 +649,98 @@ class Theremano {
         y: rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0.5,
       };
     };
+
+    /**
+     * La segunda mano del raton, que va por el boton derecho.
+     *
+     * Se decide mirando el mapa de botones y no el evento: pulsar un segundo
+     * boton con otro ya pulsado no genera otro `pointerdown`, sino un
+     * `pointermove` con el mapa actualizado. Mirar solo los pointerdown dejaba
+     * el boton derecho sin hacer nada de nada.
+     */
+    const syncMouseSecond = (event: PointerEvent): void => {
+      const held = (event.buttons & RIGHT_BUTTONS) !== 0;
+      const point = at(event);
+      // A la altura que ya tiene el volumen: con camara, la mano de expresion lo
+      // manda con su altura, pero aqui esa mano no tiene altura propia —va donde
+      // va el raton— y poner un pedal no puede cambiar el volumen de paso.
+      const beside = {
+        x: point.x > 0.5 ? point.x - MOUSE_HAND_GAP : point.x + MOUSE_HAND_GAP,
+        y: denormalize(1 - runtime.volume),
+      };
+      if (held && this.secondPointer === null) {
+        this.secondPointer = event.pointerId;
+        this.pointer.pressSecond(beside.x, beside.y);
+      } else if (held && this.secondPointer === event.pointerId) {
+        this.pointer.moveSecond(beside.x, beside.y);
+      } else if (!held && this.secondPointer === event.pointerId && this.activePointer === event.pointerId) {
+        this.secondPointer = null;
+        this.pointer.releaseSecond();
+      }
+    };
+
     const lift = (event: PointerEvent): void => {
+      if (this.secondPointer === event.pointerId && this.activePointer !== event.pointerId) {
+        this.secondPointer = null;
+        this.pointer.releaseSecond();
+        return;
+      }
       if (event.pointerId !== this.activePointer) return;
       this.activePointer = null;
       this.pointer.release();
+      // Con raton, los dos "dedos" comparten identificador: al levantar la mano
+      // se levantan los dos.
+      if (this.secondPointer === event.pointerId) {
+        this.secondPointer = null;
+        this.pointer.releaseSecond();
+      }
     };
 
     canvas.addEventListener('pointerdown', (event) => {
-      if (this.mode !== 'pointer' || !runtime.running || this.activePointer !== null) return;
-      this.activePointer = event.pointerId;
+      if (this.mode !== 'pointer' || !runtime.running) return;
+      const point = at(event);
       // Con la captura, arrastrar fuera del lienzo sigue tocando en lugar de
       // dejar la nota colgada.
       canvas.setPointerCapture(event.pointerId);
-      const point = at(event);
-      this.pointer.press(point.x, point.y);
-      this.hud.dismissHint();
+      if (this.activePointer === null && (event.buttons & RIGHT_BUTTONS) === 0) {
+        this.activePointer = event.pointerId;
+        this.pointer.press(point.x, point.y);
+        this.hud.dismissHint();
+        return;
+      }
+      // Un segundo dedo apoyado es la mano de expresion, la que pone el pedal.
+      if (this.secondPointer === null && event.pointerId !== this.activePointer) {
+        this.secondPointer = event.pointerId;
+        this.pointer.pressSecond(point.x, point.y);
+        return;
+      }
+      syncMouseSecond(event);
     });
+
     canvas.addEventListener('pointermove', (event) => {
       if (this.mode !== 'pointer' || !runtime.running) return;
-      if (this.activePointer !== null && event.pointerId !== this.activePointer) return;
       const point = at(event);
+      if (this.secondPointer === event.pointerId && this.activePointer !== event.pointerId) {
+        this.pointer.moveSecond(point.x, point.y);
+        return;
+      }
+      if (this.activePointer !== null && event.pointerId !== this.activePointer) return;
       this.pointer.moveTo(point.x, point.y);
+      syncMouseSecond(event);
     });
+
     canvas.addEventListener('pointerup', lift);
     canvas.addEventListener('pointercancel', lift);
+    // Sin esto, la segunda mano abriria el menu contextual del navegador.
+    canvas.addEventListener('contextmenu', (event) => {
+      if (this.mode === 'pointer') event.preventDefault();
+    });
     // Cambiar de ventana con el dedo apoyado no puede dejar la nota sonando.
     window.addEventListener('blur', () => {
       this.activePointer = null;
+      this.secondPointer = null;
       this.pointer.release();
+      this.pointer.releaseSecond();
     });
   }
 
@@ -748,6 +857,9 @@ class Theremano {
       await this.engine.start(settings.preset, settings.masterVolume);
 
       this.looper.attach(this.engine.loopOutput);
+      // La claqueta se guarda entre sesiones, y el bucle de fotogramas solo
+      // entera al looper de los cambios: la primera vez hay que decirselo.
+      this.looper.setMetronome(settings.metronome);
       // Si no se escucho antes, la interpretacion del enlace entra ahora: quien
       // pulsa "tocar encima" espera encontrarse el bucle girando, no un silencio.
       if (this.pendingPerformance && !this.listening) {
@@ -906,6 +1018,15 @@ class Theremano {
     this.engine.setVolume(output.gain);
     this.engine.setSpace(output.space);
     this.engine.setVibrato(output.vibrato, output.vibratoRate);
+    // La nota pedal solo se toca cuando cambia: encenderla en cada fotograma
+    // seria volver a atacarla sesenta veces por segundo.
+    if (output.drone !== this.drone) {
+      this.drone = output.drone;
+      this.engine.setDrone(output.drone);
+      // Se dice cual es, y corto: lo que interesa saber es que nota se ha
+      // quedado sostenida, y eso se lee de un vistazo.
+      if (output.drone > 0) this.hud.toast(t().toast.drone(midiToName(output.droneMidi, t().notes)), 1800);
+    }
     // El gesto de grabar hace exactamente lo mismo que el boton, y por el mismo
     // camino: es la unica forma de que no haya dos maneras distintas de grabar
     // que puedan discrepar.
@@ -949,6 +1070,7 @@ class Theremano {
       volume: output.volume,
       loops,
       targetZone: this.guide && !this.guide.finished ? this.guide.targetZone : null,
+      drone: output.drone > 0 ? output.droneMidi : null,
       showRawTrace: settings.showRawTrace,
     };
 
@@ -1034,9 +1156,13 @@ class Theremano {
    */
   private pointerHand(dt: number): RoleAssignment {
     const pose = this.pointer.update(dt);
-    if (!pose) return { melody: null, expression: null };
+    const expression = this.pointer.expression;
     const target = this.overlay.screenTarget;
-    return this.drawnHand(pose, target.width / target.height);
+    const aspect = target.width / target.height;
+    return {
+      melody: pose ? this.drawnHand(pose, aspect) : null,
+      expression: expression ? this.drawnHand(expression, aspect) : null,
+    };
   }
 
   /**
@@ -1197,6 +1323,7 @@ class Theremano {
     if (this.guide && (changed.has('scale') || changed.has('tonicPc') || changed.has('octaves') || changed.has('baseOctave'))) {
       this.guide.relayout(this.mapper.currentLayout);
     }
+    if (changed.has('metronome')) this.looper.setMetronome(settings.metronome);
     if (changed.has('preset')) this.engine.setPreset(getPreset(settings.preset));
     if (changed.has('masterVolume')) this.mapper.setVolume(settings.masterVolume);
     if (changed.has('stageMode')) this.applyStageMode(settings.stageMode);
@@ -1238,9 +1365,13 @@ class Theremano {
     // Un dedo apoyado no sobrevive a irse de la pestana: al volver estaria
     // sonando una nota que nadie esta tocando.
     this.activePointer = null;
+    this.secondPointer = null;
     this.pointer.release();
+    this.pointer.releaseSecond();
     const event = this.mapper.silence();
     if (event === 'release') this.engine.release();
+    this.drone = 0;
+    this.engine.setDrone(0);
     // Una claqueta a medias no sobrevive a irse de la pestana: los pulsos ya no
     // se oyen y el momento de entrar habra pasado para cuando se vuelva.
     this.looper.abortCountIn();

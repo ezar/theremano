@@ -50,6 +50,8 @@ export class PointerPlayer {
   private pressed = false;
   /** La primera pose no tiene pasado: tambien cuenta como aparicion. */
   private jumped = true;
+  /** El segundo dedo, o el boton derecho: la mano que pone la nota pedal. */
+  private second: { x: number; y: number } | null = null;
 
   get sounding(): boolean {
     return this.pressed;
@@ -70,6 +72,33 @@ export class PointerPlayer {
 
   release(): void {
     this.pressed = false;
+  }
+
+  /**
+   * El segundo dedo apoyado, que hace de mano de expresion.
+   *
+   * Con camara son dos manos; aqui son dos dedos, y hacen exactamente lo mismo:
+   * la pinza cerrada de esa mano sostiene la nota como pedal, y su altura es el
+   * volumen. No hay ningun camino nuevo, solo una segunda mano dibujada.
+   */
+  pressSecond(x: number, y: number): void {
+    this.second = { x, y };
+  }
+
+  moveSecond(x: number, y: number): void {
+    if (this.second) this.second = { x, y };
+  }
+
+  releaseSecond(): void {
+    this.second = null;
+  }
+
+  /** La pose de esa segunda mano, o null si no hay segundo dedo. */
+  get expression(): HandPose | null {
+    if (!this.second) return null;
+    // Siempre con la pinza cerrada: el segundo dedo no esta para separarla y
+    // juntarla, esta para decir "sostén esto".
+    return { x: this.second.x, y: this.second.y, pinch: CLOSED_PINCH, tilt: edgeLean(normalize(this.second.x)) };
   }
 
   /**

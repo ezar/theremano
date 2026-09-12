@@ -134,6 +134,11 @@ export const es: Strings = {
         optional: true,
       },
       {
+        what: 'Segunda mano: pulgar contra índice',
+        does: 'Nota pedal. La nota que esté sonando se queda sostenida mientras aguantes la pinza, y la mano que toca queda libre para hacer una melodía encima. Sin cámara, el botón derecho o un segundo dedo.',
+        optional: true,
+      },
+      {
         what: 'Segunda mano: pulgar contra corazón, medio segundo',
         does: 'Graba una capa de bucle sin tocar nada. El botón se va llenando mientras lo mantienes, y se cancela abriendo la mano.',
         optional: true,
@@ -156,6 +161,7 @@ export const es: Strings = {
       { key: 'Espacio', does: 'grabar o cerrar una capa de bucle' },
       { key: 'C', does: 'empezar o terminar un clip' },
       { key: 'Z', does: 'quitar la última capa' },
+      { key: 'M', does: 'activar o desactivar la claqueta del bucle' },
       { key: 'V', does: 'ocultar o mostrar la imagen de la cámara' },
       { key: 'H', does: 'abrir o cerrar esta ayuda' },
       { key: 'Esc', does: 'cerrar este panel o los ajustes' },
@@ -215,6 +221,8 @@ export const es: Strings = {
     overlayCutoff: 'Overlay · minCutoff',
     overlayBeta: 'Overlay · beta',
     hudSection: 'HUD',
+    metronome: 'Claqueta continua',
+    metronomeHint: 'Marca el pulso mientras gira el bucle, para poder entrar a tiempo en la capa siguiente. La vuelta reparte sus propios pulsos, así que nunca se separa de ella. Tecla M.',
     showDiagnostics: 'Mostrar fps y latencia',
     showRawTrace: 'Superponer puntos sin filtrar',
     reset: 'Restablecer',
@@ -222,6 +230,9 @@ export const es: Strings = {
 
   toast: {
     pointerHint: 'Mueve el puntero para elegir la nota y mantén pulsado para que suene.',
+    drone: (note: string) => `Nota pedal: ${note}`,
+    metronomeOn: 'Claqueta activada',
+    metronomeOff: 'Claqueta desactivada',
     countIn: 'Cuatro pulsos y empieza a grabar. Pulsa otra vez para cancelar',
     countInCancelled: 'Claqueta cancelada',
     layerRecording: 'Grabando capa sobre el bucle',

@@ -217,6 +217,9 @@ export class Controls {
     );
     this.hint(s.baseVolumeHint);
 
+    this.checkbox('metronome', s.metronome, (x) => x.metronome, (v) => this.deps.store.set({ metronome: v }));
+    this.hint(s.metronomeHint);
+
     this.section(s.guideSection);
     // Diez entradas seguidas no dicen cual es una cancion y cual un ejercicio de
     // los que hay aqui dentro. Los grupos lo dicen sin gastar una linea de texto.

@@ -45,6 +45,8 @@ export interface Settings {
   clipAspect: ClipAspect;
   /** Fondo de la escena: el video de la camara o solo el esqueleto. */
   stageMode: StageMode;
+  /** Claqueta continua mientras gira el bucle. */
+  metronome: boolean;
   /** Melodia guiada activa. Cadena vacia si no hay ninguna. */
   melodyId: string;
   /** true en cuanto se ha visto la introduccion, se complete o se salte. */
@@ -72,6 +74,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showRawTrace: false,
   clipAspect: 'vertical',
   stageMode: 'camera',
+  metronome: false,
   melodyId: '',
   onboarded: false,
   locale: 'auto',

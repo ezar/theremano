@@ -18,12 +18,13 @@ no al revés.
 Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
 **español e inglés**, y sigue al idioma del navegador salvo que se elija otro.
 
-- **Instrumento** — una voz monofónica controlada con las dos manos, con
-  cuantización a escala para que suene bien desde el primer minuto y vibrato con
-  el temblor de la mano.
+- **Instrumento** — una voz controlada con las dos manos, con cuantización a
+  escala para que suene bien desde el primer minuto, vibrato con el temblor de la
+  mano y una nota pedal que se deja sostenida para tocar encima.
 - **Estación de bucles** — hasta cuatro capas superpuestas, con cuatro pulsos de
   claqueta por delante de la primera. Esa marca el compás; las siguientes se
-  graban encima sin esperar a que la vuelta termine.
+  graban encima sin esperar a que la vuelta termine, y con una claqueta continua
+  que reparte la propia vuelta para poder entrar a tiempo. Tecla **M**.
 - **Clip para compartir** — graba imagen y sonido en 9:16, hasta un minuto, con
   la nota y la marca sobreimpresas, y lo entrega por la hoja de compartir del
   móvil o como descarga.
@@ -56,6 +57,7 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
 | Mano de melodía, distancia a la cámara | Espacio: cerca seco, lejos abierto |
 | Velocidad al cerrar la pinza | Fuerza con la que entra la nota |
 | Oscilar la mano de melodía sobre la nota | Vibrato, al ritmo al que oscilas |
+| Mano de expresión, pulgar contra índice *(opcional)* | Nota pedal: sostiene la nota que suena |
 | Mano de expresión, altura *(opcional)* | Volumen maestro |
 | Mano de expresión, dedos extendidos (1 a 4) *(opcional)* | Timbre |
 | Mano de expresión, pulgar contra corazón medio segundo *(opcional)* | Graba una capa de bucle |
@@ -193,6 +195,48 @@ cuerda: se empieza a oscilar y aparece, se para y se apaga solo.
 
 La demostración acaba ondulando la última nota, que es la única forma de enseñar
 esto: las notas se ven llegar, pero un temblor no se deduce mirando tocar.
+
+### Una nota se puede dejar sostenida
+
+Hasta aquí el instrumento era monofónico de verdad: una nota cada vez, y lo único
+que podía sonar a la vez era una capa ya grabada. Con la pinza de la otra mano
+—pulgar contra índice, la misma que abre una nota— **la nota que esté sonando se
+queda sostenida** mientras se aguante, y la mano que toca queda libre para hacer
+una melodía encima. Es el salto de «tocar notas sueltas» a «tocar sobre algo».
+
+Es un pedal, no un interruptor: mientras se aguanta, suena; al soltar, se va. No
+hay nada que arrancar ni que parar, ni un estado que se pueda quedar colgado, y
+es el mismo modelo que la propia llave de la nota.
+
+Cuatro cosas que hacen que no estorbe:
+
+- **Se sostiene lo que suena, no lo que hay debajo de la otra mano.** Si no hay
+  nota, el gesto no hace nada; nunca inventa una nota que nadie estaba tocando.
+- **Pedir un bucle no lo enciende de paso.** El pulgar pasa cerca del índice de
+  camino al corazón, y esa es exactamente la pinza del pedal. Mientras el gesto
+  de grabar está en marcha, el pedal no escucha. Hay una prueba con las dos
+  distancias por debajo del umbral a la vez —lo peor que puede pasar— y el pedal
+  no se enciende.
+- **Poner el pedal no cambia el timbre.** Al juntar pulgar e índice, el índice se
+  dobla y el recuento de dedos extendidos baja uno. Es la misma guarda que ya
+  tenía el gesto de grabar, ahora para los dos.
+- **Nadie sostiene una nota sin manos.** Perder la mano de expresión, o irse de
+  la pestaña, suelta el pedal.
+
+Suena por el mismo camino que la melodía —mismo vibrato, mismo filtro, mismo
+espacio, mismo volumen— porque es la misma voz sostenida y no otro instrumento
+pegado al lado. Entra y sale más despacio que una nota: un pedal que aparece de
+golpe suena a error. Y va por debajo en volumen, que es lo que hace que siga
+siendo un acompañamiento.
+
+Lo que **no** hace: no entra en las capas de bucle. Lo sostiene la mano, no el
+bucle, así que una capa grabada con el pedal puesto guarda la melodía y no el
+pedal.
+
+Sin cámara funciona igual, con el botón derecho del ratón o con un segundo dedo:
+es una segunda mano dibujada, y entra por el mismo sitio. Con ratón se dibuja al
+lado de la primera —un solo puntero para dos manos— y a la altura que ya tiene el
+volumen, para que poner un pedal no lo cambie de paso.
 
 ### El cambio de timbre se ve venir
 
@@ -482,6 +526,26 @@ encontrar la nota, que es justo para lo que existe esto.
 Volver a pulsar durante la cuenta la cancela. Sin eso, quien se arrepiente o
 pulsa sin querer se queda esperando a que termine para poder deshacerlo.
 
+### La claqueta que no se para
+
+Los cuatro pulsos de entrada resuelven la primera capa y dejan a medias la
+segunda: grabar encima de una vuelta que ya gira, sin un pulso que oír, es
+adivinar. La claqueta continua se enciende con **M** y marca el pulso mientras
+haya bucle.
+
+**El compás no lo pone la claqueta: lo pone la vuelta.** Una toma se cierra
+cuando quien toca la cierra, así que su duración no es un número redondo de
+pulsos de 90 por minuto, y una claqueta a 90 fijos se iría separando del bucle
+vuelta a vuelta hasta sonar a dos músicos distintos. Se reparte la vuelta en el
+número entero de pulsos más cercano: el pulso cae siempre en el mismo sitio *por
+construcción*, y el tempo que sale se queda a un palmo de 90 —entre 60 y 120,
+según lo corta que sea la vuelta—. Funciona igual con las tomas grabadas sin
+claqueta, que no tienen más compás de referencia que ellas mismas.
+
+El acento se decide por la posición del transporte y no contando pulsos:
+encenderla a mitad de vuelta pondría el uno donde no va. Y la voz del chasquido
+la comparten las dos claquetas, que nunca suenan a la vez.
+
 Dos detalles que costaron encontrarse:
 
 - **El primer pulso no se puede programar en el instante del pulsado.** Para
@@ -702,6 +766,12 @@ Los que se pueden comprobar de forma automática están en `tests/`:
   en el dato para que la tarjeta pueda anunciarla antes de que nadie lo intente.
 - **Ningún paso de la introducción se cierra solo**: cada uno se prueba con la
   señal que le toca y con todo lo demás moviéndose menos esa señal.
+- **La claqueta continua reparte la vuelta en partes iguales**, de la vuelta más
+  corta que se admite a la más larga, y el pulso que sale sigue siendo un pulso
+  que se puede seguir.
+- **La nota pedal sostiene lo que suena y nada más.** Sin nota no hace nada, no
+  se enciende al pedir un bucle aunque las dos pinzas caigan bajo el umbral a la
+  vez, no cambia el timbre de paso, y se suelta al perder la mano o la pestaña.
 - **Oscilar la mano da vibrato; viajar a otra nota y el temblor del detector, no.**
   Y con la mano puesta en el borde entre dos zonas, la oscilación cruza ese borde
   en crudo en cada ciclo y la nota que suena no se mueve.

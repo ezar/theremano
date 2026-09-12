@@ -84,6 +84,25 @@ export function isMissed(plan: CountInPlan, now: number): boolean {
   return now - plan.downbeat > BEAT_SECONDS;
 }
 
+/**
+ * En cuantos pulsos se reparte una vuelta de bucle.
+ *
+ * El compas no lo pone la claqueta: lo pone la vuelta. Una toma se cierra cuando
+ * quien toca la cierra, asi que su duracion no es un numero redondo de pulsos de
+ * noventa por minuto, y una claqueta a noventa fijos se iria separando del bucle
+ * vuelta a vuelta hasta sonar a dos musicos distintos. Repartiendo la vuelta en
+ * el numero entero de pulsos mas cercano, el pulso cae siempre en el mismo sitio
+ * por construccion, y el tempo que sale queda a un palmo de noventa: lo bastante
+ * para marcar el paso, y exacto respecto a lo unico que importa, que es el
+ * bucle.
+ *
+ * Funciona tambien con las tomas grabadas sin claqueta, que no tienen ningun
+ * compas de referencia mas que ellas mismas.
+ */
+export function beatsInCycle(cycleSeconds: number): number {
+  return Math.max(1, Math.round(cycleSeconds / BEAT_SECONDS));
+}
+
 /** El pulso fuerte es el primero: es el que marca donde cae el uno. */
 export function isAccent(index: number): boolean {
   return index === 0;

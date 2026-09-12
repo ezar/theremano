@@ -134,6 +134,11 @@ export const en: Strings = {
         optional: true,
       },
       {
+        what: 'Second hand: thumb against index finger',
+        does: 'Drone note. Whatever note is sounding stays held while you keep the pinch, and the playing hand is free to put a melody over it. Without a camera, the right mouse button or a second finger.',
+        optional: true,
+      },
+      {
         what: 'Second hand: thumb against middle finger, half a second',
         does: 'Records a loop layer without touching anything. The button fills while you hold it, and opening your hand cancels.',
         optional: true,
@@ -156,6 +161,7 @@ export const en: Strings = {
       { key: 'Space', does: 'record or close a loop layer' },
       { key: 'C', does: 'start or finish a clip' },
       { key: 'Z', does: 'remove the last layer' },
+      { key: 'M', does: 'turn the loop metronome on or off' },
       { key: 'V', does: 'hide or show the camera image' },
       { key: 'H', does: 'open or close this help' },
       { key: 'Esc', does: 'close this panel or the settings' },
@@ -215,6 +221,8 @@ export const en: Strings = {
     overlayCutoff: 'Overlay · minCutoff',
     overlayBeta: 'Overlay · beta',
     hudSection: 'HUD',
+    metronome: 'Metronome',
+    metronomeHint: 'Keeps the beat while the loop goes round, so you can come in on time on the next layer. The loop divides its own beats, so it never drifts away from it. Key M.',
     showDiagnostics: 'Show fps and latency',
     showRawTrace: 'Overlay unfiltered points',
     reset: 'Reset',
@@ -222,6 +230,9 @@ export const en: Strings = {
 
   toast: {
     pointerHint: 'Move the pointer to pick the note and hold to make it sound.',
+    drone: (note: string) => `Drone note: ${note}`,
+    metronomeOn: 'Metronome on',
+    metronomeOff: 'Metronome off',
     countIn: 'Four beats and recording starts. Press again to cancel',
     countInCancelled: 'Count-in cancelled',
     layerRecording: 'Recording a layer over the loop',
