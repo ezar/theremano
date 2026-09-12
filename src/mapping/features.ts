@@ -164,7 +164,7 @@ const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
  */
 const MARGIN = 0.08;
 
-function normalize(v: number): number {
+export function normalize(v: number): number {
   return clamp01((v - MARGIN) / (1 - 2 * MARGIN));
 }
 

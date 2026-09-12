@@ -1,5 +1,7 @@
 import { resolveTargets, type Melody } from './melodies';
 import { zoneCenters, type PitchLayout } from './scales';
+import { CLOSED_PINCH, OPEN_PINCH, edgeLean, type HandPose } from '../tracking/phantom';
+import { denormalize } from './features';
 
 /**
  * La coreografia de la demostracion: donde esta la mano en cada instante.
@@ -40,32 +42,23 @@ export const CLOSE_SECONDS = 0.08;
 export const SUSTAIN_SECONDS = 0.24;
 /** Apertura de la pinza, que es la suelta. */
 export const RELEASE_SECONDS = 0.1;
+/**
+ * Lo que dura la ondulacion con la que acaba la demostracion.
+ *
+ * La ultima nota no se suelta: se queda sonando y la mano la ondula. Es la unica
+ * forma de ensenar el vibrato, que es un gesto que no se deduce mirando tocar
+ * —las notas se ven llegar, el temblor no— y que sin esto solo esta escrito en
+ * la ayuda.
+ */
+export const CODA_SECONDS = 1.6;
+/** A que ritmo y con cuanto recorrido ondula. Un vibrato comodo de imitar. */
+const CODA_HZ = 5.5;
+const CODA_SWING = 0.03;
+
 /** Silencio final, para no cortar la ultima nota en seco. */
 export const TAIL_SECONDS = 0.9;
 
 export const NOTE_SECONDS = REACH_SECONDS + SETTLE_SECONDS + CLOSE_SECONDS + SUSTAIN_SECONDS + RELEASE_SECONDS;
-
-/**
- * Las dos aperturas de la pinza.
- *
- * Con margen a los dos lados de la banda muerta del gate: la abierta por encima
- * del umbral que calla y la cerrada por debajo del que suena. Si alguien
- * estrechara esa banda, estos dos numeros seguirian estando fuera.
- */
-export const POSE_OPEN = 0.52;
-export const POSE_CLOSED = 0.14;
-
-/**
- * Lo que se encoge la mano de la demostracion respecto a una a distancia de
- * trabajo.
- *
- * Con el tamano natural, la mano puesta en la nota mas grave se sale del
- * encuadre por la izquierda, y lo que se sale es justo lo que hay que mirar: el
- * pulgar y el indice. Un palmo mas pequeno es una mano un poco mas lejos de la
- * camara, que es una postura tan valida como la otra y cabe entera. El precio lo
- * paga el espacio del sonido, que sale algo mas seco.
- */
-export const HAND_SCALE = 0.84;
 
 /** Altura de reposo de la mano y cuanto pasea arriba y abajo. */
 const HEIGHT = 0.46;
@@ -74,28 +67,6 @@ const HEIGHT_PERIOD = 8.5;
 /** Ladeo, en radianes. Una mano que no se ladea nunca parece una pegatina. */
 export const TILT_SWING = 0.09;
 const TILT_PERIOD = 6.1;
-
-/**
- * Cuanto se ladea la mano hacia dentro en los extremos del recorrido.
- *
- * No es un adorno, resuelve un problema real en vertical. Una mano a distancia
- * de trabajo ocupa buena parte del ancho de un movil, asi que con la palma en la
- * nota mas grave el pulgar y el indice se quedan fuera del encuadre, y son justo
- * los dos que hay que mirar. Ladearla mete la mano entera dentro sin mover la
- * palma, que es la que decide la nota. Y es lo que hace cualquiera que toque
- * esto con el telefono delante: angular la mano hacia el centro al llegar a los
- * bordes.
- */
-export const EDGE_LEAN = 0.5;
-
-export interface DemoPose {
-  /** Posicion en el encuadre util, 0 a 1. La misma que lee el mapeador. */
-  x: number;
-  y: number;
-  /** Distancia pulgar-indice normalizada. */
-  pinch: number;
-  tilt: number;
-}
 
 /** Entrada y salida suaves: una mano no arranca ni frena de golpe. */
 function smooth(t: number): number {
@@ -127,7 +98,7 @@ export class DemoPerformance {
   }
 
   get seconds(): number {
-    return LEAD_IN_SECONDS + this.notes * NOTE_SECONDS + TAIL_SECONDS;
+    return LEAD_IN_SECONDS + this.notes * NOTE_SECONDS + CODA_SECONDS + TAIL_SECONDS;
   }
 
   finishedAt(seconds: number): boolean {
@@ -152,29 +123,42 @@ export class DemoPerformance {
     return this.zones[Math.min(index, this.notes - 1)] ?? null;
   }
 
-  poseAt(seconds: number): DemoPose {
+  poseAt(seconds: number): HandPose {
     const y = HEIGHT + HEIGHT_SWING * Math.sin((seconds / HEIGHT_PERIOD) * Math.PI * 2);
     const sway = TILT_SWING * Math.sin((seconds / TILT_PERIOD) * Math.PI * 2);
     // El ladeo acompana a la mano: se calcula sobre la posicion que se acaba de
     // devolver, no sobre la nota, para que gire mientras viaja y no a saltos.
-    const pose = (x: number, pinch: number): DemoPose => ({
-      x,
-      y,
+    // Las zonas viven en el encuadre util, que es el que recorta los bordes; la
+    // pose sale ya en el encuadre entero, que es donde vive una mano.
+    const pose = (x: number, pinch: number): HandPose => ({
+      x: denormalize(x),
+      y: denormalize(y),
       pinch,
-      // Al cubo, no en linea recta: asi la mano va derecha por todo el centro
-      // del recorrido y solo se angula en los ultimos pasos, que es donde hace
-      // falta y donde alguien lo haria de verdad.
-      tilt: sway + EDGE_LEAN * (2 * x - 1) ** 3,
+      tilt: sway + edgeLean(x),
     });
     const first = this.positions[0] ?? 0.5;
-    if (this.notes === 0) return pose(0.5, POSE_OPEN);
+    if (this.notes === 0) return pose(0.5, OPEN_PINCH);
 
     const elapsed = seconds - LEAD_IN_SECONDS;
-    if (elapsed <= 0) return pose(first, POSE_OPEN);
+    if (elapsed <= 0) return pose(first, OPEN_PINCH);
 
     const index = Math.floor(elapsed / NOTE_SECONDS);
     if (index >= this.notes) {
-      return pose(this.positions[this.notes - 1] ?? first, POSE_OPEN);
+      // La coda: la ultima nota sigue sonando y la mano la ondula. Viene sin
+      // corte desde el sostenido, para que sea la misma nota y no otra.
+      const last = this.positions[this.notes - 1] ?? first;
+      const since = elapsed - this.notes * NOTE_SECONDS;
+      if (since < CODA_SECONDS) {
+        // La ondulacion se centra hacia dentro si la nota esta en un extremo.
+        // Contra el borde, el encuadre corta la mitad de abajo de la onda y lo
+        // que llega al detector es media oscilacion: casi nada de vibrato. El
+        // desplazamiento es menor que media zona, asi que sigue siendo la misma
+        // nota, y es lo que haria cualquiera tocando la nota mas grave.
+        const center = Math.min(1 - CODA_SWING, Math.max(CODA_SWING, last));
+        return pose(center + CODA_SWING * Math.sin(since * CODA_HZ * Math.PI * 2), CLOSED_PINCH);
+      }
+      const opening = (since - CODA_SECONDS) / RELEASE_SECONDS;
+      return pose(last, CLOSED_PINCH + (OPEN_PINCH - CLOSED_PINCH) * smooth(opening));
     }
 
     const from = index === 0 ? first : (this.positions[index - 1] ?? first);
@@ -182,17 +166,19 @@ export class DemoPerformance {
     let local = elapsed - index * NOTE_SECONDS;
 
     if (local < REACH_SECONDS) {
-      return pose(from + (to - from) * smooth(local / REACH_SECONDS), POSE_OPEN);
+      return pose(from + (to - from) * smooth(local / REACH_SECONDS), OPEN_PINCH);
     }
     local -= REACH_SECONDS;
-    if (local < SETTLE_SECONDS) return pose(to, POSE_OPEN);
+    if (local < SETTLE_SECONDS) return pose(to, OPEN_PINCH);
     local -= SETTLE_SECONDS;
     if (local < CLOSE_SECONDS) {
-      return pose(to, POSE_OPEN + (POSE_CLOSED - POSE_OPEN) * smooth(local / CLOSE_SECONDS));
+      return pose(to, OPEN_PINCH + (CLOSED_PINCH - OPEN_PINCH) * smooth(local / CLOSE_SECONDS));
     }
     local -= CLOSE_SECONDS;
-    if (local < SUSTAIN_SECONDS) return pose(to, POSE_CLOSED);
+    if (local < SUSTAIN_SECONDS) return pose(to, CLOSED_PINCH);
     local -= SUSTAIN_SECONDS;
-    return pose(to, POSE_CLOSED + (POSE_OPEN - POSE_CLOSED) * smooth(local / RELEASE_SECONDS));
+    // La ultima no se suelta aqui: se queda sonando y la recoge la coda.
+    if (index === this.notes - 1) return pose(to, CLOSED_PINCH);
+    return pose(to, CLOSED_PINCH + (OPEN_PINCH - CLOSED_PINCH) * smooth(local / RELEASE_SECONDS));
   }
 }

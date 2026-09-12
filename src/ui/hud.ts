@@ -90,6 +90,14 @@ export class Hud {
     });
   }
 
+  /**
+   * Cambia el aviso inicial. Lo usa el modo sin camara, donde el de siempre
+   * —juntar pulgar e indice— no describe lo que hay que hacer.
+   */
+  setHint(text: string): void {
+    this.hint.textContent = text;
+  }
+
   /** El aviso inicial desaparece en cuanto se toca la primera nota. */
   dismissHint(): void {
     if (this.hintHidden) return;
@@ -270,6 +278,9 @@ export class Hud {
         `${runtime.fps.toFixed(0)} fps · ~${runtime.latencyMs.toFixed(0)} ms\n` +
         `inferencia ${runtime.inferenceMs.toFixed(1)} ms\n` +
         `pinza ${runtime.pinchRatio.toFixed(2)} · ${runtime.freq.toFixed(1)} Hz` +
+        // El vibrato solo se escribe cuando lo hay: una linea que dice 0.00
+        // durante toda la sesion es una linea que nadie vuelve a leer.
+        (runtime.vibrato > 0.02 ? ` · vib ${runtime.vibrato.toFixed(2)}` : '') +
         (settings.showRawTrace ? `\nx ${runtime.pitchXRaw.toFixed(3)} → ${runtime.pitchX.toFixed(3)}` : '');
       if (text !== this.last.diagnostics) {
         this.diagnostics.textContent = text;

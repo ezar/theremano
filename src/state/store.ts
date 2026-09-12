@@ -167,6 +167,8 @@ export interface Runtime {
   latencyMs: number;
   inferenceMs: number;
   pinchRatio: number;
+  /** Vibrato que pide la mano, de 0 a 1. */
+  vibrato: number;
   /** MIDI de la nota actual. El HUD lo usa para colorear. */
   midi: number;
   /** Timbre al que apuntan los dedos, aun sin confirmar. */
@@ -194,6 +196,7 @@ export const runtime: Runtime = {
   latencyMs: 0,
   inferenceMs: 0,
   pinchRatio: 1,
+  vibrato: 0,
   midi: 69,
   presetCandidate: null,
   presetProgress: 0,

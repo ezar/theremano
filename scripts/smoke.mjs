@@ -418,6 +418,58 @@ console.log(JSON.stringify({ beforeDemo, playing, afterDemo, erroresDemostracion
 await demoPage.close();
 await demo.close();
 
+// --- Tocar sin camara: el mismo instrumento con el puntero por manos.
+// Pestana limpia y sin permiso de camara, como quien acaba de negarlo. Lo que
+// hay que demostrar es que suena la nota donde se pulsa y que se calla al
+// soltar; y que el HUD, la barra de acciones y todo lo demas siguen ahi, porque
+// esto no es un modo recortado.
+const pointer = await browser.newContext({ viewport: { width: 900, height: 640 } });
+const pointerPage = await pointer.newPage();
+const pointerLogs = [];
+pointerPage.on('pageerror', (e) => pointerLogs.push(e.message));
+await pointerPage.addInitScript(audioProbe);
+await pointerPage.goto(url, { waitUntil: 'domcontentloaded' });
+await pointerPage.waitForTimeout(700);
+await pointerPage.click('#pointer-button');
+await pointerPage.waitForTimeout(1200);
+const beforePress = await pointerPage.evaluate(() => ({
+  hud: !document.getElementById('hud')?.classList.contains('hidden'),
+  acciones: !document.getElementById('actions')?.classList.contains('hidden'),
+  picoDeAudio: Number((window.__peak ?? 0).toFixed(4)),
+}));
+await pointerPage.mouse.move(250, 320);
+await pointerPage.mouse.down();
+await pointerPage.waitForTimeout(600);
+const pressed = await pointerPage.evaluate(() => ({
+  nota: document.getElementById('note')?.textContent,
+  picoDeAudio: Number((window.__peak ?? 0).toFixed(4)),
+}));
+// Arrastrar con el boton pulsado es un glissando, no una nota nueva.
+for (let x = 250; x <= 650; x += 50) {
+  await pointerPage.mouse.move(x, 320);
+  await pointerPage.waitForTimeout(50);
+}
+const dragged = await pointerPage.evaluate(() => document.getElementById('note')?.textContent);
+// Vibrato: oscilar el puntero sobre la nota, sin soltar. Se mira en la linea de
+// diagnostico, que es donde la aplicacion lo escribe cuando lo hay.
+for (let step = 0; step < 34; step += 1) {
+  await pointerPage.mouse.move(650 + Math.round(40 * Math.sin(step * 0.033 * 5.5 * Math.PI * 2)), 320);
+  await pointerPage.waitForTimeout(33);
+}
+const vibrato = await pointerPage.evaluate(() => document.getElementById('diagnostics')?.textContent ?? '');
+const soundingClass = await pointerPage.evaluate(() => document.getElementById('note')?.classList.contains('sounding'));
+await pointerPage.mouse.up();
+await pointerPage.waitForTimeout(500);
+// Que la nota se cierra se mira en el gate y no en el pico de audio: detras hay
+// una reverberacion de varios segundos, y esperar a que se apague del todo no
+// prueba nada que el gate no diga ya.
+const released = await pointerPage.evaluate(() => ({
+  sonando: document.getElementById('note')?.classList.contains('sounding'),
+}));
+console.log(JSON.stringify({ beforePress, pressed, dragged, vibrato, soundingClass, released, erroresPuntero: pointerLogs }, null, 2));
+await pointerPage.close();
+await pointer.close();
+
 // --- Interpretacion en el enlace. Se abre uno guardado de la version 1, con
 // cuatro notas de theremin dentro, y se comprueba que suena sin camara: la
 // pantalla inicial cambia, escuchar arranca el audio y no aparece ningun error.
@@ -636,6 +688,28 @@ if (beforeListening.botonDemostracion) {
   console.error('\nFALLO: con musica en el enlace, la demostracion deberia quitarse de en medio');
   process.exit(1);
 }
+if (beforePress.picoDeAudio > 0.01 || pressed.picoDeAudio < 0.01) {
+  console.error(
+    `\nFALLO: con el puntero no suena al pulsar, o suena sin pulsar (antes ${beforePress.picoDeAudio}, pulsando ${pressed.picoDeAudio})`,
+  );
+  process.exit(1);
+}
+if (!beforePress.hud || !beforePress.acciones) {
+  console.error('\nFALLO: tocar sin camara deberia traer el instrumento entero, con HUD y barra de acciones');
+  process.exit(1);
+}
+if (dragged === pressed.nota) {
+  console.error(`\nFALLO: arrastrar el puntero deberia cambiar la nota (${pressed.nota} -> ${dragged})`);
+  process.exit(1);
+}
+if (!/vib (0\.[1-9]|1\.00)/.test(vibrato)) {
+  console.error(`\nFALLO: oscilar el puntero sobre la nota deberia dar vibrato (${vibrato.replace(/\n/g, ' | ')})`);
+  process.exit(1);
+}
+if (!soundingClass || released.sonando || pointerLogs.length > 0) {
+  console.error(`\nFALLO: con el puntero, pulsar deberia abrir la nota y soltar cerrarla ${pointerLogs.join(' ')}`);
+  process.exit(1);
+}
 if (state.error || errors.length > 0) {
   console.error(`\nFALLO: ${state.error ?? errors.join('\n')}`);
   process.exit(1);
@@ -647,5 +721,5 @@ if (!state.splashHidden || !state.hudVisible) {
 console.log(
   `\nOK: arranque, modelo, audio, introduccion de ${coachStart.dots} pasos, ayuda, espanol e ingles, ` +
     `bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB, solo manos con clip de ` +
-    `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion sin camara y enlace compartible.`,
+    `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion y puntero sin camara con vibrato, y enlace compartible.`,
 );

@@ -142,6 +142,75 @@ export function phantomScale(aspect: number): number {
   return WORKING_PALM / Math.sqrt(PALM_AREA / Math.max(aspect, 1e-3));
 }
 
+/**
+ * La pose de la mano dibujada, sin saber nada del encuadre.
+ *
+ * La comparten los dos sitios que mueven esta mano: la coreografia de la
+ * demostracion y el puntero de quien toca sin camara. Lo que cambia entre los
+ * dos es quien decide la pose; todo lo que viene despues es identico.
+ */
+export interface HandPose {
+  /**
+   * Posicion de la palma en espacio de vista: 0 a 1 sobre el encuadre entero,
+   * igual que un punto detectado. No sobre el encuadre util, que recorta los
+   * bordes; quien produce la pose se encarga de esa conversion.
+   */
+  x: number;
+  y: number;
+  /** Distancia pulgar-indice normalizada. */
+  pinch: number;
+  /** Ladeo, en radianes. */
+  tilt: number;
+}
+
+/**
+ * Las dos aperturas de la pinza que usa la mano dibujada.
+ *
+ * Con margen a los dos lados de la banda muerta del gate: la abierta por encima
+ * del umbral que calla y la cerrada por debajo del que suena. Si alguien
+ * estrechara esa banda, estos dos numeros seguirian estando fuera.
+ */
+export const OPEN_PINCH = 0.52;
+export const CLOSED_PINCH = 0.14;
+
+/**
+ * Lo que se encoge la mano dibujada respecto a una a distancia de trabajo.
+ *
+ * Con el tamano natural, la mano puesta en la nota mas grave se sale del
+ * encuadre por la izquierda, y lo que se sale es justo lo que hay que mirar: el
+ * pulgar y el indice. Un palmo mas pequeno es una mano un poco mas lejos de la
+ * camara, que es una postura tan valida como la otra y cabe entera. El precio lo
+ * paga el espacio del sonido, que sale algo mas seco.
+ */
+const HAND_DISTANCE = 0.84;
+
+/** El palmo con el que se dibuja la mano de la demostracion y la del puntero. */
+export function drawnScale(aspect: number): number {
+  return phantomScale(aspect) * HAND_DISTANCE;
+}
+
+/**
+ * Cuanto se ladea la mano hacia dentro segun donde este, en radianes.
+ *
+ * No es un adorno, resuelve un problema real en vertical. Una mano a distancia
+ * de trabajo ocupa buena parte del ancho de un movil, asi que con la palma en la
+ * nota mas grave el pulgar y el indice se quedan fuera del encuadre, y son justo
+ * los dos que hay que mirar. Ladearla mete la mano entera dentro sin mover la
+ * palma, que es la que decide la nota. Y es lo que hace cualquiera que toque
+ * esto con el telefono delante: angular la mano hacia el centro al llegar a los
+ * bordes.
+ *
+ * Al cubo, no en linea recta: asi la mano va derecha por todo el centro del
+ * recorrido y solo se angula en los ultimos pasos.
+ *
+ * @param x posicion en el encuadre util, de 0 a 1.
+ */
+export function edgeLean(x: number): number {
+  return EDGE_LEAN * (2 * clamp01(x) - 1) ** 3;
+}
+
+const EDGE_LEAN = 0.5;
+
 export interface PhantomPose {
   /** Centro de la palma en espacio de vista: 0 a 1 sobre el encuadre. */
   x: number;

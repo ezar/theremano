@@ -26,12 +26,27 @@ const CUTOFF_RAMP = 0.03;
  * alguien esta girando.
  */
 const SPACE_RAMP = 0.25;
+/*
+ * El vibrato entra y sale rapido, pero no de golpe: un salto en la profundidad
+ * de la modulacion se oye como un tropiezo en mitad de la nota.
+ */
+const VIBRATO_RAMP = 0.08;
+
+/**
+ * Lo mas que anade la mano a la profundidad del timbre.
+ *
+ * Por encima de esto deja de sonar a vibrato y empieza a sonar a sirena: la
+ * modulacion se come el intervalo entero hasta la nota de al lado.
+ */
+const HAND_VIBRATO = 0.35;
 
 /** Zonas muertas: por debajo de esto no se reprograma nada. */
 const FREQ_EPSILON_CENTS = 0.5;
 const GAIN_EPSILON = 0.002;
 const CUTOFF_EPSILON_RATIO = 0.01;
 const SPACE_EPSILON = 0.01;
+const VIBRATO_EPSILON = 0.01;
+const RATE_EPSILON = 0.15;
 
 export class AudioEngine {
   private synth: Tone.Synth | null = null;
@@ -48,6 +63,8 @@ export class AudioEngine {
   private lastFreq = 0;
   private lastCutoff = 0;
   private lastSpace = -1;
+  private lastVibrato = -1;
+  private lastVibratoRate = -1;
   private lastGain = 0;
   private targetVolume = 0.75;
   private muted = false;
@@ -174,6 +191,11 @@ export class AudioEngine {
       if (this.vibrato) {
         this.vibrato.depth.rampTo(preset.vibrato.depth, 0.05);
         if (preset.vibrato.frequency > 0) this.vibrato.frequency.rampTo(preset.vibrato.frequency, 0.05);
+        // El timbre acaba de pisar los dos valores: lo que recordaba el vibrato
+        // de la mano ya no es lo que hay puesto, y sin esto se quedaria sin
+        // volver a escribirlo hasta que cambiara de sitio.
+        this.lastVibrato = -1;
+        this.lastVibratoRate = -1;
       }
       this.lastGain = -1;
       this.applyGain(0.03);
@@ -225,6 +247,32 @@ export class AudioEngine {
   }
 
   /** @param volume 0..1 de la mano de expresion. */
+  /**
+   * Vibrato de la mano, por encima del que trae el timbre.
+   *
+   * Se suma al del timbre en lugar de sustituirlo: el theremin ya vibra un poco
+   * solo, y quitarselo para poner el de la mano lo dejaria mas plano que antes
+   * mientras la mano esta quieta. El ritmo, en cambio, si lo manda la mano
+   * cuando la mano manda: que se oiga el temblor que se esta haciendo, y no uno
+   * parecido.
+   *
+   * @param depth de 0 a 1, lo que pide la mano.
+   * @param hz a que ritmo, o 0 para dejar el del timbre.
+   */
+  setVibrato(depth: number, hz: number): void {
+    if (!this.vibrato) return;
+    const target = Math.min(1, this.preset.vibrato.depth + depth * HAND_VIBRATO);
+    if (Math.abs(target - this.lastVibrato) > VIBRATO_EPSILON) {
+      this.lastVibrato = target;
+      this.vibrato.depth.rampTo(target, VIBRATO_RAMP);
+    }
+    const rate = hz > 0 ? hz : this.preset.vibrato.frequency;
+    if (rate > 0 && Math.abs(rate - this.lastVibratoRate) > RATE_EPSILON) {
+      this.lastVibratoRate = rate;
+      this.vibrato.frequency.rampTo(rate, VIBRATO_RAMP);
+    }
+  }
+
   setVolume(volume: number): void {
     this.targetVolume = Math.min(1, Math.max(0, volume));
     this.applyGain(VOLUME_RAMP);

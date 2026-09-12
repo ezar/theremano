@@ -4,7 +4,8 @@ import { AudioEngine } from './audio/engine';
 import { Looper } from './audio/looper';
 import { getPreset } from './audio/presets';
 import { ClipRecorder, clipRecordingSupported, deliverClip } from './capture/recorder';
-import { DemoPerformance, HAND_SCALE } from './mapping/demo';
+import { DemoPerformance } from './mapping/demo';
+import { PointerPlayer } from './mapping/pointer';
 import { GuideSession, getMelody } from './mapping/melodies';
 import { decodeSettings, hasShareableKeys, readPerformanceParam, shareUrl } from './state/share';
 import { decodePerformance, encodePerformance, type Performance } from './state/performance';
@@ -13,8 +14,7 @@ import { applyStaticStrings } from './ui/static';
 import { Camera, HIGH_RES, LOW_RES, attachStream, type CameraInfo } from './camera/stream';
 import { LandmarkFilter } from './filter/vectorFilter';
 import { Mapper } from './mapping/mapper';
-import { denormalize } from './mapping/features';
-import { phantomHand, phantomScale } from './tracking/phantom';
+import { drawnScale, phantomHand, type HandPose } from './tracking/phantom';
 import { RoleTracker } from './tracking/handedness';
 import { Landmarker } from './tracking/landmarker';
 import type { HandFrame, RoleAssignment } from './tracking/types';
@@ -33,6 +33,15 @@ import { SettingsStore, runtime, type Settings, type StageMode } from './state/s
  * (ataque y suelta) se atienden en el mismo instante en que se detectan, sin
  * esperar al siguiente repintado: el audio no puede ir al ritmo del render.
  */
+
+/**
+ * De donde salen las manos.
+ *
+ * `pointer` no es una version recortada del instrumento: es el mismo bucle, el
+ * mismo mapeador y la misma estacion de bucles, con una mano dibujada que mueve
+ * el raton o el dedo en lugar de una detectada por la camara.
+ */
+type PlayMode = 'camera' | 'pointer';
 
 /** Debajo de esto, de forma sostenida, se baja la resolucion pedida. */
 const LOW_FPS_THRESHOLD = 20;
@@ -92,6 +101,7 @@ class Theremano {
   private readonly startButton = must<HTMLButtonElement>('start-button');
   private readonly listenButton = must<HTMLButtonElement>('listen-button');
   private readonly demoButton = must<HTMLButtonElement>('demo-button');
+  private readonly pointerButton = must<HTMLButtonElement>('pointer-button');
   private readonly demoBanner = must('demo-banner');
   private readonly demoLabel = must('demo-label');
   private readonly splashInvite = must('splash-invite');
@@ -116,6 +126,11 @@ class Theremano {
   private brokenPerformance = false;
   /** Sonando el enlace sin haber arrancado la camara. */
   private listening = false;
+  private mode: PlayMode = 'camera';
+  private readonly pointer = new PointerPlayer();
+  /** El dedo o el boton que manda ahora mismo. Solo uno a la vez. */
+  private activePointer: number | null = null;
+
   /** La demostracion en marcha, o null. */
   private demo: DemoPerformance | null = null;
   private demoHandle: number | null = null;
@@ -167,6 +182,8 @@ class Theremano {
     });
     i18n.subscribe(() => {
       applyStaticStrings();
+      // applyStaticStrings devuelve el aviso a su version con camara.
+      if (this.mode === 'pointer') this.hud.setHint(t().hud.pointerHint);
       // applyStaticStrings devuelve los rotulos a su version normal, asi que la
       // invitacion hay que volver a ponerla despues de cada cambio de idioma.
       this.applyInvite();
@@ -183,6 +200,8 @@ class Theremano {
     this.startButton.addEventListener('click', () => void this.start());
     this.listenButton.addEventListener('click', () => void this.toggleListening());
     this.demoButton.addEventListener('click', () => void this.toggleDemo());
+    this.pointerButton.addEventListener('click', () => void this.start('pointer'));
+    this.bindPointer();
     must('demo-stop').addEventListener('click', () => this.stopDemo());
     this.applyInvite();
     this.bindActions();
@@ -234,7 +253,8 @@ class Theremano {
         void this.toggleClip();
       } else if (event.key.toLowerCase() === 'z') {
         this.looper.undo();
-      } else if (event.key.toLowerCase() === 'v') {
+      } else if (event.key.toLowerCase() === 'v' && this.mode === 'camera') {
+        // Sin camara no hay nada que ocultar: el fondo ya es el propio.
         this.toggleStageMode();
       }
     });
@@ -509,20 +529,7 @@ class Theremano {
     const seconds = now / 1000;
 
     const target = this.overlay.screenTarget;
-    const aspect = target.height > 0 ? target.width / target.height : 1;
-    const pose = performance.poseAt(elapsed);
-    const landmarks = phantomHand({
-      // La pose viene en el encuadre util, que es el que recorta los bordes; los
-      // puntos van en el encuadre entero, que es donde vive una mano detectada.
-      x: denormalize(pose.x),
-      y: denormalize(pose.y),
-      pinch: pose.pinch,
-      tilt: pose.tilt,
-      aspect,
-      scale: phantomScale(aspect) * HAND_SCALE,
-    });
-    const hand: HandFrame = { landmarks, raw: landmarks };
-    const assignment: RoleAssignment = { melody: { hand, held: false, heldFor: 0 }, expression: null };
+    const assignment = this.drawnHand(performance.poseAt(elapsed), target.width / target.height);
 
     const output = this.mapper.update(assignment, seconds);
     if (output.gateEvent === 'attack') this.engine.attack(output.freq);
@@ -531,6 +538,7 @@ class Theremano {
     this.engine.setCutoffNorm(output.cutoffNorm);
     this.engine.setVolume(output.gain);
     this.engine.setSpace(output.space);
+    this.engine.setVibrato(output.vibrato, output.vibratoRate);
 
     const frame: OverlayFrame = {
       assignment,
@@ -560,6 +568,72 @@ class Theremano {
     }
     this.demoHandle = requestAnimationFrame(this.demoFrame);
   };
+
+  /**
+   * Una mano dibujada, lista para entrar en el mapeador como una de verdad.
+   *
+   * La usan los dos modos sin camara: la demostracion, que mueve la pose sola, y
+   * el puntero, que la mueve quien toca. Que compartan esta funcion es lo que
+   * garantiza que las dos suenan igual.
+   */
+  private drawnHand(pose: HandPose, aspect: number): RoleAssignment {
+    // El lienzo puede no estar medido todavia, y una proporcion de cero o de
+    // infinito deja la mano en coordenadas que no existen.
+    const safe = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
+    const landmarks = phantomHand({ ...pose, aspect: safe, scale: drawnScale(safe) });
+    const hand: HandFrame = { landmarks, raw: landmarks };
+    return { melody: { hand, held: false, heldFor: 0 }, expression: null };
+  }
+
+  // --------------------------------------------------------------- puntero
+
+  /**
+   * El raton o el dedo sobre el lienzo.
+   *
+   * Se escucha en el lienzo y no en la pantalla entera para que los botones del
+   * HUD, que estan por encima, sigan siendo botones: pulsar "grabar" no puede
+   * tocar una nota de paso. Y solo un puntero a la vez: un segundo dedo apoyado
+   * en la pantalla no mueve la mano.
+   */
+  private bindPointer(): void {
+    const canvas = must<HTMLCanvasElement>('overlay');
+    const at = (event: PointerEvent): { x: number; y: number } => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0.5,
+        y: rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0.5,
+      };
+    };
+    const lift = (event: PointerEvent): void => {
+      if (event.pointerId !== this.activePointer) return;
+      this.activePointer = null;
+      this.pointer.release();
+    };
+
+    canvas.addEventListener('pointerdown', (event) => {
+      if (this.mode !== 'pointer' || !runtime.running || this.activePointer !== null) return;
+      this.activePointer = event.pointerId;
+      // Con la captura, arrastrar fuera del lienzo sigue tocando en lugar de
+      // dejar la nota colgada.
+      canvas.setPointerCapture(event.pointerId);
+      const point = at(event);
+      this.pointer.press(point.x, point.y);
+      this.hud.dismissHint();
+    });
+    canvas.addEventListener('pointermove', (event) => {
+      if (this.mode !== 'pointer' || !runtime.running) return;
+      if (this.activePointer !== null && event.pointerId !== this.activePointer) return;
+      const point = at(event);
+      this.pointer.moveTo(point.x, point.y);
+    });
+    canvas.addEventListener('pointerup', lift);
+    canvas.addEventListener('pointercancel', lift);
+    // Cambiar de ventana con el dedo apoyado no puede dejar la nota sonando.
+    window.addEventListener('blur', () => {
+      this.activePointer = null;
+      this.pointer.release();
+    });
+  }
 
   private stopDemo(): void {
     if (this.demoHandle !== null) cancelAnimationFrame(this.demoHandle);
@@ -639,29 +713,36 @@ class Theremano {
 
   // ---------------------------------------------------------------- arranque
 
-  private async start(): Promise<void> {
+  /**
+   * @param mode con camara, o con el puntero para quien no la tiene o no la da.
+   */
+  private async start(mode: PlayMode = 'camera'): Promise<void> {
     if (this.starting || runtime.running) return;
     // Por si acaso: dos bucles empujando el mismo mapeador se pisarian el tono.
     this.stopDemo();
     this.starting = true;
     this.startButton.disabled = true;
-    // Mientras se abre la camara, la demostracion tambien queda fuera de juego:
-    // son dos cosas que no pueden estar arrancando a la vez.
+    // Mientras arranca una cosa, las otras dos quedan fuera de juego: son tres
+    // caminos que no pueden estar arrancando a la vez.
     this.demoButton.disabled = true;
+    this.pointerButton.disabled = true;
     this.splashError.hidden = true;
+    this.mode = mode;
 
     try {
       const settings = this.store.get();
 
-      // Tanto la camara como el contexto de audio exigen un gesto del usuario:
-      // este es el unico momento en el que se pueden arrancar los dos.
-      this.setStatus(t().loading.camera);
-      const state = await this.camera.open({ deviceId: settings.cameraId, ...HIGH_RES });
-      this.highRes = true;
-      await attachStream(this.video, state.stream);
-      this.applyMirror(state.frontFacing);
-      this.applyStageMode(settings.stageMode);
-      this.store.set({ cameraId: state.deviceId });
+      if (mode === 'camera') {
+        // Tanto la camara como el contexto de audio exigen un gesto del usuario:
+        // este es el unico momento en el que se pueden arrancar los dos.
+        this.setStatus(t().loading.camera);
+        const state = await this.camera.open({ deviceId: settings.cameraId, ...HIGH_RES });
+        this.highRes = true;
+        await attachStream(this.video, state.stream);
+        this.applyMirror(state.frontFacing);
+        this.applyStageMode(settings.stageMode);
+        this.store.set({ cameraId: state.deviceId });
+      }
 
       this.setStatus(t().loading.audio);
       await this.engine.start(settings.preset, settings.masterVolume);
@@ -673,12 +754,16 @@ class Theremano {
         this.looper.load(this.pendingPerformance.tracks, this.pendingPerformance.cycleSeconds);
       }
 
-      const loading = t().loading;
-      await this.landmarker.load(loading, (message) => this.setStatus(message));
-      await this.landmarker.warmUp(loading.warmup, (message) => this.setStatus(message));
-
-      void this.refreshCameraList();
+      if (mode === 'camera') {
+        const loading = t().loading;
+        await this.landmarker.load(loading, (message) => this.setStatus(message));
+        await this.landmarker.warmUp(loading.warmup, (message) => this.setStatus(message));
+        void this.refreshCameraList();
+      }
       void this.requestWakeLock();
+      // Solo el lienzo recibe pulsaciones, y solo en este modo: con camara, una
+      // pulsacion en la pantalla no significa nada.
+      must('overlay').classList.toggle('playable', mode === 'pointer');
 
       this.overlay.resize();
       this.hud.setSubtitle(this.store.get());
@@ -690,7 +775,17 @@ class Theremano {
       // A partir de aqui manda el bucle: la escucha era solo el rodeo para oir
       // el enlace sin camara, y quien gobierna el silencio pasa a ser suspend().
       this.listening = false;
-      if (!this.store.get().onboarded) this.startOnboarding();
+      // La introduccion habla de manos, de dedos levantados y de la mano de
+      // expresion: con el puntero no hay nada de eso, y un paso que no se puede
+      // completar es peor que no tener introduccion. Se queda sin ver, asi que
+      // aparecera entera el dia que se entre con camara.
+      if (mode === 'camera' && !this.store.get().onboarded) this.startOnboarding();
+      else if (mode === 'pointer') {
+        // El aviso de siempre habla de juntar los dedos: aqui no hay dedos que
+        // juntar.
+        this.hud.setHint(t().hud.pointerHint);
+        this.hud.toast(t().toast.pointerHint, 6000);
+      }
       this.hideSplash();
 
       this.scheduleFrame();
@@ -700,6 +795,7 @@ class Theremano {
       this.starting = false;
       this.startButton.disabled = false;
       this.demoButton.disabled = false;
+      this.pointerButton.disabled = false;
     }
   }
 
@@ -724,7 +820,15 @@ class Theremano {
     }
     this.splashError.textContent = message;
     this.splashError.hidden = false;
-    this.setStatus('');
+    if (this.mode === 'camera') {
+      // Quien acaba de ver un error de camara necesita saber que le queda una
+      // salida, y que no sea la letra pequena de la pantalla. Si lo que ha
+      // fallado es el propio modo sin camara, ofrecerlo otra vez seria una burla.
+      this.setStatus(t().splash.pointerRescue);
+      this.pointerButton.classList.add('rescue');
+    } else {
+      this.setStatus('');
+    }
     this.camera.stop();
   }
 
@@ -742,8 +846,9 @@ class Theremano {
 
     // requestVideoFrameCallback avisa una vez por fotograma real de la camara.
     // Con requestAnimationFrame se acaba infiriendo dos veces sobre la misma
-    // imagen, que es tiempo de GPU tirado a la basura.
-    if (typeof this.video.requestVideoFrameCallback === 'function') {
+    // imagen, que es tiempo de GPU tirado a la basura. Con el puntero no hay
+    // video del que esperar nada: manda el ritmo de la pantalla.
+    if (this.mode === 'camera' && typeof this.video.requestVideoFrameCallback === 'function') {
       this.frameHandle = this.video.requestVideoFrameCallback((now, metadata) => {
         this.frameHandle = null;
         this.onFrame(now, metadata);
@@ -754,8 +859,10 @@ class Theremano {
 
     this.rafHandle = requestAnimationFrame((now) => {
       this.rafHandle = null;
-      // Sin metadatos hay que descartar a mano los fotogramas repetidos.
-      if (this.video.currentTime !== this.lastMediaTime) {
+      if (this.mode === 'pointer') {
+        this.onFrame(now, null);
+      } else if (this.video.currentTime !== this.lastMediaTime) {
+        // Sin metadatos hay que descartar a mano los fotogramas repetidos.
         this.lastMediaTime = this.video.currentTime;
         this.onFrame(now, null);
       }
@@ -773,19 +880,17 @@ class Theremano {
   }
 
   private onFrame(now: number, metadata: VideoFrameCallbackMetadata | null): void {
-    if (this.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+    if (this.mode === 'camera' && this.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
 
     const settings = this.store.get();
     const seconds = now / 1000;
     this.updateFps(now);
+    // El paso de tiempo se calcula aqui arriba porque lo necesitan tres cosas: la
+    // pinza del puntero, los efectos del overlay y la introduccion.
+    const dt = this.lastEffectsTime > 0 ? (now - this.lastEffectsTime) / 1000 : 1 / 60;
+    this.lastEffectsTime = now;
 
-    const detection = this.landmarker.detect(this.video, now, settings.mirror);
-    const hands: HandFrame[] = detection?.hands ?? [];
-    runtime.inferenceMs = detection?.inferenceMs ?? runtime.inferenceMs;
-
-    const assignment = this.roles.update(hands, now);
-    this.smoothForOverlay(assignment, seconds);
-
+    const assignment = this.mode === 'pointer' ? this.pointerHand(dt) : this.detectHands(now, seconds, settings.mirror);
     const output = this.mapper.update(assignment, seconds);
 
     // El evento del gate se atiende antes que cualquier otra cosa: es lo unico
@@ -800,6 +905,7 @@ class Theremano {
     // cada nota.
     this.engine.setVolume(output.gain);
     this.engine.setSpace(output.space);
+    this.engine.setVibrato(output.vibrato, output.vibratoRate);
     // El gesto de grabar hace exactamente lo mismo que el boton, y por el mismo
     // camino: es la unica forma de que no haya dos maneras distintas de grabar
     // que puedan discrepar.
@@ -813,6 +919,7 @@ class Theremano {
     runtime.cutoffNorm = output.cutoffNorm;
     runtime.volume = output.volume;
     runtime.pinchRatio = output.pinch;
+    runtime.vibrato = output.vibrato;
     runtime.fingerCount = output.fingerCount;
     runtime.presetCandidate = output.presetCandidate;
     runtime.presetProgress = output.presetProgress;
@@ -847,8 +954,6 @@ class Theremano {
 
     // Los efectos avanzan una vez por fotograma aunque se pinten dos veces:
     // si dependieran del numero de destinos, grabar aceleraria las particulas.
-    const dt = this.lastEffectsTime > 0 ? (now - this.lastEffectsTime) / 1000 : 1 / 60;
-    this.lastEffectsTime = now;
     if (output.gateEvent === 'attack') {
       this.overlay.attack(frame);
       this.hud.dismissHint();
@@ -856,7 +961,9 @@ class Theremano {
     }
     this.overlay.update(frame, dt);
 
-    const handsOnly = settings.stageMode === 'hands';
+    // Sin camara no hay fotograma que ensenar ni que tapar: el fondo propio es
+    // lo unico que hay, se haya pedido el modo de solo manos o no.
+    const handsOnly = settings.stageMode === 'hands' || this.mode === 'pointer';
     this.overlay.paint(this.overlay.screenTarget, frame, this.video.videoWidth, this.video.videoHeight, {
       backdrop: handsOnly,
     });
@@ -907,6 +1014,31 @@ class Theremano {
     this.hud.update(runtime, settings);
   }
 
+  /** Las manos que ve la camara, con su rol asignado y ya suavizadas. */
+  private detectHands(now: number, seconds: number, mirror: boolean): RoleAssignment {
+    const detection = this.landmarker.detect(this.video, now, mirror);
+    runtime.inferenceMs = detection?.inferenceMs ?? runtime.inferenceMs;
+    const assignment = this.roles.update(detection?.hands ?? [], now);
+    this.smoothForOverlay(assignment, seconds);
+    return assignment;
+  }
+
+  /**
+   * La mano dibujada que mueve el puntero.
+   *
+   * Devuelve un fotograma sin mano cuando la pose salta de sitio, que es lo que
+   * pasa con el dedo en cada nota nueva. No es un apano: la mano de verdad ha
+   * desaparecido y ha vuelto a aparecer en otro sitio, y ese es justo el camino
+   * que pone los filtros a cero para que la nota entre donde se ha pulsado y no
+   * donde se venia.
+   */
+  private pointerHand(dt: number): RoleAssignment {
+    const pose = this.pointer.update(dt);
+    if (!pose) return { melody: null, expression: null };
+    const target = this.overlay.screenTarget;
+    return this.drawnHand(pose, target.width / target.height);
+  }
+
   /**
    * Los puntos que se dibujan llevan su propio suavizado, mas suelto que el de
    * los parametros de audio: en pantalla un poco de retardo no se nota y un
@@ -939,6 +1071,9 @@ class Theremano {
   }
 
   private estimateLatency(now: number, metadata: VideoFrameCallbackMetadata | null): number {
+    // Con el puntero no hay tramo de camara que contar: la pulsacion llega al
+    // instante y lo unico que queda por delante es la cadena de audio.
+    if (this.mode === 'pointer') return this.engine.outputLatencyMs;
     // captureTime es el unico dato que mide de verdad desde el sensor; cuando no
     // esta, presentationTime da el tramo desde que el fotograma llego al
     // compositor. Sin metadatos se estima medio fotograma.
@@ -948,7 +1083,7 @@ class Theremano {
   }
 
   private checkPerformance(now: number): void {
-    if (!this.highRes || runtime.fps === 0) return;
+    if (this.mode !== 'camera' || !this.highRes || runtime.fps === 0) return;
     if (runtime.fps >= LOW_FPS_THRESHOLD) {
       this.lowFpsSince = null;
       return;
@@ -974,7 +1109,7 @@ class Theremano {
   // ------------------------------------------------------------- ciclo de vida
 
   private async reopenCamera(): Promise<void> {
-    if (!runtime.running) return;
+    if (!runtime.running || this.mode !== 'camera') return;
     const settings = this.store.get();
     const resolution = this.highRes ? HIGH_RES : LOW_RES;
     try {
@@ -1100,6 +1235,10 @@ class Theremano {
   /** Deja de sonar y de consumir GPU en cuanto la pestana pasa a segundo plano. */
   private suspend(): void {
     if (!runtime.running) return;
+    // Un dedo apoyado no sobrevive a irse de la pestana: al volver estaria
+    // sonando una nota que nadie esta tocando.
+    this.activePointer = null;
+    this.pointer.release();
     const event = this.mapper.silence();
     if (event === 'release') this.engine.release();
     // Una claqueta a medias no sobrevive a irse de la pestana: los pulsos ya no

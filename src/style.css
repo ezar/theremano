@@ -487,9 +487,17 @@ html, body {
  * lo sabe se la encuentra justo debajo, sin tener que dar permiso de camara para
  * averiguar de que va esto.
  */
-#demo-button {
-  display: block;
-  margin: 14px auto 0;
+#splash-alt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.splash-sep { color: rgba(244, 246, 251, 0.35); }
+
+#splash-alt button {
   padding: 8px 14px;
   border: none;
   background: none;
@@ -501,8 +509,27 @@ html, body {
   cursor: pointer;
 }
 
-#demo-button:hover:not(:disabled) { color: var(--fg); }
-#demo-button:disabled { opacity: 0.55; cursor: progress; }
+#splash-alt button:hover:not(:disabled) { color: var(--fg); }
+#splash-alt button:disabled { opacity: 0.55; cursor: progress; }
+
+/*
+ * Cuando la camara falla, tocar sin ella deja de ser la letra pequena: es la
+ * unica salida que le queda a quien acaba de ver un error de permisos.
+ */
+#splash-alt button.rescue {
+  color: var(--accent);
+  text-decoration-thickness: 2px;
+}
+
+/*
+ * El lienzo solo recibe pulsaciones cuando se toca con el puntero. Asi los
+ * botones del HUD, que estan por encima, siguen siendo botones y no notas.
+ */
+#overlay.playable {
+  pointer-events: auto;
+  touch-action: none;
+  cursor: crosshair;
+}
 
 /*
  * Rotulo de la demostracion. Abajo, donde estaria la barra de acciones, y no
