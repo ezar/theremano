@@ -297,7 +297,12 @@ function write(performance: Performance, paramHz: number): Uint8Array | null {
       at += 2;
       for (const hit of hits) {
         const units = Math.min(MAX_TIME_UNITS, Math.max(0, Math.round(hit.t * TIME_SCALE)));
-        const piece = Math.max(0, KIT.indexOf(hit.piece));
+        const piece = KIT.indexOf(hit.piece);
+        // Como con un timbre que no existe: se rechaza el enlace entero en vez
+        // de escribir otra pieza en su sitio. Hoy el tipo lo impide, pero el dia
+        // que el kit cambie es mejor no compartir nada que compartir un ritmo
+        // con los golpes cambiados de sitio.
+        if (piece < 0) return null;
         writeUint16(bytes, at, (piece << 14) | units);
         bytes[at + 2] = clampInt(Math.round(hit.force * 255), 0, 255);
         at += BYTES_PER_HIT;

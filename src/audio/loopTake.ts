@@ -128,7 +128,19 @@ export class LoopTake {
      * bytes por golpe en un enlace en vez de seis por evento.
      */
     if (this.drums) {
-      for (const strike of live.strikes) this.hits.push({ t, piece: strike.piece, force: strike.force });
+      /*
+       * El volumen entra en la fuerza, igual que en melodia entra en la ganancia
+       * de cada evento.
+       *
+       * Una capa se reproduce al volumen que tenia al grabarse y no al que haya
+       * ahora: los bucles no cuelgan del volumen maestro a proposito, porque
+       * bajar la mano apagaria tambien lo ya grabado. Sin esto la capa salia mas
+       * fuerte que los golpes que la hicieron -al volumen por defecto, un tercio
+       * mas- y mucho mas si se habia grabado con el volumen bajo.
+       */
+      for (const strike of live.strikes) {
+        this.hits.push({ t, piece: strike.piece, force: strike.force * live.gain });
+      }
       return;
     }
 

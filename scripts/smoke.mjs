@@ -590,10 +590,24 @@ console.log(JSON.stringify({ layer, withoutMetronome, metronomeToast, withMetron
  * melodia y de silenciarla, y lo que hay que medir es un ritmo solo.
  */
 await pointerPage.keyboard.press('z');
+// Sin ningun boton pendiente: este bloque viene de probar el pedal y una tecla
+// suelta con el raton pulsado grabaria una nota donde tiene que haber un golpe.
+await pointerPage.mouse.up().catch(() => {});
+await pointerPage.mouse.up({ button: 'right' }).catch(() => {});
 await pointerPage.waitForTimeout(400);
 await pointerPage.keyboard.press('b');
 await pointerPage.waitForTimeout(500);
-const drumsOnToast = await pointerPage.textContent('#toast');
+/*
+ * El subtitulo del panel es lo que distingue de verdad los dos modos: en
+ * bateria dice el kit y en melodia la escala. El aviso no sirve para eso -es el
+ * ultimo que se haya mostrado, y hay varios por el camino-, asi que comprobar
+ * solo el aviso daba por bueno un recorrido en el que la tecla B no hacia nada y
+ * lo que se grababa era una capa de melodia.
+ */
+const drumsOn = await pointerPage.evaluate(() => ({
+  aviso: document.getElementById('toast')?.textContent ?? '',
+  subtitulo: document.getElementById('note-sub')?.textContent ?? '',
+}));
 
 const strike = async (x) => {
   await pointerPage.mouse.move(x, 150);
@@ -641,7 +655,7 @@ const overTheBeat = await pointerPage.evaluate(() => ({
   sonando: document.getElementById('note')?.classList.contains('sounding') ?? false,
 }));
 await pointerPage.mouse.up();
-console.log(JSON.stringify({ drumsOnToast, drumLayer, drumLoopAlone, backToMelody, overTheBeat }, null, 2));
+console.log(JSON.stringify({ drumsOn, drumLayer, drumLoopAlone, backToMelody, overTheBeat }, null, 2));
 
 console.log(
   JSON.stringify(
@@ -753,6 +767,26 @@ if (spanish.lang !== 'es' || !/índice/.test(spanish.hint ?? '') || spanish.note
 const plainLabels = new Set(allSteps.filter((s) => !s.optional).map((s) => s.skipLabel));
 if (optionalSteps.length !== 2 || optionalSteps.some((s) => plainLabels.has(s.skipLabel))) {
   console.error('\nFALLO: los pasos de la segunda mano no se anuncian como opcionales');
+  process.exit(1);
+}
+if (drumLayer.capas !== 1) {
+  console.error('\nFALLO: grabar un ritmo no deja capa');
+  process.exit(1);
+}
+if (drumLoopAlone < 0.02) {
+  console.error('\nFALLO: la capa de bateria no suena sola, sin manos delante');
+  process.exit(1);
+}
+if (drumsOn.subtitulo === backToMelody.subtitulo) {
+  console.error('\nFALLO: la tecla B no cambia de instrumento');
+  process.exit(1);
+}
+if (backToMelody.capas !== 1) {
+  console.error('\nFALLO: cambiar de instrumento se lleva el bucle por delante');
+  process.exit(1);
+}
+if (!overTheBeat.sonando || overTheBeat.nota === '--') {
+  console.error('\nFALLO: no se puede tocar melodia encima del ritmo grabado');
   process.exit(1);
 }
 if (drumCoach.dots !== 4 || drumCoach.steps.length !== 4) {

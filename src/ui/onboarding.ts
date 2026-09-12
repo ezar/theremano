@@ -55,8 +55,10 @@ interface StepProgress {
   hits: number;
   /** Piezas distintas golpeadas en el paso. */
   pieces: Set<string>;
-  /** Fotogramas en que han caido dos golpes a la vez, uno por mano. */
+  /** Veces que han caido dos golpes juntos, uno por mano. */
   pairs: number;
+  /** Cuando entro el ultimo golpe, para medir si el siguiente viene con el. */
+  lastHitAt: number;
 }
 
 export interface OnboardingStep {
@@ -72,6 +74,15 @@ export interface OnboardingStep {
   /** Se cierra cuando esto devuelve true. */
   isDone: (progress: Readonly<StepProgress>, signals: CoachSignals) => boolean;
 }
+
+/**
+ * Lo que separa dos golpes para seguir siendo uno de cada mano.
+ *
+ * Por debajo del tiempo muerto del detector de golpe, que son noventa
+ * milisegundos: una sola mano no puede dar dos golpes tan seguidos, asi que dos
+ * dentro de esta ventana vienen por fuerza de manos distintas.
+ */
+const TOGETHER = 0.08;
 
 /** Recorrido de un valor durante el paso. Mide "muevete", no "estate quieto". */
 const span = (p: Readonly<StepProgress>): number => (p.max >= p.min ? p.max - p.min : 0);
@@ -196,9 +207,24 @@ export class Onboarding {
     if (signals.presetChanged) p.changes += 1;
     // Los golpes se acumulan siempre, como los ataques: en modo melodia la lista
     // llega vacia en todos los fotogramas y esto no cuesta nada.
-    p.hits += signals.strikes.length;
-    if (signals.strikes.length >= 2) p.pairs += 1;
-    for (const strike of signals.strikes) p.pieces.add(strike.piece);
+    for (const strike of signals.strikes) {
+      p.hits += 1;
+      p.pieces.add(strike.piece);
+      /*
+       * Dos golpes juntos, no dos golpes en el mismo fotograma.
+       *
+       * La primera version exigia el mismo fotograma, y eso es algo que casi no
+       * pasa: cada mano tiene su propio detector, y cada uno dispara cuando su
+       * mano lleva sus centesimas de caida. Dos manos que un humano baja "a la
+       * vez" cruzan el umbral uno o dos fotogramas apartadas, asi que el paso se
+       * quedaba esperando algo que se estaba haciendo bien.
+       *
+       * La ventana es mas corta que el tiempo muerto del detector, asi que dos
+       * golpes dentro de ella no pueden ser de la misma mano: son dos manos.
+       */
+      if (p.lastHitAt >= 0 && p.elapsed - p.lastHitAt <= TOGETHER) p.pairs += 1;
+      p.lastHitAt = p.elapsed;
+    }
 
     // Cada paso mide lo suyo. Meter todas las medidas en el mismo acumulador
     // haria que el recorrido de la mano contase para el paso del volumen.
@@ -244,7 +270,18 @@ function seesMelody(signals: CoachSignals): boolean {
 }
 
 function blank(): StepProgress {
-  return { elapsed: 0, held: 0, min: Infinity, max: -Infinity, attacks: 0, changes: 0, hits: 0, pieces: new Set(), pairs: 0 };
+  return {
+    elapsed: 0,
+    held: 0,
+    min: Infinity,
+    max: -Infinity,
+    attacks: 0,
+    changes: 0,
+    hits: 0,
+    pieces: new Set(),
+    pairs: 0,
+    lastHitAt: -1,
+  };
 }
 
 function track(p: StepProgress, value: number): void {

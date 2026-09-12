@@ -288,6 +288,41 @@ describe('introduccion de la bateria', () => {
     expect(coach.isActive).toBe(false);
   });
 
+  it('dos manos separadas por un par de fotogramas cuentan como juntas', () => {
+    /*
+     * El caso de verdad. Cada mano tiene su propio detector y cada uno dispara
+     * cuando su mano lleva sus centesimas de caida, asi que dos manos que uno
+     * baja a la vez no cruzan el umbral en el mismo fotograma: se separan uno o
+     * dos. Exigir el mismo fotograma dejaba el paso esperando algo que se estaba
+     * haciendo bien.
+     */
+    const coach = coachAt('drumBoth', true);
+    let frame = 0;
+    const events = feed(coach, { melodyVisible: true }, 0.5, () => {
+      const at = frame++;
+      if (at === 0) return hit('kick');
+      if (at === 2) return hit('hat');
+      return {};
+    });
+    expect(events).toEqual(['finished']);
+  });
+
+  it('pero dos golpes de la misma mano no, ni aunque sean rapidos', () => {
+    // El detector impone noventa milisegundos entre golpes de una mano, y la
+    // ventana de "juntos" es mas corta: lo que cae dentro son dos manos.
+    const coach = coachAt('drumBoth', true);
+    let frame = 0;
+    expect(
+      feed(coach, { melodyVisible: true }, 1, () => {
+        const at = frame++;
+        // Cada seis fotogramas: cien milisegundos, lo mas rapido que puede ir
+        // una mano sola.
+        return at % 6 === 0 ? hit('snare') : {};
+      }),
+    ).toEqual([]);
+    expect(coach.step?.id).toBe('drumBoth');
+  });
+
   it('el paso de las dos manos se puede saltar, y es el unico', () => {
     const optional = DRUM_STEPS.filter((step) => step.optional).map((step) => step.id);
     expect(optional).toEqual(['drumBoth']);

@@ -234,9 +234,10 @@ export interface Strings {
     /**
      * El mismo final, para la bateria.
      *
-     * Hace falta uno propio porque el de la melodia manda grabar una capa, y en
-     * bateria los bucles todavia no graban golpes: seria despedir la
-     * introduccion mandando hacer lo unico que la aplicacion va a rechazar.
+     * Hace falta uno propio porque el de la melodia despide mandando grabar una
+     * capa, y ahi lo que toca aprender a continuacion es otra cosa: sostener el
+     * charles con una mano mientras la otra alterna. Lo de grabar viene despues
+     * y lo cuenta la ayuda.
      */
     onboardingDoneDrums: string;
     onboardingSkipped: string;
