@@ -196,6 +196,9 @@ export interface Strings {
     drumPointerHint: string;
     /** Que nota se ha quedado sostenida con la otra mano. */
     drone: (note: string) => string;
+    /** El cambio de instrumento en caliente, con la tecla B. */
+    drumsOn: string;
+    drumsOff: string;
     metronomeOn: string;
     metronomeOff: string;
     countIn: string;
@@ -227,8 +230,6 @@ export interface Strings {
     guideNeedsScale: string;
     /** La guia no cabe en bateria: no hay notas que apuntar. */
     guideNeedsMelody: string;
-    /** Los bucles todavia no saben grabar golpes. */
-    loopNeedsMelody: string;
     onboardingDone: string;
     /**
      * El mismo final, para la bateria.

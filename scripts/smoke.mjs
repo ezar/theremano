@@ -577,6 +577,72 @@ const withMetronome = Number((await pointerPage.evaluate(() => window.__peak)).t
 await pointerPage.keyboard.press('m');
 console.log(JSON.stringify({ layer, withoutMetronome, metronomeToast, withMetronome }, null, 2));
 
+/*
+ * --- Un ritmo grabado, y melodia encima.
+ *
+ * Es la razon de ser del modo bateria y toca todo lo que se acaba de anadir a la
+ * vez: que la toma guarde golpes, que la capa se reproduzca sola, que la tecla B
+ * cambie de instrumento sin parar el bucle, y que se pueda tocar encima de lo
+ * grabado. Va en la pestana del puntero porque ahi se puede dar un golpe a
+ * voluntad; delante de la camara falsa no hay manos que bajar.
+ *
+ * Se limpia lo anterior primero: esta pestana viene de grabar una capa de
+ * melodia y de silenciarla, y lo que hay que medir es un ritmo solo.
+ */
+await pointerPage.keyboard.press('z');
+await pointerPage.waitForTimeout(400);
+await pointerPage.keyboard.press('b');
+await pointerPage.waitForTimeout(500);
+const drumsOnToast = await pointerPage.textContent('#toast');
+
+const strike = async (x) => {
+  await pointerPage.mouse.move(x, 150);
+  await pointerPage.waitForTimeout(60);
+  for (let step = 1; step <= 8; step += 1) {
+    await pointerPage.mouse.move(x, 150 + step * 30);
+    await pointerPage.waitForTimeout(8);
+  }
+  await pointerPage.mouse.move(x, 150);
+  await pointerPage.waitForTimeout(60);
+};
+await pointerPage.keyboard.press('Space');
+// La primera capa lleva claqueta: cuatro pulsos antes de que empiece a grabar.
+await pointerPage.waitForTimeout(2900);
+for (const x of [180, 351, 540, 351]) await strike(x);
+await pointerPage.keyboard.press('Space');
+await pointerPage.waitForTimeout(900);
+const drumLayer = await pointerPage.evaluate(() => ({
+  capas: document.querySelectorAll('.loop-lane').length,
+  aviso: document.getElementById('toast')?.textContent ?? '',
+}));
+
+// Sin manos encima: lo que suene ahora es la capa grabada y nada mas. La espera
+// larga antes de poner el contador a cero es por la sonda: el analizador guarda
+// casi un segundo de historia y medir justo despues leeria lo de antes.
+await pointerPage.mouse.move(450, 60);
+await pointerPage.waitForTimeout(1500);
+await pointerPage.evaluate(() => window.__resetPeak());
+await pointerPage.waitForTimeout(2500);
+const drumLoopAlone = Number((await pointerPage.evaluate(() => window.__peak)).toFixed(4));
+
+// Y de vuelta a la melodia sin parar, para tocar encima.
+await pointerPage.keyboard.press('b');
+await pointerPage.waitForTimeout(500);
+const backToMelody = await pointerPage.evaluate(() => ({
+  aviso: document.getElementById('toast')?.textContent ?? '',
+  subtitulo: document.getElementById('note-sub')?.textContent ?? '',
+  capas: document.querySelectorAll('.loop-lane').length,
+}));
+await pointerPage.mouse.move(500, 320);
+await pointerPage.mouse.down();
+await pointerPage.waitForTimeout(800);
+const overTheBeat = await pointerPage.evaluate(() => ({
+  nota: document.getElementById('note')?.textContent ?? '',
+  sonando: document.getElementById('note')?.classList.contains('sounding') ?? false,
+}));
+await pointerPage.mouse.up();
+console.log(JSON.stringify({ drumsOnToast, drumLayer, drumLoopAlone, backToMelody, overTheBeat }, null, 2));
+
 console.log(
   JSON.stringify(
     { beforePress, pressed, dragged, vibrato, soundingClass, droneToast, droning, afterDrone, released, erroresPuntero: pointerLogs },
@@ -874,5 +940,5 @@ if (!state.splashHidden || !state.hudVisible) {
 console.log(
   `\nOK: mando de la portada, arranque, modelo, audio, introduccion de ${coachStart.dots} pasos y la de bateria de ${drumCoach.dots}, ayuda, espanol e ingles, ` +
     `bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB, solo manos con clip de ` +
-    `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion y puntero sin camara con vibrato, nota pedal y claqueta, y enlace compartible.`,
+    `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion y puntero sin camara con vibrato, nota pedal y claqueta, ritmo grabado con melodia encima, y enlace compartible.`,
 );

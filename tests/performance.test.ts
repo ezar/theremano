@@ -141,7 +141,7 @@ describe('interpretacion en el enlace', () => {
    */
   it('una capa cuya nota cruza el final del ciclo es valida', () => {
     const take = new LoopTake('theremin', 3.4, 4);
-    const live = { freq: 440, cutoffNorm: 0.5, gain: 0.8 };
+    const live = { freq: 440, cutoffNorm: 0.5, gain: 0.8, strikes: [] };
     take.capture(0.1, { ...live, gateEvent: 'attack', gateOpen: true });
     for (let at = 0.15; at < 0.9; at += 0.05) {
       take.capture(at, { ...live, gateEvent: null, gateOpen: true });

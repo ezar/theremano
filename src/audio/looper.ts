@@ -1,9 +1,10 @@
 import * as Tone from 'tone';
 import { getPreset, type Preset, type PresetId } from './presets';
-import { LoopTake, MAX_TRACKS, type LiveSnapshot, type LoopEvent } from './loopTake';
+import { LoopTake, MAX_TRACKS, type DrumHitEvent, type LiveSnapshot, type LoopEvent } from './loopTake';
+import { DrumKit } from './drums';
 import { beatsInCycle, beatsLeft, isAccent, isDue, isMissed, planCountIn, type CountInPlan } from './countIn';
 
-export type { LoopEvent } from './loopTake';
+export type { DrumHitEvent, LoopEvent } from './loopTake';
 export { MAX_CYCLE_SECONDS, MAX_TRACKS, MIN_CYCLE_SECONDS } from './loopTake';
 export { COUNT_IN_BEATS } from './countIn';
 
@@ -34,6 +35,9 @@ export interface LoopTrack {
   id: number;
   presetId: PresetId;
   events: LoopEvent[];
+  /** Golpes, si la capa es de bateria. */
+  hits: DrumHitEvent[];
+  drums: boolean;
   muted: boolean;
   hue: number;
 }
@@ -125,6 +129,45 @@ class LoopVoice {
 }
 
 /**
+ * Una capa de bateria reproduciendose: su propio kit.
+ *
+ * Propio y no compartido entre capas porque silenciar una capa tiene que
+ * silenciarla sola, y el mando esta antes del kit. Con un kit compartido no
+ * habria donde poner ese mando sin callar tambien a las demas.
+ *
+ * No hay rampas ni parametros que seguir: un golpe se programa en su instante y
+ * ya esta. Toda la diferencia con la voz de melodia es esa.
+ */
+class DrumLoopVoice {
+  private readonly kit: DrumKit;
+  private readonly gain: Tone.Gain;
+
+  constructor(output: Tone.InputNode) {
+    this.gain = new Tone.Gain(1).connect(output);
+    this.kit = new DrumKit(this.gain);
+  }
+
+  schedule(hits: readonly DrumHitEvent[], cycleStart: number): void {
+    this.gain.gain.cancelScheduledValues(cycleStart);
+    // Devuelve el volumen al empezar la vuelta: es lo que hace que quitar el
+    // silencio de una capa se note en la vuelta siguiente y no haya que tocar
+    // nada mas.
+    this.gain.gain.setValueAtTime(1, cycleStart);
+    for (const hit of hits) this.kit.hit(hit.piece, hit.force, cycleStart + hit.t);
+  }
+
+  silence(): void {
+    this.gain.gain.cancelScheduledValues(Tone.now());
+    this.gain.gain.rampTo(0, 0.02);
+  }
+
+  dispose(): void {
+    this.kit.dispose();
+    this.gain.dispose();
+  }
+}
+
+/**
  * La voz de la claqueta.
  *
  * Se crea al empezar la cuenta y se destruye al terminarla o al cancelarla.
@@ -182,12 +225,12 @@ export interface LoopState {
 export class Looper {
   private output: Tone.InputNode | null = null;
   private readonly tracks: LoopTrack[] = [];
-  private readonly voices = new Map<number, LoopVoice>();
+  private readonly voices = new Map<number, LoopVoice | DrumLoopVoice>();
   private recordingTake: Recording | null = null;
   private cycleSeconds = 0;
   private repeatId: number | null = null;
   private nextId = 1;
-  private countIn: { plan: CountInPlan; presetId: PresetId } | null = null;
+  private countIn: { plan: CountInPlan; presetId: PresetId; drums: boolean } | null = null;
   private click: ClickVoice | null = null;
   private metronome = false;
   private beatId: number | null = null;
@@ -225,7 +268,8 @@ export class Looper {
    * vacia: son cosas distintas y decirle al interprete que ha grabado algo
    * cuando no hay nada es peor que no decir nada.
    */
-  toggle(presetId: PresetId): 'started' | 'counting' | 'cancelled' | 'saved' | 'discarded' | 'rejected' {
+  /** @param drums graba golpes en lugar de notas. */
+  toggle(presetId: PresetId, drums = false): 'started' | 'counting' | 'cancelled' | 'saved' | 'discarded' | 'rejected' {
     if (this.recordingTake) {
       return this.finish() ? 'saved' : 'discarded';
     }
@@ -241,11 +285,11 @@ export class Looper {
     // de la nada. En una sobregrabacion el ciclo ya existe y la toma entra donde
     // este el cabezal, asi que contar por delante solo desplazaria la capa.
     if (this.cycleSeconds <= 0) {
-      this.startCountIn(presetId);
+      this.startCountIn(presetId, drums);
       return 'counting';
     }
 
-    this.startTake(presetId, Tone.now());
+    this.startTake(presetId, drums, Tone.now());
     return 'started';
   }
 
@@ -268,10 +312,10 @@ export class Looper {
     }
   }
 
-  private startCountIn(presetId: PresetId): void {
+  private startCountIn(presetId: PresetId, drums: boolean): void {
     if (!this.output) return;
     const plan = planCountIn(Tone.now());
-    this.countIn = { plan, presetId };
+    this.countIn = { plan, presetId, drums };
     const click = this.ensureClick();
     for (let i = 0; i < plan.clicks.length; i += 1) click?.at(plan.clicks[i]!, isAccent(i));
   }
@@ -307,13 +351,13 @@ export class Looper {
     this.click = null;
   }
 
-  private startTake(presetId: PresetId, startedAt: number): void {
+  private startTake(presetId: PresetId, drums: boolean, startedAt: number): void {
     const transport = Tone.getTransport();
     // La primera capa arranca en cero y define el ciclo. Las siguientes se
     // colocan donde este el cabezal, para poder grabar encima sin esperar a que
     // la vuelta termine.
     const offset = this.cycleSeconds > 0 ? transport.seconds % this.cycleSeconds : 0;
-    this.recordingTake = { take: new LoopTake(presetId, offset, this.cycleSeconds), startedAt };
+    this.recordingTake = { take: new LoopTake(presetId, offset, this.cycleSeconds, drums), startedAt };
   }
 
   private stopCountIn(): void {
@@ -334,7 +378,7 @@ export class Looper {
      * codigo sino el que se guarda en startedAt, que es el del pulso.
      */
     if (this.countIn && isDue(this.countIn.plan, Tone.now())) {
-      const { plan, presetId } = this.countIn;
+      const { plan, presetId, drums } = this.countIn;
       this.stopCountIn();
       /*
        * Si el pulso de entrada quedo muy atras, la entrada se perdio y no hay
@@ -343,7 +387,7 @@ export class Looper {
        * la toma con un inicio que ya paso la llenaria de silencio por delante, y
        * con veinte segundos de ausencia se descartaria sola nada mas nacer.
        */
-      if (!isMissed(plan, Tone.now())) this.startTake(presetId, plan.downbeat);
+      if (!isMissed(plan, Tone.now())) this.startTake(presetId, drums, plan.downbeat);
     }
 
     const recording = this.recordingTake;
@@ -388,9 +432,14 @@ export class Looper {
    * false si no hay salida de audio todavia o si no llega ninguna capa con
    * eventos: el resto de la aplicacion decide entonces que contar.
    */
-  load(tracks: ReadonlyArray<{ presetId: PresetId; events: LoopEvent[] }>, cycleSeconds: number): boolean {
+  load(
+    tracks: ReadonlyArray<{ presetId: PresetId; events: LoopEvent[]; hits?: DrumHitEvent[]; drums?: boolean }>,
+    cycleSeconds: number,
+  ): boolean {
     if (!this.output || cycleSeconds <= 0) return false;
-    const usable = tracks.filter((track) => track.events.length > 0).slice(0, MAX_TRACKS);
+    const usable = tracks
+      .filter((track) => (track.drums ? (track.hits?.length ?? 0) > 0 : track.events.length > 0))
+      .slice(0, MAX_TRACKS);
     if (usable.length === 0) return false;
 
     this.clear();
@@ -400,11 +449,13 @@ export class Looper {
         id: this.nextId++,
         presetId: incoming.presetId,
         events: incoming.events,
+        hits: incoming.hits ?? [],
+        drums: incoming.drums ?? false,
         muted: false,
         hue: TRACK_HUES[this.tracks.length % TRACK_HUES.length]!,
       };
       this.tracks.push(track);
-      this.voices.set(track.id, new LoopVoice(getPreset(track.presetId), this.output));
+      this.voices.set(track.id, this.makeVoice(track));
     }
     this.startTransport();
     return true;
@@ -453,13 +504,20 @@ export class Looper {
       id: this.nextId++,
       presetId: finished.presetId,
       events: finished.events,
+      hits: finished.hits,
+      drums: finished.drums,
       muted: false,
       hue: TRACK_HUES[this.tracks.length % TRACK_HUES.length]!,
     };
     this.tracks.push(track);
-    this.voices.set(track.id, new LoopVoice(getPreset(track.presetId), this.output));
+    this.voices.set(track.id, this.makeVoice(track));
     this.startTransport();
     return true;
+  }
+
+  private makeVoice(track: LoopTrack): LoopVoice | DrumLoopVoice {
+    const output = this.output!;
+    return track.drums ? new DrumLoopVoice(output) : new LoopVoice(getPreset(track.presetId), output);
   }
 
   private startTransport(): void {
@@ -472,7 +530,9 @@ export class Looper {
     this.repeatId = transport.scheduleRepeat((time) => {
       for (const track of this.tracks) {
         if (track.muted) continue;
-        this.voices.get(track.id)?.schedule(track.events, time);
+        const voice = this.voices.get(track.id);
+        if (voice instanceof DrumLoopVoice) voice.schedule(track.hits, time);
+        else voice?.schedule(track.events, time);
       }
     }, this.cycleSeconds, 0);
     this.scheduleBeats();

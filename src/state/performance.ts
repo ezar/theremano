@@ -1,6 +1,7 @@
 import { PRESETS, type PresetId } from '../audio/presets';
-import type { LoopEvent } from '../audio/loopTake';
+import type { DrumHitEvent, LoopEvent } from '../audio/loopTake';
 import { MAX_CYCLE_SECONDS, MAX_TRACKS, MIN_CYCLE_SECONDS } from '../audio/loopTake';
+import { KIT } from '../mapping/kit';
 
 /**
  * Una interpretacion dentro de un enlace.
@@ -19,6 +20,9 @@ import { MAX_CYCLE_SECONDS, MAX_TRACKS, MIN_CYCLE_SECONDS } from '../audio/loopT
 export interface PerformanceTrack {
   presetId: PresetId;
   events: LoopEvent[];
+  /** Golpes, si la capa es de bateria. */
+  hits?: DrumHitEvent[];
+  drums?: boolean;
 }
 
 export interface Performance {
@@ -49,6 +53,25 @@ const MAX_BYTES = 1400;
 const PARAM_RATES = [10, 5] as const;
 
 const BYTES_PER_EVENT = 6;
+
+/**
+ * Un golpe cabe en tres bytes: catorce bits de tiempo, dos de pieza y ocho de
+ * fuerza. Dos bits dan para cuatro piezas, que es exactamente el kit.
+ */
+const BYTES_PER_HIT = 3;
+
+/**
+ * Marca de capa de bateria en el byte donde una capa de melodia lleva su timbre.
+ *
+ * Se elige un valor que no puede ser un indice de timbre en vez de subir la
+ * version del formato, y la diferencia importa: subir la version dejaria
+ * ilegibles tambien los enlaces de melodia nuevos para quien tenga una copia
+ * vieja de la pagina en cache. Asi los de melodia siguen viajando igual, y una
+ * copia vieja que reciba uno con bateria lo rechaza entero -no hay indice de
+ * timbre 255- y dice que el enlace trae algo que no puede reproducir, que es la
+ * verdad y no media vuelta sonando mal.
+ */
+const DRUM_MARK = 0xff;
 const KIND_CODES = { attack: 0, release: 1, param: 2 } as const;
 const KIND_NAMES = ['attack', 'release', 'param'] as const;
 
@@ -75,7 +98,9 @@ export interface EncodeResult {
 export function encodePerformance(performance: Performance): EncodeResult | null {
   // Se recorta a lo que se puede reproducir. Codificar una quinta capa seria
   // escribir algo que el propio decodificador va a rechazar despues.
-  const usable = performance.tracks.filter((track) => track.events.length > 0).slice(0, MAX_TRACKS);
+  const usable = performance.tracks
+    .filter((track) => (track.drums ? (track.hits?.length ?? 0) > 0 : track.events.length > 0))
+    .slice(0, MAX_TRACKS);
   if (usable.length === 0) return null;
   if (!(performance.cycleSeconds > 0)) return null;
 
@@ -113,10 +138,38 @@ export function decodePerformance(encoded: string): Performance | null {
   const tracks: PerformanceTrack[] = [];
   for (let i = 0; i < trackCount; i += 1) {
     if (at + 3 > bytes.length) return null;
-    const preset = PRESETS[bytes[at++] ?? -1];
+    const mark = bytes[at++] ?? -1;
+    const drums = mark === DRUM_MARK;
+    const preset = drums ? PRESETS[0] : PRESETS[mark];
     if (!preset) return null;
     const eventCount = readUint16(bytes, at);
     at += 2;
+
+    if (drums) {
+      if (eventCount === 0 || at + eventCount * BYTES_PER_HIT > bytes.length) return null;
+      const hits: DrumHitEvent[] = [];
+      let last = -1;
+      for (let h = 0; h < eventCount; h += 1) {
+        const packed = readUint16(bytes, at);
+        const piece = KIT[packed >> 14];
+        // Con cuatro piezas los dos bits estan llenos, asi que hoy esto no puede
+        // fallar. Se comprueba igual: el dia que el kit tenga tres, un enlace
+        // manipulado traeria un undefined golpeando.
+        if (!piece) return null;
+        const t = (packed & MAX_TIME_UNITS) / TIME_SCALE;
+        if (t > cycleSeconds + 0.5) return null;
+        // En orden, por el mismo motivo que en melodia: el reproductor programa
+        // por instante y no por posicion en la lista.
+        if (t < last) return null;
+        last = t;
+        hits.push({ t, piece, force: (bytes[at + 2] ?? 0) / 255 });
+        at += BYTES_PER_HIT;
+      }
+      // Sin notas enteras que exigir: un golpe no deja nada abierto. Con que
+      // haya uno, la capa suena.
+      tracks.push({ presetId: preset.id, events: [], hits, drums: true });
+      continue;
+    }
     // Una capa sin eventos no la produce el codificador: las vacias se filtran
     // antes de escribir. Si aparece, el enlace no es de aqui.
     if (eventCount === 0 || at + eventCount * BYTES_PER_EVENT > bytes.length) return null;
@@ -218,8 +271,16 @@ export function thin(events: readonly LoopEvent[], paramHz: number): LoopEvent[]
 }
 
 function write(performance: Performance, paramHz: number): Uint8Array | null {
-  const thinned = performance.tracks.map((track) => ({ ...track, events: thin(track.events, paramHz) }));
-  const total = thinned.reduce((sum, track) => sum + 3 + track.events.length * BYTES_PER_EVENT, 4);
+  // Los golpes no se remuestrean: no son instantaneas de un parametro que se
+  // pueda estirar en rampas, son eventos. Quitar uno es quitar un golpe.
+  const thinned = performance.tracks.map((track) =>
+    track.drums ? track : { ...track, events: thin(track.events, paramHz) },
+  );
+  const total = thinned.reduce(
+    (sum, track) =>
+      sum + 3 + (track.drums ? (track.hits?.length ?? 0) * BYTES_PER_HIT : track.events.length * BYTES_PER_EVENT),
+    4,
+  );
   const bytes = new Uint8Array(total);
 
   let at = 0;
@@ -229,6 +290,20 @@ function write(performance: Performance, paramHz: number): Uint8Array | null {
   bytes[at++] = thinned.length;
 
   for (const track of thinned) {
+    if (track.drums) {
+      const hits = track.hits ?? [];
+      bytes[at++] = DRUM_MARK;
+      writeUint16(bytes, at, hits.length);
+      at += 2;
+      for (const hit of hits) {
+        const units = Math.min(MAX_TIME_UNITS, Math.max(0, Math.round(hit.t * TIME_SCALE)));
+        const piece = Math.max(0, KIT.indexOf(hit.piece));
+        writeUint16(bytes, at, (piece << 14) | units);
+        bytes[at + 2] = clampInt(Math.round(hit.force * 255), 0, 255);
+        at += BYTES_PER_HIT;
+      }
+      continue;
+    }
     const index = PRESETS.findIndex((preset) => preset.id === track.presetId);
     if (index < 0) return null;
     bytes[at++] = index;

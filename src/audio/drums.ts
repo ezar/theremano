@@ -54,7 +54,7 @@ const LEVEL: Record<DrumPiece, number> = {
 const MIN_VELOCITY = 0.05;
 
 interface Voice {
-  hit(force: number): void;
+  hit(force: number, time?: number): void;
   dispose(): void;
 }
 
@@ -78,8 +78,8 @@ class NoiseVoice implements Voice {
     }).connect(this.band);
   }
 
-  hit(force: number): void {
-    this.noise.triggerAttackRelease(this.decay, undefined, velocity(force));
+  hit(force: number, time?: number): void {
+    this.noise.triggerAttackRelease(this.decay, time, velocity(force));
   }
 
   dispose(): void {
@@ -106,8 +106,8 @@ class KickVoice implements Voice {
     }).connect(this.gain);
   }
 
-  hit(force: number): void {
-    this.synth.triggerAttackRelease('C1', DECAY.kick, undefined, velocity(force));
+  hit(force: number, time?: number): void {
+    this.synth.triggerAttackRelease('C1', DECAY.kick, time, velocity(force));
   }
 
   dispose(): void {
@@ -136,9 +136,14 @@ export class DrumKit {
     };
   }
 
-  /** @param force de 0 a 1, lo fuerte que ha bajado la mano. */
-  hit(piece: DrumPiece, force: number): void {
-    this.voices[piece].hit(force);
+  /**
+   * @param force de 0 a 1, lo fuerte que ha bajado la mano.
+   * @param time instante del contexto de audio, o nada para ya mismo. Lo usan
+   * las capas de bucle, que programan la vuelta entera por delante; en directo
+   * no se pasa, porque ahi el instante es este.
+   */
+  hit(piece: DrumPiece, force: number, time?: number): void {
+    this.voices[piece].hit(force, time);
   }
 
   dispose(): void {

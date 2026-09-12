@@ -12,7 +12,7 @@ import type { LiveSnapshot } from '../src/audio/loopTake';
  */
 
 const FPS = 60;
-const silent: LiveSnapshot = { gateEvent: null, gateOpen: false, freq: 440, cutoffNorm: 0.5, gain: 0.8 };
+const silent: LiveSnapshot = { gateEvent: null, gateOpen: false, strikes: [], freq: 440, cutoffNorm: 0.5, gain: 0.8 };
 const holding: LiveSnapshot = { ...silent, gateOpen: true };
 
 /** Reproduce una grabacion fotograma a fotograma. */

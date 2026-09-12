@@ -1,4 +1,5 @@
 import type { PresetId } from './presets';
+import type { DrumPiece } from '../mapping/kit';
 
 /**
  * La toma de una capa de bucle, sin nada de audio.
@@ -19,12 +20,31 @@ export interface LoopEvent {
   gain: number;
 }
 
+/**
+ * Un golpe dentro de una capa.
+ *
+ * No es un LoopEvent con otros campos y no puede serlo: un evento de melodia es
+ * la mitad de una nota —hay un ataque y hay una suelta, y sin las dos la nota se
+ * queda abierta para siempre— y un golpe es entero en si mismo. Meterlos en la
+ * misma lista obligaria a inventar sueltas que no existen y a que todo lo que
+ * valida notas enteras tuviera que mirar antes de que tipo es cada cosa.
+ */
+export interface DrumHitEvent {
+  /** Segundos desde el inicio del ciclo. */
+  t: number;
+  piece: DrumPiece;
+  /** 0 a 1. */
+  force: number;
+}
+
 export interface LiveSnapshot {
   gateEvent: 'attack' | 'release' | null;
   gateOpen: boolean;
   freq: number;
   cutoffNorm: number;
   gain: number;
+  /** Golpes de este fotograma. Casi siempre vacio, y siempre en melodia. */
+  strikes: readonly { piece: DrumPiece; force: number }[];
 }
 
 /**
@@ -52,12 +72,16 @@ export function wrapTime(t: number, cycleSeconds: number): number {
 export interface FinishedTake {
   presetId: PresetId;
   events: LoopEvent[];
+  /** Golpes de la capa. Vacio si es de melodia; lo otro lo esta si es de bateria. */
+  hits: DrumHitEvent[];
+  drums: boolean;
   /** Duracion del ciclo tras cerrar la toma. */
   cycleSeconds: number;
 }
 
 export class LoopTake {
   private readonly events: LoopEvent[] = [];
+  private readonly hits: DrumHitEvent[] = [];
   private lastParamAt = -Infinity;
   /** Si hay una nota abierta ahora mismo dentro de la toma. */
   private noteOpen = false;
@@ -68,6 +92,8 @@ export class LoopTake {
     private readonly offset: number,
     /** Duracion del ciclo ya establecida, o 0 si esta es la primera capa. */
     private cycleSeconds: number,
+    /** Capa de bateria: guarda golpes en lugar de notas. */
+    readonly drums = false,
   ) {}
 
   get isFirst(): boolean {
@@ -75,7 +101,7 @@ export class LoopTake {
   }
 
   get hasNotes(): boolean {
-    return this.events.some((e) => e.kind === 'attack');
+    return this.drums ? this.hits.length > 0 : this.events.some((e) => e.kind === 'attack');
   }
 
   /**
@@ -94,6 +120,18 @@ export class LoopTake {
   /** @param elapsed segundos desde que empezo la grabacion. */
   capture(elapsed: number, live: LiveSnapshot): void {
     const t = wrapTime(this.offset + elapsed, this.cycleSeconds);
+
+    /*
+     * Una capa de bateria no tiene nada que muestrear entre golpe y golpe: el
+     * golpe es un instante y lo que hay en medio es silencio. Ni ataques, ni
+     * sueltas, ni instantaneas de parametros: eso es lo que la hace pesar tres
+     * bytes por golpe en un enlace en vez de seis por evento.
+     */
+    if (this.drums) {
+      for (const strike of live.strikes) this.hits.push({ t, piece: strike.piece, force: strike.force });
+      return;
+    }
+
     const base = { freq: live.freq, cutoffNorm: live.cutoffNorm, gain: live.gain };
 
     if (live.gateEvent === 'attack') {
@@ -137,6 +175,14 @@ export class LoopTake {
       // La primera capa define el compas de todo lo que venga despues.
       this.cycleSeconds = Math.min(MAX_CYCLE_SECONDS, Math.max(MIN_CYCLE_SECONDS, elapsed));
       for (const event of this.events) event.t = wrapTime(event.t, this.cycleSeconds);
+      for (const hit of this.hits) hit.t = wrapTime(hit.t, this.cycleSeconds);
+    }
+
+    if (this.drums) {
+      // Sin nota abierta que cerrar: un golpe no deja nada sonando que haya que
+      // apagar al cortar la toma.
+      this.hits.sort((a, b) => a.t - b.t);
+      return { presetId: this.presetId, events: [], hits: this.hits, drums: true, cycleSeconds: this.cycleSeconds };
     }
 
     // Una nota que sigue abierta al cortar sonaria para siempre en cada vuelta.
@@ -147,6 +193,6 @@ export class LoopTake {
     }
     this.events.sort((a, b) => a.t - b.t);
 
-    return { presetId: this.presetId, events: this.events, cycleSeconds: this.cycleSeconds };
+    return { presetId: this.presetId, events: this.events, hits: [], drums: false, cycleSeconds: this.cycleSeconds };
   }
 }
