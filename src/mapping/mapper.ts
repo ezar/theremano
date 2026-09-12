@@ -2,6 +2,7 @@ import { OneEuroFilter, DEFAULT_D_CUTOFF } from '../filter/oneEuro';
 import { attackVelocity, depthFromSize, expressionFeatures, melodyFeatures, middlePinchRatio, palmSize, pinchRatio } from './features';
 import { HoldGesture } from './holdGesture';
 import { ClosingSpeed } from './closingSpeed';
+import { VibratoDetector } from './vibrato';
 import { PinchGate, type GateEvent } from './gate';
 import { createLayout, isContinuous, pitchAt, type PitchLayout } from './scales';
 import { getPreset, presetForFingerCount, type Preset, type PresetId } from '../audio/presets';
@@ -83,6 +84,10 @@ export interface MappingOutput {
   gain: number;
   /** Cerca o lejos de la camara, de 0 a 1. Manda el espacio del sonido. */
   space: number;
+  /** Vibrato que pide el temblor de la mano, de 0 a 1. */
+  vibrato: number;
+  /** A que ritmo oscila esa mano, en hercios, o 0 si no oscila. */
+  vibratoRate: number;
   /** true en el fotograma en que el gesto de grabar se completa. */
   loopGesture: boolean;
   /** Lo sostenido que va ese gesto, de 0 a 1. */
@@ -110,6 +115,7 @@ export class Mapper {
   private readonly spaceFilter: OneEuroFilter;
   private space = 0.5;
   private readonly closing = new ClosingSpeed();
+  private readonly vibrato = new VibratoDetector();
   private lastTimestamp = -1;
   /** Fuerza de la nota que suena ahora, fijada en su ataque. */
   private velocity = 1;
@@ -187,6 +193,14 @@ export class Mapper {
        * fuerza y dos notas iguales sonarian distinto sin motivo.
        */
       this.closing.push(timestamp, pinch);
+      /*
+       * El vibrato se mide sobre la x cruda, no sobre la filtrada. El filtro del
+       * tono existe para borrar precisamente esto: a cinco hercios deja pasar
+       * menos de la sexta parte, que es lo que evita que oscilar la mano mueva
+       * la nota de zona. Lo que para el tono es ruido, para el vibrato es la
+       * senal.
+       */
+      this.vibrato.push(timestamp, f.x);
 
       gateEvent = this.gate.update(pinch);
       // La fuerza se fija en el ataque y dura toda la nota. Recalcularla por
@@ -208,6 +222,7 @@ export class Mapper {
       this.pinchFilter.reset();
       this.spaceFilter.reset();
       this.closing.reset();
+      this.vibrato.reset();
       this.lastTimestamp = -1;
     }
     this.space = space;
@@ -263,6 +278,8 @@ export class Mapper {
       volume: this.volume,
       gain: this.volume * this.velocity,
       space,
+      vibrato: this.vibrato.depth,
+      vibratoRate: this.vibrato.rate,
       loopGesture,
       loopGestureProgress: this.loopHold.progress,
       preset,

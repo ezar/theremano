@@ -450,6 +450,13 @@ for (let x = 250; x <= 650; x += 50) {
   await pointerPage.waitForTimeout(50);
 }
 const dragged = await pointerPage.evaluate(() => document.getElementById('note')?.textContent);
+// Vibrato: oscilar el puntero sobre la nota, sin soltar. Se mira en la linea de
+// diagnostico, que es donde la aplicacion lo escribe cuando lo hay.
+for (let step = 0; step < 34; step += 1) {
+  await pointerPage.mouse.move(650 + Math.round(40 * Math.sin(step * 0.033 * 5.5 * Math.PI * 2)), 320);
+  await pointerPage.waitForTimeout(33);
+}
+const vibrato = await pointerPage.evaluate(() => document.getElementById('diagnostics')?.textContent ?? '');
 const soundingClass = await pointerPage.evaluate(() => document.getElementById('note')?.classList.contains('sounding'));
 await pointerPage.mouse.up();
 await pointerPage.waitForTimeout(500);
@@ -459,7 +466,7 @@ await pointerPage.waitForTimeout(500);
 const released = await pointerPage.evaluate(() => ({
   sonando: document.getElementById('note')?.classList.contains('sounding'),
 }));
-console.log(JSON.stringify({ beforePress, pressed, soundingClass, dragged, released, erroresPuntero: pointerLogs }, null, 2));
+console.log(JSON.stringify({ beforePress, pressed, dragged, vibrato, soundingClass, released, erroresPuntero: pointerLogs }, null, 2));
 await pointerPage.close();
 await pointer.close();
 
@@ -695,6 +702,10 @@ if (dragged === pressed.nota) {
   console.error(`\nFALLO: arrastrar el puntero deberia cambiar la nota (${pressed.nota} -> ${dragged})`);
   process.exit(1);
 }
+if (!/vib (0\.[1-9]|1\.00)/.test(vibrato)) {
+  console.error(`\nFALLO: oscilar el puntero sobre la nota deberia dar vibrato (${vibrato.replace(/\n/g, ' | ')})`);
+  process.exit(1);
+}
 if (!soundingClass || released.sonando || pointerLogs.length > 0) {
   console.error(`\nFALLO: con el puntero, pulsar deberia abrir la nota y soltar cerrarla ${pointerLogs.join(' ')}`);
   process.exit(1);
@@ -710,5 +721,5 @@ if (!state.splashHidden || !state.hudVisible) {
 console.log(
   `\nOK: arranque, modelo, audio, introduccion de ${coachStart.dots} pasos, ayuda, espanol e ingles, ` +
     `bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB, solo manos con clip de ` +
-    `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion y puntero sin camara, y enlace compartible.`,
+    `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion y puntero sin camara con vibrato, y enlace compartible.`,
 );

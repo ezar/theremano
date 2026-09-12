@@ -19,7 +19,8 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
 **español e inglés**, y sigue al idioma del navegador salvo que se elija otro.
 
 - **Instrumento** — una voz monofónica controlada con las dos manos, con
-  cuantización a escala para que suene bien desde el primer minuto.
+  cuantización a escala para que suene bien desde el primer minuto y vibrato con
+  el temblor de la mano.
 - **Estación de bucles** — hasta cuatro capas superpuestas, con cuatro pulsos de
   claqueta por delante de la primera. Esa marca el compás; las siguientes se
   graban encima sin esperar a que la vuelta termine.
@@ -54,6 +55,7 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
 | Mano de melodía, altura | Corte del filtro paso bajo: arriba brillante, abajo oscuro |
 | Mano de melodía, distancia a la cámara | Espacio: cerca seco, lejos abierto |
 | Velocidad al cerrar la pinza | Fuerza con la que entra la nota |
+| Oscilar la mano de melodía sobre la nota | Vibrato, al ritmo al que oscilas |
 | Mano de expresión, altura *(opcional)* | Volumen maestro |
 | Mano de expresión, dedos extendidos (1 a 4) *(opcional)* | Timbre |
 | Mano de expresión, pulgar contra corazón medio segundo *(opcional)* | Graba una capa de bucle |
@@ -159,6 +161,38 @@ fotogramas de confirmación caen en puntos algo distintos de la trayectoria.
 
 El riel de volumen del HUD sigue mostrando la mano, no la ganancia real. Si
 mostrara la ganancia, saltaría en cada nota sin que nadie haya movido nada.
+
+### El temblor de la mano es el vibrato
+
+Es el gesto que define a un theremín y hasta ahora no hacía nada. El instrumento
+tenía una sola forma de mover una nota ya empezada —subirle o bajarle el brillo—
+y ninguna de darle vida sin cambiarla de altura.
+
+Lo delicado no es medir la oscilación, es distinguirla de las otras dos cosas que
+hace la misma mano en el mismo eje: **viajar** hasta la nota siguiente, que es un
+movimiento grande y en una sola dirección, y **temblar** porque una mano en el
+aire tiembla, que es pequeño y rapidísimo. Por eso no basta con la amplitud: se
+cuentan además los cruces por el centro de la ventana, y solo cuenta lo que
+oscila entre tres y nueve veces por segundo. Un viaje no cruza; el ruido del
+detector cruza demasiado. Hay una prueba para cada uno de los tres casos.
+
+**Se mide sobre la x cruda, no sobre la filtrada**, y esa es la parte bonita. El
+filtro del tono existe precisamente para borrar esto: a cinco hercios deja pasar
+menos de la sexta parte, que es lo que evita que oscilar la mano mueva la nota de
+zona. Lo que para el tono es ruido, para el vibrato es la señal. Una prueba pone
+la mano justo en el borde entre dos zonas y comprueba las dos mitades a la vez:
+que en crudo cruza el borde en cada ciclo, y que la nota que suena no se mueve.
+
+El ritmo también lo manda la mano: se oye el temblor que se está haciendo y no
+uno parecido que traiga el timbre. Y la profundidad se suma a la del timbre en
+lugar de sustituirla, porque el theremin ya vibra un poco solo y quitárselo lo
+dejaría más plano que antes mientras la mano está quieta.
+
+Entra deprisa y se va despacio, como el vibrato de cualquier instrumento de
+cuerda: se empieza a oscilar y aparece, se para y se apaga solo.
+
+La demostración acaba ondulando la última nota, que es la única forma de enseñar
+esto: las notas se ven llegar, pero un temblor no se deduce mirando tocar.
 
 ### El cambio de timbre se ve venir
 
@@ -571,6 +605,7 @@ src/
     mapper.ts             magnitudes a parámetros de audio
     gate.ts               histéresis de la pinza
     pointer.ts            tocar con el ratón o con el dedo
+    vibrato.ts            el temblor de la mano, separado del viaje
     melodies.ts           melodías guiadas y progreso
     demo.ts               coreografía de la demostración
   audio/
@@ -667,6 +702,9 @@ Los que se pueden comprobar de forma automática están en `tests/`:
   en el dato para que la tarjeta pueda anunciarla antes de que nadie lo intente.
 - **Ningún paso de la introducción se cierra solo**: cada uno se prueba con la
   señal que le toca y con todo lo demás moviéndose menos esa señal.
+- **Oscilar la mano da vibrato; viajar a otra nota y el temblor del detector, no.**
+  Y con la mano puesta en el borde entre dos zonas, la oscilación cruza ese borde
+  en crudo en cada ciclo y la nota que suena no se mueve.
 - **Con el puntero, la nota que suena es la de donde se ha pulsado.** Dos toques
   en zonas lejanas dan las dos notas correctas, igual a 30 que a 60 fotogramas;
   arrastrar con el botón pulsado es un glissando y no una nota nueva; y la pinza

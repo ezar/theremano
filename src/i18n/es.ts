@@ -125,6 +125,10 @@ export const es: Strings = {
       { what: 'Esa misma mano, cerca o lejos de la cámara', does: 'Espacio: cerca suena seco y pegado, lejos se abre como una sala.' },
       { what: 'Lo rápido que cierras la pinza', does: 'Fuerza de la nota: dejar caer los dedos entra más fuerte que posarlos.' },
       {
+        what: 'Oscilar esa mano sobre la nota',
+        does: 'Vibrato, al ritmo al que oscilas. Un temblor amplio y tranquilo, no rápido: viajar a otra nota no cuenta.',
+      },
+      {
         what: 'Segunda mano, arriba y abajo',
         does: 'Volumen. Sin ella se mantiene el último valor y se ajusta en Ajustes; perderla nunca silencia.',
         optional: true,

@@ -125,6 +125,10 @@ export const en: Strings = {
       { what: 'That same hand, near or far from the camera', does: 'Space: close is dry and near, far opens up like a room.' },
       { what: 'How fast you close the pinch', does: 'How hard the note lands: dropping your fingers hits harder than resting them.' },
       {
+        what: 'Wobbling that hand over the note',
+        does: 'Vibrato, at the rate you wobble. A wide, calm shake, not a fast one: travelling to another note does not count.',
+      },
+      {
         what: 'Second hand, up and down',
         does: 'Volume. Without it the last value stays and you set it in Settings; losing it never mutes.',
         optional: true,

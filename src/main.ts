@@ -538,6 +538,7 @@ class Theremano {
     this.engine.setCutoffNorm(output.cutoffNorm);
     this.engine.setVolume(output.gain);
     this.engine.setSpace(output.space);
+    this.engine.setVibrato(output.vibrato, output.vibratoRate);
 
     const frame: OverlayFrame = {
       assignment,
@@ -904,6 +905,7 @@ class Theremano {
     // cada nota.
     this.engine.setVolume(output.gain);
     this.engine.setSpace(output.space);
+    this.engine.setVibrato(output.vibrato, output.vibratoRate);
     // El gesto de grabar hace exactamente lo mismo que el boton, y por el mismo
     // camino: es la unica forma de que no haya dos maneras distintas de grabar
     // que puedan discrepar.
@@ -917,6 +919,7 @@ class Theremano {
     runtime.cutoffNorm = output.cutoffNorm;
     runtime.volume = output.volume;
     runtime.pinchRatio = output.pinch;
+    runtime.vibrato = output.vibrato;
     runtime.fingerCount = output.fingerCount;
     runtime.presetCandidate = output.presetCandidate;
     runtime.presetProgress = output.presetProgress;

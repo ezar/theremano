@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DemoPerformance, NOTE_SECONDS } from '../src/mapping/demo';
+import { DemoPerformance, LEAD_IN_SECONDS, NOTE_SECONDS } from '../src/mapping/demo';
 import { CLOSED_PINCH, OPEN_PINCH, drawnScale, phantomHand } from '../src/tracking/phantom';
 import { depthFromSize, palmCenter, palmSize, pinchRatio } from '../src/mapping/features';
 import { Mapper } from '../src/mapping/mapper';
@@ -210,6 +210,37 @@ describe('demostracion', () => {
     expect(performance.notes).toBe(0);
     expect(performance.zoneAt(2)).toBeNull();
     expect(performance.poseAt(2).pinch).toBe(OPEN_PINCH);
+  });
+
+  it('acaba ondulando la ultima nota, que es como se ensena el vibrato', () => {
+    // Sin esto el vibrato solo estaria escrito en la ayuda: las notas se ven
+    // llegar, pero un temblor no se deduce mirando tocar.
+    const settings = settingsFor('estrellita');
+    const mapper = new Mapper(settings);
+    const performance = new DemoPerformance(getMelody('estrellita')!, mapper.currentLayout);
+    const notes = new Set<number>();
+    let vibrato = 0;
+    let attacks = 0;
+    const dt = 1 / 60;
+    for (let frame = 0; ; frame += 1) {
+      const seconds = frame * dt;
+      if (performance.finishedAt(seconds)) break;
+      const pose = performance.poseAt(seconds);
+      const landmarks = phantomHand({ ...pose, aspect: WIDE, scale: drawnScale(WIDE) });
+      const output = mapper.update(
+        { melody: { hand: { landmarks, raw: landmarks }, held: false, heldFor: 0 }, expression: null },
+        seconds,
+      );
+      if (output.gateEvent === 'attack') attacks += 1;
+      // La coda empieza justo detras de la ultima nota.
+      if (seconds > LEAD_IN_SECONDS + performance.notes * NOTE_SECONDS + 0.4 && output.gateOpen) {
+        vibrato = Math.max(vibrato, output.vibrato);
+        notes.add(output.midi);
+      }
+    }
+    expect(vibrato, 'la mano ondula lo bastante para que se oiga').toBeGreaterThan(0.4);
+    expect(notes.size, 'y ondula la misma nota, no dos').toBe(1);
+    expect(attacks, 'la coda no vuelve a atacar: es la misma nota sostenida').toBe(performance.notes);
   });
 
   it('dura lo que dura una melodia, no lo que dura una pelicula', () => {

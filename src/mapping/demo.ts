@@ -42,6 +42,19 @@ export const CLOSE_SECONDS = 0.08;
 export const SUSTAIN_SECONDS = 0.24;
 /** Apertura de la pinza, que es la suelta. */
 export const RELEASE_SECONDS = 0.1;
+/**
+ * Lo que dura la ondulacion con la que acaba la demostracion.
+ *
+ * La ultima nota no se suelta: se queda sonando y la mano la ondula. Es la unica
+ * forma de ensenar el vibrato, que es un gesto que no se deduce mirando tocar
+ * —las notas se ven llegar, el temblor no— y que sin esto solo esta escrito en
+ * la ayuda.
+ */
+export const CODA_SECONDS = 1.6;
+/** A que ritmo y con cuanto recorrido ondula. Un vibrato comodo de imitar. */
+const CODA_HZ = 5.5;
+const CODA_SWING = 0.03;
+
 /** Silencio final, para no cortar la ultima nota en seco. */
 export const TAIL_SECONDS = 0.9;
 
@@ -85,7 +98,7 @@ export class DemoPerformance {
   }
 
   get seconds(): number {
-    return LEAD_IN_SECONDS + this.notes * NOTE_SECONDS + TAIL_SECONDS;
+    return LEAD_IN_SECONDS + this.notes * NOTE_SECONDS + CODA_SECONDS + TAIL_SECONDS;
   }
 
   finishedAt(seconds: number): boolean {
@@ -131,7 +144,21 @@ export class DemoPerformance {
 
     const index = Math.floor(elapsed / NOTE_SECONDS);
     if (index >= this.notes) {
-      return pose(this.positions[this.notes - 1] ?? first, OPEN_PINCH);
+      // La coda: la ultima nota sigue sonando y la mano la ondula. Viene sin
+      // corte desde el sostenido, para que sea la misma nota y no otra.
+      const last = this.positions[this.notes - 1] ?? first;
+      const since = elapsed - this.notes * NOTE_SECONDS;
+      if (since < CODA_SECONDS) {
+        // La ondulacion se centra hacia dentro si la nota esta en un extremo.
+        // Contra el borde, el encuadre corta la mitad de abajo de la onda y lo
+        // que llega al detector es media oscilacion: casi nada de vibrato. El
+        // desplazamiento es menor que media zona, asi que sigue siendo la misma
+        // nota, y es lo que haria cualquiera tocando la nota mas grave.
+        const center = Math.min(1 - CODA_SWING, Math.max(CODA_SWING, last));
+        return pose(center + CODA_SWING * Math.sin(since * CODA_HZ * Math.PI * 2), CLOSED_PINCH);
+      }
+      const opening = (since - CODA_SECONDS) / RELEASE_SECONDS;
+      return pose(last, CLOSED_PINCH + (OPEN_PINCH - CLOSED_PINCH) * smooth(opening));
     }
 
     const from = index === 0 ? first : (this.positions[index - 1] ?? first);
@@ -150,6 +177,8 @@ export class DemoPerformance {
     local -= CLOSE_SECONDS;
     if (local < SUSTAIN_SECONDS) return pose(to, CLOSED_PINCH);
     local -= SUSTAIN_SECONDS;
+    // La ultima no se suelta aqui: se queda sonando y la recoge la coda.
+    if (index === this.notes - 1) return pose(to, CLOSED_PINCH);
     return pose(to, CLOSED_PINCH + (OPEN_PINCH - CLOSED_PINCH) * smooth(local / RELEASE_SECONDS));
   }
 }
