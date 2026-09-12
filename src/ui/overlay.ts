@@ -4,7 +4,8 @@ import { midiToName, zoneCenters, type PitchLayout } from '../mapping/scales';
 import { t } from '../i18n';
 import type { LoopState } from '../audio/looper';
 import { Visualizer } from './visualizer';
-import { coverRect, pitchHue, type RenderTarget } from './target';
+import { coverRect, pitchHue, PIECE_HUE, type RenderTarget } from './target';
+import { BAND, KIT, bandCenter, type DrumPiece } from '../mapping/kit';
 
 /**
  * Todo lo que se ve encima del video: esqueleto, rejilla de la escala, efectos y
@@ -16,6 +17,9 @@ import { coverRect, pitchHue, type RenderTarget } from './target';
  * una captura de pantalla recortada. Lo que se comparte se ve tan bien como lo
  * que se toca.
  */
+
+/** Lo que tarda en apagarse el destello de una banda golpeada. */
+const FLASH_SECONDS = 0.18;
 
 const FINGER_COLORS: Record<Finger, string> = {
   palm: 'rgba(255,255,255,0.5)',
@@ -38,6 +42,8 @@ export interface OverlayFrame {
   targetZone: number | null;
   /** Nota que sostiene el pedal, en MIDI, o null si no hay ninguna. */
   drone: number | null;
+  /** Modo bateria: en vez de la rejilla de la escala se dibuja la del kit. */
+  drums: boolean;
   showRawTrace: boolean;
 }
 
@@ -63,6 +69,8 @@ export interface PaintOptions {
 export class Overlay {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly visualizer = new Visualizer();
+  /** Lo que le queda de destello a cada banda, de 1 a 0. */
+  private readonly flashes: Record<DrumPiece, number> = { kick: 0, snare: 0, hat: 0, crash: 0 };
   private dpr = 1;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -95,14 +103,36 @@ export class Overlay {
       },
       dtSeconds,
     );
+    // El destello dura poco a proposito: tiene que leerse como un golpe y no
+    // como una banda encendida, que es lo que parece en cuanto se solapa con el
+    // siguiente.
+    for (const piece of KIT) {
+      const left = this.flashes[piece];
+      if (left > 0) this.flashes[piece] = Math.max(0, left - dtSeconds / FLASH_SECONDS);
+    }
   }
 
   attack(frame: OverlayFrame): void {
     this.visualizer.attack(this.pinchPoint(frame), frame.midi);
   }
 
+  /**
+   * La salpicadura de un golpe, donde ha caido la mano y del color de su pieza.
+   *
+   * No reutiliza `attack` porque ahi el punto es la pinza de la mano de melodia,
+   * y en bateria golpean las dos manos: la salpicadura tiene que salir de la que
+   * ha dado el golpe, o deja de decir cual de las dos ha sonado. Y el destello
+   * de la banda es lo que convierte el color en informacion: si la mano ha
+   * entrado en la pieza de al lado, se ve antes de oirlo.
+   */
+  splash(x: number, y: number, piece: DrumPiece): void {
+    this.visualizer.splash({ x, y }, PIECE_HUE[piece]);
+    this.flashes[piece] = 1;
+  }
+
   resetEffects(): void {
     this.visualizer.reset();
+    for (const piece of KIT) this.flashes[piece] = 0;
   }
 
   /**
@@ -132,21 +162,29 @@ export class Overlay {
     // La rejilla se calibro contra una imagen de camara. Sobre el fondo oscuro
     // del modo de solo manos, con esos mismos valores, casi no se ve: hay que
     // subirla, porque ahi es de lo poco que queda en pantalla.
-    this.drawGrid(target, rect, frame, options.backdrop ? 1.7 : 1);
+    if (frame.drums) this.drawKit(target, rect, options.backdrop ? 1.7 : 1);
+    else this.drawGrid(target, rect, frame, options.backdrop ? 1.7 : 1);
 
     const melody = frame.assignment.melody;
     const expression = frame.assignment.expression;
 
     if (expression) {
-      this.drawHand(target, rect, expression.hand.landmarks, expression.held, 0.5);
-      this.drawRoleTag(target, rect, expression.hand.landmarks, t().overlay.expressionTag, expression.held);
+      // En bateria las dos manos hacen lo mismo, asi que la de expresion se
+      // dibuja tan presente como la otra: atenuarla diria que es la secundaria.
+      this.drawHand(target, rect, expression.hand.landmarks, expression.held, frame.drums ? 1 : 0.5);
+      // Y los rotulos de rol sobran: ahi ninguna de las dos es la melodia.
+      if (!frame.drums) this.drawRoleTag(target, rect, expression.hand.landmarks, t().overlay.expressionTag, expression.held);
       if (frame.drone !== null) this.drawDrone(target, rect, expression.hand.landmarks, frame.drone);
     }
     if (melody) {
       if (frame.showRawTrace) this.drawRawTrace(target, rect, melody.hand.raw);
       this.drawHand(target, rect, melody.hand.landmarks, melody.held, 1, frame.gateOpen);
-      this.drawRoleTag(target, rect, melody.hand.landmarks, t().overlay.melodyTag, melody.held);
-      this.drawPinch(target, rect, melody.hand.landmarks, frame);
+      if (!frame.drums) {
+        this.drawRoleTag(target, rect, melody.hand.landmarks, t().overlay.melodyTag, melody.held);
+        // El circulo de la pinza mide lo que le falta para sonar, y en bateria
+        // no le falta nada porque no es la pinza lo que hace sonar.
+        this.drawPinch(target, rect, melody.hand.landmarks, frame);
+      }
     }
 
     this.visualizer.paintForeground(target, videoWidth, videoHeight);
@@ -199,6 +237,69 @@ export class Overlay {
       ctx.drawImage(video, target.width - rect.x - rect.w, rect.y, rect.w, rect.h);
     } else {
       ctx.drawImage(video, rect.x, rect.y, rect.w, rect.h);
+    }
+    ctx.restore();
+  }
+
+  /**
+   * La rejilla de la bateria. No se parece a la de la escala y no debe.
+   *
+   * Las zonas de una escala son puntos en un continuo: la mano se desliza entre
+   * ellas y lo que hay que ensenar es donde esta cada centro. Las piezas de un
+   * kit son territorios con frontera: dentro de la banda suena la caja y un
+   * dedo mas alla suena el charles, sin nada en medio. Por eso aqui se pintan
+   * las fronteras y el suelo de cada banda, y no unas lineas por el centro que
+   * dejarian lo unico que importa —donde acaba una pieza y empieza la otra— sin
+   * dibujar.
+   */
+  private drawKit(target: RenderTarget, rect: Rect2, lift: number): void {
+    const { ctx } = target;
+    const top = target.height * 0.08;
+    const bottom = target.height * 0.84;
+    const labelY = target.height * 0.885;
+    const labelPad = 24 * target.unit;
+    const names = t().pieces;
+
+    ctx.save();
+    ctx.font = `${11 * target.unit}px ui-monospace, monospace`;
+    ctx.textAlign = 'center';
+
+    for (let i = 0; i < KIT.length; i += 1) {
+      const piece = KIT[i]!;
+      const hue = PIECE_HUE[piece];
+      const left = rect.x + denormalize(i * BAND) * rect.w;
+      const right = rect.x + denormalize((i + 1) * BAND) * rect.w;
+      const flash = this.flashes[piece];
+
+      // El relleno permanente es casi invisible y aun asi hace todo el trabajo:
+      // sin el, cuatro rayas verticales no dicen que hay cuatro territorios.
+      const fill = ctx.createLinearGradient(0, top, 0, bottom);
+      const base = Math.min(1, 0.05 * lift);
+      fill.addColorStop(0, `hsla(${hue}, 90%, 60%, 0)`);
+      fill.addColorStop(1, `hsla(${hue}, 90%, 60%, ${base + flash * 0.42})`);
+      ctx.fillStyle = fill;
+      ctx.fillRect(left, top, right - left, bottom - top);
+
+      // La frontera: solo las de dentro, que son las que hay que ver. Las de los
+      // extremos coinciden con el borde del encuadre util y no separan nada.
+      if (i > 0) {
+        const line = ctx.createLinearGradient(left, top, left, bottom);
+        const strength = Math.min(1, 0.18 * lift);
+        line.addColorStop(0, 'rgba(255,255,255,0)');
+        line.addColorStop(0.5, `rgba(255,255,255,${strength})`);
+        line.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.strokeStyle = line;
+        ctx.lineWidth = 1 * target.unit;
+        ctx.beginPath();
+        ctx.moveTo(left, top);
+        ctx.lineTo(left, bottom);
+        ctx.stroke();
+      }
+
+      const x = rect.x + denormalize(bandCenter(i)) * rect.w;
+      const labelX = Math.min(Math.max(x, labelPad), target.width - labelPad);
+      ctx.fillStyle = `hsla(${hue}, 90%, ${70 + flash * 25}%, ${Math.min(1, (0.45 + flash * 0.5) * lift)})`;
+      ctx.fillText(names[piece], labelX, labelY);
     }
     ctx.restore();
   }

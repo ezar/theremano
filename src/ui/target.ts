@@ -1,3 +1,5 @@
+import type { DrumPiece } from '../mapping/kit';
+
 /**
  * Un destino de dibujo. La pantalla es uno; el lienzo de grabacion es otro, con
  * otro tamano y otra proporcion.
@@ -43,3 +45,19 @@ export function pitchHue(midi: number): number {
   // una escala no salgan con colores casi identicos.
   return (pc * 7 * 30) % 360;
 }
+
+/**
+ * Tono de color de cada pieza de la bateria.
+ *
+ * No sale del circulo de quintas como el de las notas, porque aqui no hay
+ * alturas que ordenar: son cuatro cosas distintas y lo unico que se les pide a
+ * los colores es no parecerse. Van de grave a agudo —rojo el bombo, ambar la
+ * caja, verde el charles, azul el platillo— que es el orden en que estan
+ * repartidas por el encuadre, asi que la rejilla se lee de un vistazo.
+ */
+export const PIECE_HUE: Record<DrumPiece, number> = {
+  kick: 8,
+  snare: 42,
+  hat: 152,
+  crash: 205,
+};

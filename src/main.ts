@@ -203,7 +203,7 @@ class Theremano {
     i18n.subscribe(() => {
       applyStaticStrings();
       // applyStaticStrings devuelve el aviso a su version con camara.
-      if (this.mode === 'pointer') this.hud.setHint(t().hud.pointerHint);
+      this.applyHint();
       // applyStaticStrings devuelve los rotulos a su version normal, asi que la
       // invitacion hay que volver a ponerla despues de cada cambio de idioma.
       this.applyInvite();
@@ -312,6 +312,22 @@ class Theremano {
   }
 
   private toggleLoop(): void {
+    /*
+     * Los bucles guardan gestos de melodia -ataque, suelta, tono, brillo- y un
+     * golpe no es ninguna de esas cosas. Una capa grabada en bateria sale sin un
+     * solo ataque, asi que la toma se descarta sola al cerrarla: lo que se
+     * llevaria uno es una claqueta entera y un "capa descartada" sin explicacion.
+     * Mejor decirlo antes de contar.
+     *
+     * Solo se corta al empezar: si ya hay algo en marcha -porque se encendio la
+     * bateria a media toma o a media claqueta- hay que dejar cerrarlo o
+     * cancelarlo, o el boton se quedaria sin forma de parar.
+     */
+    const loops = this.looper.state;
+    if (this.store.get().drums && !loops.recording && loops.countInBeats === 0) {
+      this.hud.toast(t().toast.loopNeedsMelody);
+      return;
+    }
     const hadCycle = this.looper.state.cycleSeconds > 0;
     switch (this.looper.toggle(this.store.get().preset)) {
       case 'rejected':
@@ -537,6 +553,14 @@ class Theremano {
       const settings = this.store.get();
       await this.engine.start(settings.preset, settings.masterVolume);
       this.engine.setMuted(false);
+      /*
+       * La demostracion toca una melodia, y comparte mapeador con el
+       * instrumento. Si los ajustes se quedaron en bateria, ese mapeador cierra
+       * la pinza a la fuerza y la demostracion sale muda: la mano dibujada se
+       * pasea por la rejilla sin que suene nada. Se le pide melodia mientras
+       * dura, y al salir se devuelven los ajustes de verdad.
+       */
+      this.mapper.syncSettings({ ...settings, drums: false });
 
       this.demo = performance;
       this.demoStartedAt = 0;
@@ -588,6 +612,9 @@ class Theremano {
       gateOpen: output.gateOpen,
       volume: output.volume,
       loops: this.looper.state,
+      // La demostracion toca la melodia: ensena la escala aunque los ajustes
+      // esten en bateria, porque lo que se esta viendo es lo otro.
+      drums: false,
       // La marca de la rejilla senala la nota a la que va la mano: se ve el
       // destino antes que el movimiento, que es como se entiende el movimiento.
       targetZone: performance.zoneAt(elapsed),
@@ -754,6 +781,9 @@ class Theremano {
     // Parar a mitad de una nota deja el oscilador abierto: hay que cerrarlo por
     // el mismo camino que lo cierra perder la pestana.
     if (this.mapper.silence() === 'release') this.engine.release();
+    // Y se le devuelve el modo que tenian los ajustes, que la demostracion le
+    // habia quitado para poder sonar.
+    this.mapper.syncSettings(this.store.get());
     this.overlay.resetEffects();
     this.overlay.clear();
     this.demoBanner.hidden = true;
@@ -857,6 +887,9 @@ class Theremano {
       await this.engine.start(settings.preset, settings.masterVolume);
 
       this.looper.attach(this.engine.loopOutput);
+      // El kit tampoco se monta solo: el motor no lee los ajustes, y esto se
+      // guarda entre sesiones igual que la claqueta.
+      this.engine.setDrums(settings.drums);
       // La claqueta se guarda entre sesiones, y el bucle de fotogramas solo
       // entera al looper de los cambios: la primera vez hay que decirselo.
       this.looper.setMetronome(settings.metronome);
@@ -891,13 +924,13 @@ class Theremano {
       // expresion: con el puntero no hay nada de eso, y un paso que no se puede
       // completar es peor que no tener introduccion. Se queda sin ver, asi que
       // aparecera entera el dia que se entre con camara.
-      if (mode === 'camera' && !this.store.get().onboarded) this.startOnboarding();
+      if (mode === 'camera' && !this.store.get().onboarded && !this.store.get().drums) this.startOnboarding();
       else if (mode === 'pointer') {
-        // El aviso de siempre habla de juntar los dedos: aqui no hay dedos que
-        // juntar.
-        this.hud.setHint(t().hud.pointerHint);
-        this.hud.toast(t().toast.pointerHint, 6000);
+        this.hud.toast(this.store.get().drums ? t().toast.drumPointerHint : t().toast.pointerHint, 6000);
       }
+      // El aviso de siempre habla de juntar los dedos, y en bateria no hay nada
+      // que juntar ni dedos con los que hacerlo.
+      this.applyHint();
       this.hideSplash();
 
       this.scheduleFrame();
@@ -1009,6 +1042,9 @@ class Theremano {
     // de este bucle que el oido percibe como instantaneo o como tarde.
     if (output.gateEvent === 'attack') this.engine.attack(output.freq);
     else if (output.gateEvent === 'release') this.engine.release();
+    // El golpe no espera a nada: es lo unico de este bucle que se oye tarde si
+    // se atiende un fotograma despues.
+    for (const hit of output.strikes) this.engine.hit(hit.piece, hit.force);
 
     this.engine.setFrequency(output.freq, output.glide);
     this.engine.setCutoffNorm(output.cutoffNorm);
@@ -1071,6 +1107,7 @@ class Theremano {
       loops,
       targetZone: this.guide && !this.guide.finished ? this.guide.targetZone : null,
       drone: output.drone > 0 ? output.droneMidi : null,
+      drums: settings.drums,
       showRawTrace: settings.showRawTrace,
     };
 
@@ -1080,6 +1117,14 @@ class Theremano {
       this.overlay.attack(frame);
       this.hud.dismissHint();
       this.scoreGuide(output.zoneIndex);
+    }
+    // El golpe tambien salpica: sin nada que ver, no hay forma de saber si lo
+    // que llega tarde es el sonido o la deteccion.
+    for (const hit of output.strikes) {
+      this.overlay.splash(hit.x, hit.y, hit.piece);
+      runtime.piece = hit.piece;
+      runtime.strikeForce = hit.force;
+      this.hud.dismissHint();
     }
     this.overlay.update(frame, dt);
 
@@ -1286,6 +1331,19 @@ class Theremano {
    * lienzo que aun no se ha redimensionado tras girar el movil, deje ver la
    * habitacion por un borde.
    */
+  /**
+   * El aviso de abajo, que depende de dos cosas a la vez: de con que se toca
+   * —camara o puntero— y de si se esta golpeando o sosteniendo notas.
+   */
+  private applyHint(): void {
+    const strings = t().hud;
+    const drums = this.store.get().drums;
+    const pointer = this.mode === 'pointer';
+    this.hud.setHint(
+      drums ? (pointer ? strings.drumPointerHint : strings.drumHint) : pointer ? strings.pointerHint : strings.hint,
+    );
+  }
+
   private applyStageMode(mode: StageMode): void {
     this.video.classList.toggle('camera-hidden', mode === 'hands');
   }
@@ -1324,6 +1382,30 @@ class Theremano {
       this.guide.relayout(this.mapper.currentLayout);
     }
     if (changed.has('metronome')) this.looper.setMetronome(settings.metronome);
+    if (changed.has('drums')) {
+      this.mapper.syncSettings(settings);
+      this.engine.setDrums(settings.drums);
+      // La guia apunta a zonas de la escala, y en bateria la rejilla ya no es
+      // esa: el objetivo no se dibuja en ninguna parte y solo puntua un ataque,
+      // que ahi no existe. Se quedaria en 0/N para siempre. Se retira igual que
+      // con el modo continuo, y por el mismo motivo.
+      if (settings.drums && settings.melodyId) {
+        this.store.set({ melodyId: '' });
+        this.hud.toast(t().toast.guideNeedsMelody);
+      }
+      // Al salir del modo bateria, la nota que hubiera quedado abierta no existe;
+      // al entrar, la que este sonando se cierra sola en el fotograma siguiente.
+      if (this.mapper.silence() === 'release') this.engine.release();
+      // Cambia todo lo que la pantalla dice del instrumento: el subtitulo pasa de
+      // la escala al kit y el aviso deja de hablar de juntar los dedos.
+      this.hud.setSubtitle(settings);
+      this.applyHint();
+      // Y la ultima pieza es de la sesion anterior de bateria: al volver a la
+      // melodia y regresar, el panel no debe abrir con un golpe que no se ha dado.
+      runtime.piece = null;
+      runtime.strikeForce = 0;
+      this.overlay.resetEffects();
+    }
     if (changed.has('preset')) this.engine.setPreset(getPreset(settings.preset));
     if (changed.has('masterVolume')) this.mapper.setVolume(settings.masterVolume);
     if (changed.has('stageMode')) this.applyStageMode(settings.stageMode);

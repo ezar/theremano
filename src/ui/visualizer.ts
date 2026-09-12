@@ -110,6 +110,18 @@ export class Visualizer {
     this.ripples.push({ x: source.x, y: source.y, life: RIPPLE_LIFE, hue: this.hue });
   }
 
+  /**
+   * Una onda con su color dado, en vez de deducirlo de una nota.
+   *
+   * La percusion no tiene altura de la que sacar un tono, y aun asi necesita que
+   * cada pieza salpique de su color: es lo unico que distingue un golpe de otro
+   * en pantalla. Tampoco toca `this.hue`, que es el tinte de fondo de la nota
+   * que esta sonando: un golpe no cambia de color el resto de la escena.
+   */
+  splash(source: { x: number; y: number }, hue: number): void {
+    this.ripples.push({ x: source.x, y: source.y, life: RIPPLE_LIFE, hue });
+  }
+
   reset(): void {
     this.particles.length = 0;
     this.ripples.length = 0;

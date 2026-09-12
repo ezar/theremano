@@ -8,6 +8,7 @@
  * traduccion a medias no compila.
  */
 import type { PresetId } from '../audio/presets';
+import type { DrumPiece } from '../mapping/kit';
 import type { ScaleId } from '../mapping/scales';
 
 export type Locale = 'es' | 'en';
@@ -21,6 +22,15 @@ export interface Strings {
    * equivocada convierte la rejilla en ruido para quien sabe algo de musica.
    */
   notes: readonly [string, string, string, string, string, string, string, string, string, string, string, string];
+
+  /**
+   * Nombres de las piezas de la bateria, para la rejilla y el panel.
+   *
+   * Cortos por obligacion: van debajo de una banda que mide un cuarto del ancho
+   * de un movil en vertical, y cualquiera de los nombres largos ("charles",
+   * "platillo") se sale o se lee a medias.
+   */
+  pieces: Record<DrumPiece, string>;
 
   splash: {
     tagline: string;
@@ -65,6 +75,9 @@ export interface Strings {
     hint: string;
     /** El mismo aviso, para quien toca con el raton o con el dedo. */
     pointerHint: string;
+    /** Y los dos equivalentes en bateria, donde no se sostiene nada. */
+    drumHint: string;
+    drumPointerHint: string;
     melodyDot: string;
     expressionDot: string;
     volume: string;
@@ -74,6 +87,8 @@ export interface Strings {
     layer: (index: number) => string;
     layerMuted: string;
     layerActive: string;
+    /** Subtitulo del panel en modo bateria: ocupa el sitio de la escala. */
+    kit: string;
   };
 
   actions: {
@@ -156,6 +171,9 @@ export interface Strings {
     overlayCutoff: string;
     overlayBeta: string;
     hudSection: string;
+    /** Tanteo del modo bateria: una voz y un gesto. */
+    drums: string;
+    drumsHint: string;
     /** Claqueta continua mientras gira el bucle. */
     metronome: string;
     metronomeHint: string;
@@ -167,6 +185,8 @@ export interface Strings {
   toast: {
     /** Como se toca con el puntero. Se dice una vez, al entrar. */
     pointerHint: string;
+    /** Lo mismo, cuando lo que hay debajo del puntero es una bateria. */
+    drumPointerHint: string;
     /** Que nota se ha quedado sostenida con la otra mano. */
     drone: (note: string) => string;
     metronomeOn: string;
@@ -198,6 +218,10 @@ export interface Strings {
     guideStart: (name: string, hint: string) => string;
     guideFinished: (accuracy: number) => string;
     guideNeedsScale: string;
+    /** La guia no cabe en bateria: no hay notas que apuntar. */
+    guideNeedsMelody: string;
+    /** Los bucles todavia no saben grabar golpes. */
+    loopNeedsMelody: string;
     onboardingDone: string;
     onboardingSkipped: string;
   };
