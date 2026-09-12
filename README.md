@@ -32,6 +32,8 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
   de verdad, no cuando se pulsa «siguiente». Repetible desde la ayuda.
 - **Demostración** — el instrumento se toca solo, con una mano dibujada, y
   enseña de dónde sale cada nota. **Sin pedir la cámara.**
+- **Tocar sin cámara** — el mismo instrumento entero, con el ratón o con el
+  dedo moviendo esa misma mano dibujada. Bucles, clip y enlaces incluidos.
 - **Melodías guiadas** — diez secuencias que seguir, con el objetivo marcado
   sobre la rejilla: cinco canciones conocidas y cinco ejercicios. Sin presión de
   tiempo: se sigue el orden, no el compás.
@@ -228,6 +230,53 @@ teniendo el instrumento vivo mientras se practica.
 Se marca como vista tanto si se completa como si se salta —insistir con algo ya
 rechazado es la forma más rápida de molestar— y se puede repetir en cualquier
 momento desde el panel de ayuda, al que se llega con el botón **?** o con **H**.
+
+---
+
+## Sobre tocar sin cámara
+
+El permiso de cámara es la puerta donde se queda la mitad de la gente, y hasta
+ahora detrás de esa puerta no había nada: ni instrumento, ni forma de probarlo.
+La demostración resolvió la mitad —ver cómo se toca— y esto resuelve la otra:
+tocarlo.
+
+El puntero mueve la palma de la mano dibujada, que es lo que decide la nota, y
+pulsar cierra la pinza. **De ahí para adelante el camino es el de siempre**: el
+mismo gate con su histéresis, la misma cuantización a la escala, la misma fuerza
+de ataque, el mismo bucle de fotogramas y la misma estación de bucles. No es un
+modo recortado ni un juguete aparte: es el instrumento con otra entrada, con su
+HUD, su barra de acciones, sus clips y sus enlaces.
+
+Tres decisiones que no son evidentes:
+
+- **Un toque en otro sitio es una mano nueva, no una mano que viaja.** Con el
+  dedo, cada nota es un toque en un punto distinto de la pantalla. El filtro del
+  tono —que existe para limar el temblor de una mano de verdad— no distingue un
+  salto de un movimiento rapidísimo, y llegaría a la nota nueva dos décimas
+  después de que el gate haya abierto: sonaría la zona de la que se venía. Al
+  pulsar lejos de donde estaba la mano se emite **un fotograma sin mano**, que es
+  exactamente lo que ocurre cuando una mano sale del encuadre y vuelve a entrar,
+  y ese camino ya pone los filtros a cero. Sin esto, la segunda nota de una
+  prueba de dos toques sale una octava por debajo; hay un test que lo comprueba.
+  Con el ratón, en cambio, pulsar donde ya está el puntero no pierde nada: el
+  filtro venía siguiéndolo.
+- **La pinza no se cierra de golpe.** La fuerza del ataque sale de lo rápido que
+  se cierra, y un salto instantáneo la satura: todas las notas entrarían al
+  máximo. Ochenta milisegundos dan una entrada firme sin llegar al tope, y se
+  notan menos que la latencia de la cámara, que es a lo que sustituyen.
+- **Las pulsaciones las recibe el lienzo, no la pantalla entera.** Los botones
+  del HUD están por encima, así que pulsar «grabar» sigue siendo pulsar un botón
+  y no tocar una nota de paso. Y solo manda un puntero a la vez: un segundo dedo
+  apoyado en la pantalla no mueve la mano.
+
+La introducción guiada no aparece en este modo: habla de dos manos, de dedos
+levantados y de gestos que aquí no existen, y un paso que no se puede completar
+es peor que no tener introducción. Queda sin ver, así que aparecerá entera el día
+que se entre con cámara.
+
+Cuando la cámara falla, el botón deja de ser la letra pequeña: se enciende y la
+pantalla lo dice, porque quien acaba de ver un error de permisos necesita saber
+que le queda una salida.
 
 ---
 
@@ -521,6 +570,7 @@ src/
     scales.ts             escalas y cuantización
     mapper.ts             magnitudes a parámetros de audio
     gate.ts               histéresis de la pinza
+    pointer.ts            tocar con el ratón o con el dedo
     melodies.ts           melodías guiadas y progreso
     demo.ts               coreografía de la demostración
   audio/
@@ -617,6 +667,10 @@ Los que se pueden comprobar de forma automática están en `tests/`:
   en el dato para que la tarjeta pueda anunciarla antes de que nadie lo intente.
 - **Ningún paso de la introducción se cierra solo**: cada uno se prueba con la
   señal que le toca y con todo lo demás moviéndose menos esa señal.
+- **Con el puntero, la nota que suena es la de donde se ha pulsado.** Dos toques
+  en zonas lejanas dan las dos notas correctas, igual a 30 que a 60 fotogramas;
+  arrastrar con el botón pulsado es un glissando y no una nota nueva; y la pinza
+  no se cierra de golpe, así que el ataque no sale saturado.
 - **La demostración toca las diez melodías nota por nota**, con la mano de
   mentira entrando por el mapeador de verdad, igual a 30 que a 60 fotogramas y
   con la ventana apaisada o vertical. Y la mano cabe entera en el encuadre en los

@@ -90,6 +90,14 @@ export class Hud {
     });
   }
 
+  /**
+   * Cambia el aviso inicial. Lo usa el modo sin camara, donde el de siempre
+   * —juntar pulgar e indice— no describe lo que hay que hacer.
+   */
+  setHint(text: string): void {
+    this.hint.textContent = text;
+  }
+
   /** El aviso inicial desaparece en cuanto se toca la primera nota. */
   dismissHint(): void {
     if (this.hintHidden) return;

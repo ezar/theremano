@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DemoPerformance, HAND_SCALE, NOTE_SECONDS, POSE_CLOSED, POSE_OPEN } from '../src/mapping/demo';
-import { phantomHand, phantomScale } from '../src/tracking/phantom';
-import { denormalize, depthFromSize, palmCenter, palmSize, pinchRatio } from '../src/mapping/features';
+import { DemoPerformance, NOTE_SECONDS } from '../src/mapping/demo';
+import { CLOSED_PINCH, OPEN_PINCH, drawnScale, phantomHand } from '../src/tracking/phantom';
+import { depthFromSize, palmCenter, palmSize, pinchRatio } from '../src/mapping/features';
 import { Mapper } from '../src/mapping/mapper';
 import { PINCH_CLOSE, PINCH_OPEN } from '../src/mapping/gate';
 import { MELODIES, getMelody, type Melody } from '../src/mapping/melodies';
@@ -56,8 +56,8 @@ function play(id: string, fps: number, aspect = WIDE): number[] {
     if (performance.finishedAt(seconds)) break;
     const pose = performance.poseAt(seconds);
     const landmarks = phantomHand({
-      x: denormalize(pose.x),
-      y: denormalize(pose.y),
+      x: pose.x,
+      y: pose.y,
       pinch: pose.pinch,
       tilt: pose.tilt,
       aspect,
@@ -108,7 +108,7 @@ describe('mano de mentira', () => {
     // Si saliera pegada a un extremo, el espacio del sonido de la demostracion
     // estaria saturado de reverberacion o completamente seco. Se mide con el
     // tamano que usa la demostracion, que no es el natural.
-    const hand = phantomHand({ x: 0.5, y: 0.5, pinch: 0.5, aspect, scale: phantomScale(aspect) * HAND_SCALE });
+    const hand = phantomHand({ x: 0.5, y: 0.5, pinch: 0.5, aspect, scale: drawnScale(aspect) });
     const depth = depthFromSize(palmSize(hand));
     expect(depth).toBeGreaterThan(0.2);
     expect(depth).toBeLessThan(0.8);
@@ -141,7 +141,7 @@ describe('mano de mentira', () => {
     // se salia media mano. Se recorre la demostracion entera, con su vaiven y su
     // ladeo, y se mira cada punto.
     const performance = new DemoPerformance(EDGES, createLayout('pentatonic', 9, 3, 2));
-    const scale = phantomScale(aspect) * HAND_SCALE;
+    const scale = drawnScale(aspect);
     // Lo que no puede salirse: la pinza y la palma. Del resto se admite que un
     // nudillo asome por el borde, que es lo que le pasa a una mano de verdad
     // tocando la nota del extremo.
@@ -151,8 +151,8 @@ describe('mano de mentira', () => {
       const seconds = frame / 60;
       const pose = performance.poseAt(seconds);
       const hand = phantomHand({
-        x: denormalize(pose.x),
-        y: denormalize(pose.y),
+        x: pose.x,
+        y: pose.y,
         pinch: pose.pinch,
         tilt: pose.tilt,
         aspect,
@@ -173,8 +173,8 @@ describe('mano de mentira', () => {
 
 describe('demostracion', () => {
   it('las dos aperturas caen a los dos lados de la banda muerta del gate', () => {
-    expect(POSE_CLOSED).toBeLessThan(PINCH_CLOSE);
-    expect(POSE_OPEN).toBeGreaterThan(PINCH_OPEN);
+    expect(CLOSED_PINCH).toBeLessThan(PINCH_CLOSE);
+    expect(OPEN_PINCH).toBeGreaterThan(PINCH_OPEN);
   });
 
   it.each(MELODIES.map((melody) => melody.id))('toca %s entera y en orden', (id) => {
@@ -200,7 +200,7 @@ describe('demostracion', () => {
     // En pleno viaje hacia la segunda nota, la marca ya senala la segunda.
     const travelling = 0.95 + NOTE_SECONDS;
     expect(performance.zoneAt(travelling)).toBe(performance.zoneAt(travelling + NOTE_SECONDS * 0.6));
-    expect(performance.poseAt(travelling).pinch).toBe(POSE_OPEN);
+    expect(performance.poseAt(travelling).pinch).toBe(OPEN_PINCH);
   });
 
   it('en modo continuo no se inventa una melodia que no se puede tocar', () => {
@@ -209,7 +209,7 @@ describe('demostracion', () => {
     const performance = new DemoPerformance(getMelody('estrellita')!, createLayout('continuous', 9, 3, 2));
     expect(performance.notes).toBe(0);
     expect(performance.zoneAt(2)).toBeNull();
-    expect(performance.poseAt(2).pinch).toBe(POSE_OPEN);
+    expect(performance.poseAt(2).pinch).toBe(OPEN_PINCH);
   });
 
   it('dura lo que dura una melodia, no lo que dura una pelicula', () => {

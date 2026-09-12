@@ -21,6 +21,8 @@ export const es: Strings = {
     stopListening: 'Parar',
     playAlong: 'Tocar encima',
     demo: 'Ver una demostración',
+    pointer: 'Tocar sin cámara',
+    pointerRescue: 'Sin cámara también se toca: con el ratón o con el dedo.',
   },
   demo: {
     playing: (melody: string) => `Demostración: ${melody}`,
@@ -45,6 +47,7 @@ export const es: Strings = {
 
   hud: {
     hint: 'Junta el pulgar y el índice para que suene',
+    pointerHint: 'Mantén pulsado para que suene',
     melodyDot: 'Mano de melodía',
     expressionDot: 'Mano de expresión',
     volume: 'Volumen (mano de expresión)',
@@ -158,7 +161,7 @@ export const es: Strings = {
       'No detecta la mano. Necesita luz de frente y la mano entera dentro del encuadre, a medio metro o así.',
       'No suena. Comprueba que la pinza se cierra del todo: el círculo entre los dedos se enciende cuando suena.',
       'Va a tirones. Cierra otras pestañas. Si los fps bajan mucho, la cámara se reduce sola.',
-      'No hay cámara. El navegador solo la permite en https o en localhost, y hay que dar permiso.',
+      'No hay cámara. El navegador solo la permite en https o en localhost, y hay que dar permiso. Si no la tienes o prefieres no darla, en la pantalla inicial está «Tocar sin cámara»: el mismo instrumento con el ratón o con el dedo.',
     ],
     replay: 'Repetir la introducción',
   },
@@ -214,6 +217,7 @@ export const es: Strings = {
   },
 
   toast: {
+    pointerHint: 'Mueve el puntero para elegir la nota y mantén pulsado para que suene.',
     countIn: 'Cuatro pulsos y empieza a grabar. Pulsa otra vez para cancelar',
     countInCancelled: 'Claqueta cancelada',
     layerRecording: 'Grabando capa sobre el bucle',

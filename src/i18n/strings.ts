@@ -36,6 +36,10 @@ export interface Strings {
     playAlong: string;
     /** Ver el instrumento tocandose solo, sin pedir la camara. */
     demo: string;
+    /** Tocarlo con el raton o con el dedo, tampoco sin camara. */
+    pointer: string;
+    /** Se ensena cuando la camara falla: que hay salida. */
+    pointerRescue: string;
   };
   demo: {
     playing: (melody: string) => string;
@@ -59,6 +63,8 @@ export interface Strings {
 
   hud: {
     hint: string;
+    /** El mismo aviso, para quien toca con el raton o con el dedo. */
+    pointerHint: string;
     melodyDot: string;
     expressionDot: string;
     volume: string;
@@ -156,6 +162,8 @@ export interface Strings {
   };
 
   toast: {
+    /** Como se toca con el puntero. Se dice una vez, al entrar. */
+    pointerHint: string;
     countIn: string;
     countInCancelled: string;
     layerRecording: string;

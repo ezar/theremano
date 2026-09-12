@@ -21,6 +21,8 @@ export const en: Strings = {
     stopListening: 'Stop',
     playAlong: 'Play along',
     demo: 'Watch a demo',
+    pointer: 'Play without a camera',
+    pointerRescue: 'You can play without a camera too: with the mouse or your finger.',
   },
   demo: {
     playing: (melody: string) => `Demo: ${melody}`,
@@ -45,6 +47,7 @@ export const en: Strings = {
 
   hud: {
     hint: 'Pinch thumb and index finger to make it sound',
+    pointerHint: 'Hold to make it sound',
     melodyDot: 'Melody hand',
     expressionDot: 'Expression hand',
     volume: 'Volume (expression hand)',
@@ -158,7 +161,7 @@ export const en: Strings = {
       'It does not see your hand. It needs light from the front and the whole hand inside the frame, about half a metre away.',
       'No sound. Check that the pinch closes fully: the circle between your fingers lights up when it sounds.',
       'It stutters. Close other tabs. If the frame rate drops far enough, the camera scales itself down.',
-      'No camera. Browsers only allow it over https or on localhost, and you have to grant permission.',
+      'No camera. Browsers only allow it over https or on localhost, and you have to grant permission. If you have none, or would rather not grant it, the splash screen has "Play without a camera": the same instrument, with the mouse or your finger.',
     ],
     replay: 'Play the walkthrough again',
   },
@@ -214,6 +217,7 @@ export const en: Strings = {
   },
 
   toast: {
+    pointerHint: 'Move the pointer to pick the note and hold to make it sound.',
     countIn: 'Four beats and recording starts. Press again to cancel',
     countInCancelled: 'Count-in cancelled',
     layerRecording: 'Recording a layer over the loop',
