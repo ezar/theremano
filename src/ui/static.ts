@@ -39,16 +39,28 @@ function heading(text: string): HTMLHeadingElement {
   return h;
 }
 
-export function applyStaticStrings(): void {
+/**
+ * @param drums que lado del mando de la portada esta elegido. La pantalla
+ * inicial entera depende de el: no es lo mismo prometer una melodia guiada en
+ * cinco pasos que cuatro piezas repartidas a lo ancho, y quien llega deberia
+ * poder leer lo que va a encontrarse antes de dar permiso de camara.
+ */
+export function applyStaticStrings(drums = false): void {
   const s = t();
 
-  setText('splash-tagline', s.splash.tagline);
+  setText('splash-tagline', drums ? s.splash.drumTagline : s.splash.tagline);
   const bullets = el('splash-bullets');
-  if (bullets) bullets.replaceChildren(...s.splash.bullets.map((text) => {
+  const lines = drums ? s.splash.drumBullets : s.splash.bullets;
+  if (bullets) bullets.replaceChildren(...lines.map((text) => {
     const li = document.createElement('li');
     li.textContent = text;
     return li;
   }));
+  setAttr('mode-switch', 'aria-label', s.splash.modeLabel);
+  setText('mode-melody', s.splash.modeMelody);
+  setText('mode-drums', s.splash.modeDrums);
+  el('mode-melody')?.setAttribute('aria-checked', String(!drums));
+  el('mode-drums')?.setAttribute('aria-checked', String(drums));
   setText('start-button', s.splash.start);
   setText('splash-invite', s.splash.invite);
   setText('listen-button', s.splash.listen);
