@@ -16,9 +16,18 @@ export interface ShareableSettings {
   baseOctave: number;
   octaves: number;
   preset: PresetId;
+  /**
+   * Con que se estaba tocando.
+   *
+   * Va en el enlace porque sin el todo lo demas del enlace miente: quien recibia
+   * un ritmo abria la pagina prometiendo un instrumento melodico, y al entrar se
+   * encontraba la escala y la pinza. Es lo primero que hay que saber, antes que
+   * en que tono estaba.
+   */
+  drums: boolean;
 }
 
-const KEYS: Array<keyof ShareableSettings> = ['scale', 'tonicPc', 'baseOctave', 'octaves', 'preset'];
+const KEYS: Array<keyof ShareableSettings> = ['scale', 'tonicPc', 'baseOctave', 'octaves', 'preset', 'drums'];
 
 export function encodeSettings(settings: Readonly<Settings>): string {
   const params = new URLSearchParams();
@@ -27,6 +36,10 @@ export function encodeSettings(settings: Readonly<Settings>): string {
   params.set('o', String(settings.baseOctave));
   params.set('r', String(settings.octaves));
   params.set('v', settings.preset);
+  // Solo cuando esta puesta: un enlace de melodia no tiene por que crecer para
+  // decir que no es de bateria, y asi los que ya andan por ahi siguen siendo
+  // exactamente lo que eran.
+  if (settings.drums) params.set('b', '1');
   return params.toString();
 }
 
@@ -81,6 +94,11 @@ export function decodeSettings(hash: string): Partial<ShareableSettings> {
 
   const range = readInt(params, 'r', 1, 4);
   if (range !== null) out.octaves = range;
+
+  // Solo el uno enciende la bateria. Cualquier otra cosa -incluido un "0"- se
+  // lee como que el enlace no dice nada del modo, que es lo que pasa con todos
+  // los enlaces escritos antes de que esto existiera.
+  if (params.get('b') === '1') out.drums = true;
 
   return out;
 }

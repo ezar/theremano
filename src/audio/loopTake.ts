@@ -35,6 +35,8 @@ export interface DrumHitEvent {
   piece: DrumPiece;
   /** 0 a 1. */
   force: number;
+  /** Charles abierto. Sin sentido en las demas piezas. */
+  open: boolean;
 }
 
 export interface LiveSnapshot {
@@ -44,7 +46,7 @@ export interface LiveSnapshot {
   cutoffNorm: number;
   gain: number;
   /** Golpes de este fotograma. Casi siempre vacio, y siempre en melodia. */
-  strikes: readonly { piece: DrumPiece; force: number }[];
+  strikes: readonly { piece: DrumPiece; force: number; open: boolean }[];
 }
 
 /**
@@ -139,7 +141,7 @@ export class LoopTake {
        * mas- y mucho mas si se habia grabado con el volumen bajo.
        */
       for (const strike of live.strikes) {
-        this.hits.push({ t, piece: strike.piece, force: strike.force * live.gain });
+        this.hits.push({ t, piece: strike.piece, force: strike.force * live.gain, open: strike.open });
       }
       return;
     }

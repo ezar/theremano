@@ -153,7 +153,7 @@ class DrumLoopVoice {
     // silencio de una capa se note en la vuelta siguiente y no haya que tocar
     // nada mas.
     this.gain.gain.setValueAtTime(1, cycleStart);
-    for (const hit of hits) this.kit.hit(hit.piece, hit.force, cycleStart + hit.t);
+    for (const hit of hits) this.kit.hit(hit.piece, hit.force, cycleStart + hit.t, hit.open);
   }
 
   silence(): void {

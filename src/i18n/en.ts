@@ -68,6 +68,7 @@ export const en: Strings = {
     lowPerformance: 'Low performance: dropping the camera to 640x480',
     cameraSwitchFailed: 'Could not switch camera',
     layer: (index) => `Layer ${index}`,
+    drumLayer: (index) => `Layer ${index} · beat`,
     layerMuted: 'Layer muted. Tap to bring it back.',
     layerActive: 'Tap to mute this layer.',
     kit: 'drums · 4 pieces',
@@ -128,7 +129,7 @@ export const en: Strings = {
       },
       drumPieces: {
         title: 'Now hit somewhere else',
-        body: 'Each band is a piece: kick and snare on the left, hat and crash on the right. You can see them below, each in its colour.',
+        body: 'Each band is a piece: kick and snare on the left, hat and crash on the right. The hat rings open if you hit it while pinching.',
       },
       drumBoth: {
         title: 'And both hands at once',
@@ -178,6 +179,10 @@ export const en: Strings = {
       {
         what: 'On drums: where that hand is',
         does: 'Picks the piece. Four bands across: kick and snare on the left, hat and crash on the right.',
+      },
+      {
+        what: 'On drums: hitting the hat while pinching',
+        does: 'Open hi-hat. Pinch thumb and index as you hit it and it rings; the next hit without the pinch cuts it off, like the pedal. With a mouse, hold the button.'
       },
       {
         what: 'On drums: both hands',

@@ -370,9 +370,14 @@ export class AudioEngine {
     this.drum = null;
   }
 
-  /** Un golpe de percusion. @param force de 0 a 1. */
-  hit(piece: DrumPiece, force: number): void {
-    this.drum?.hit(piece, force);
+  /**
+   * Un golpe de percusion.
+   *
+   * @param force de 0 a 1.
+   * @param open charles abierto. Las demas piezas lo ignoran.
+   */
+  hit(piece: DrumPiece, force: number, open = false): void {
+    this.drum?.hit(piece, force, undefined, open);
   }
 
   /** Envolvente del pedal: la del timbre, pero nunca mas rapida que esto. */

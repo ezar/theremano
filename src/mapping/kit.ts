@@ -47,6 +47,25 @@ export function pieceAt(x: number): DrumPiece {
   return KIT[pieceIndexAt(x)]!;
 }
 
+/**
+ * Pinza por debajo de la cual el charles suena abierto.
+ *
+ * El gesto no son los dedos estirados, que es lo primero que se prueba y lo
+ * que no funciona: una mano que baja a golpear lleva los cuatro dedos
+ * extendidos casi siempre -y la mano dibujada del puntero, siempre-, asi que
+ * abierto acababa siendo lo que salia sin querer. Y el charles abierto en cada
+ * corchea lo emborrona todo: el que tiene que salir solo es el cerrado.
+ *
+ * La pinza es lo contrario: en bateria no abre ninguna nota, asi que esta
+ * libre, y es una postura deliberada que hay que sostener. Ademas es el gesto
+ * que la aplicacion ya ensena y el que mejor mide. Y sale gratis con el raton:
+ * mantener pulsado ya cierra la pinza de la mano dibujada.
+ *
+ * El umbral es mas exigente que el del gate porque aqui no hay histeresis que
+ * valga: se mira una vez, en el fotograma del golpe.
+ */
+export const OPEN_HAT_PINCH = 0.35;
+
 /** Centro de una banda, para dibujar su nombre y su destello. */
 export function bandCenter(index: number): number {
   return (index + 0.5) * BAND;

@@ -1072,7 +1072,7 @@ class Theremano {
     else if (output.gateEvent === 'release') this.engine.release();
     // El golpe no espera a nada: es lo unico de este bucle que se oye tarde si
     // se atiende un fotograma despues.
-    for (const hit of output.strikes) this.engine.hit(hit.piece, hit.force);
+    for (const hit of output.strikes) this.engine.hit(hit.piece, hit.force, hit.open);
 
     this.engine.setFrequency(output.freq, output.glide);
     this.engine.setCutoffNorm(output.cutoffNorm);
