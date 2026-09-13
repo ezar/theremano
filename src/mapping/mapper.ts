@@ -56,7 +56,7 @@ export interface DrumHit {
   piece: DrumPiece;
   /** Lo fuerte que ha entrado, de 0 a 1. */
   force: number;
-  /** Charles abierto: la mano golpeo con los dedos estirados. */
+  /** Charles abierto: la mano golpeo con la pinza cerrada. */
   open: boolean;
   /** Donde ha caido, en espacio de vista y sin normalizar: la salpicadura va ahi. */
   x: number;

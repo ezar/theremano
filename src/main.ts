@@ -163,6 +163,15 @@ class Theremano {
     // construir nada, para que el instrumento arranque ya configurado.
     const fromLink = decodeSettings(window.location.hash);
     if (hasShareableKeys(fromLink)) this.store.set(fromLink);
+    /*
+     * Si lo que trae el enlace es bateria, la melodia guiada se va con ella.
+     *
+     * Encenderla desde los ajustes ya lo hace, pero eso vive en el manejador de
+     * cambios, que todavia no existe: por este camino la melodia se quedaba
+     * elegida y sin guia, y al volver al instrumento el selector la mostraba
+     * puesta sin que hubiera nada siguiendola.
+     */
+    if (this.store.get().drums && this.store.get().melodyId) this.store.set({ melodyId: '' });
 
     // La interpretacion del enlace se lee aqui, pero no suena hasta que alguien
     // pulsa: ningun navegador deja arrancar audio sin un gesto, y tampoco seria
@@ -413,7 +422,15 @@ class Theremano {
    * interprete eligio despues, y la que trae un enlace compartido.
    */
   private syncGuide(melodyId: string, options: { applySuggestedScale: boolean }): void {
-    const melody = melodyId ? getMelody(melodyId) : null;
+    /*
+     * En bateria no hay guia, y se decide aqui y no solo al encender el modo.
+     * Un ajuste que llega en un enlace se aplica antes de que exista la
+     * suscripcion que atiende los cambios, asi que por ese camino la guia se
+     * montaba igual: un objetivo que no se dibuja sobre la rejilla del kit y que
+     * solo puntua un ataque, que ahi no existe. Se quedaba en 0/N para siempre y
+     * encima sin forma de quitarla, porque el selector esta escondido.
+     */
+    const melody = melodyId && !this.store.get().drums ? getMelody(melodyId) : null;
     if (!melody) {
       this.guide = null;
       return;

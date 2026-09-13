@@ -72,6 +72,13 @@ const BYTES_PER_HIT = 3;
  * lleva ahi un cero -ningun tiempo valido llega a ese bit-, de modo que se lee
  * como charles cerrado, que es lo unico que existia entonces. No hace falta
  * subir la version ni marcar la capa de otra forma.
+ *
+ * Al reves no, y no puede serlo: una copia vieja de la pagina que reciba un
+ * enlace con un charles abierto lee ese bit como tiempo, le salen ochenta
+ * segundos, y rechaza la interpretacion entera -capas de melodia incluidas-. Es
+ * inherente a validar en bloque, que es lo que se decidio para no reconstruir
+ * medio bucle de un enlace roto; y falla como debe, diciendo que el enlace trae
+ * algo que no puede reproducir, en vez de sonando mal.
  */
 const OPEN_HAT_BIT = 1 << 13;
 const MAX_HIT_TIME_UNITS = 0x1fff;

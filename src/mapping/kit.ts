@@ -61,8 +61,11 @@ export function pieceAt(x: number): DrumPiece {
  * que la aplicacion ya ensena y el que mejor mide. Y sale gratis con el raton:
  * mantener pulsado ya cierra la pinza de la mano dibujada.
  *
- * El umbral es mas exigente que el del gate porque aqui no hay histeresis que
- * valga: se mira una vez, en el fotograma del golpe.
+ * El umbral es un poco mas holgado que el del gate -que cierra en 0,30- y a
+ * proposito: alli hay histeresis y una racha de confirmacion detras, y aqui hay
+ * una sola lectura, en el fotograma del golpe y sobre puntos sin filtrar. Con el
+ * mismo numero, un temblor en ese fotograma se lleva por delante el charles
+ * abierto que si se estaba pidiendo.
  */
 export const OPEN_HAT_PINCH = 0.35;
 

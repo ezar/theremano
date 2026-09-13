@@ -36,10 +36,15 @@ export function encodeSettings(settings: Readonly<Settings>): string {
   params.set('o', String(settings.baseOctave));
   params.set('r', String(settings.octaves));
   params.set('v', settings.preset);
-  // Solo cuando esta puesta: un enlace de melodia no tiene por que crecer para
-  // decir que no es de bateria, y asi los que ya andan por ahi siguen siendo
-  // exactamente lo que eran.
-  if (settings.drums) params.set('b', '1');
+  /*
+   * Siempre, tambien cuando esta apagada.
+   *
+   * La primera version solo lo escribia al estar encendida, para no alargar los
+   * enlaces de melodia. El precio era el mismo fallo al reves: quien estuviera
+   * en bateria recibia un enlace de melodia, se le aplicaba la escala y el
+   * timbre, y se quedaba golpeando. Cuatro caracteres valen menos que eso.
+   */
+  params.set('b', settings.drums ? '1' : '0');
   return params.toString();
 }
 
@@ -95,10 +100,12 @@ export function decodeSettings(hash: string): Partial<ShareableSettings> {
   const range = readInt(params, 'r', 1, 4);
   if (range !== null) out.octaves = range;
 
-  // Solo el uno enciende la bateria. Cualquier otra cosa -incluido un "0"- se
-  // lee como que el enlace no dice nada del modo, que es lo que pasa con todos
-  // los enlaces escritos antes de que esto existiera.
-  if (params.get('b') === '1') out.drums = true;
+  // Ausente no es lo mismo que cero: los enlaces escritos antes de que esto
+  // existiera no dicen nada del modo, y a esos hay que dejarles el que tenga
+  // quien los abre en lugar de apagarle la bateria por su cuenta.
+  const mode = params.get('b');
+  if (mode === '1') out.drums = true;
+  else if (mode === '0') out.drums = false;
 
   return out;
 }

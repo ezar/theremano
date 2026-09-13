@@ -35,7 +35,7 @@ export interface DrumHitEvent {
   piece: DrumPiece;
   /** 0 a 1. */
   force: number;
-  /** Charles abierto. Sin sentido en las demas piezas. */
+  /** Charles abierto: se golpeo con la pinza cerrada. Sin sentido en las demas. */
   open: boolean;
 }
 
