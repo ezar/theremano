@@ -17,7 +17,29 @@ describe('configuracion en el enlace', () => {
       baseOctave: 2,
       octaves: 3,
       preset: 'bass',
+      drums: false,
     });
+  });
+
+  it('el enlace dice con que se tocaba, y lo dice en los dos sentidos', () => {
+    /*
+     * Los dos, y no solo el encendido. Decir solo "esto es bateria" deja el
+     * fallo al reves: quien esta golpeando recibe un enlace de melodia, se le
+     * aplican la escala y el timbre, y se queda golpeando con una portada que
+     * promete otra cosa.
+     */
+    const bateria = decodeSettings(`#${encodeSettings({ ...DEFAULT_SETTINGS, drums: true })}`);
+    expect(bateria.drums).toBe(true);
+    const melodia = decodeSettings(`#${encodeSettings({ ...DEFAULT_SETTINGS, drums: false })}`);
+    expect(melodia.drums).toBe(false);
+  });
+
+  it('un enlace de antes de que existiera el modo no lo toca', () => {
+    // Ausente no es cero: esos enlaces no dicen nada del modo, y apagarle la
+    // bateria a quien los abre seria inventarse lo que no traen.
+    const viejo = decodeSettings('#e=blues&t=4&o=2&r=3&v=bass');
+    expect('drums' in viejo, 'no dice nada del modo').toBe(false);
+    expect(viejo.scale, 'y lo demas se lee igual que siempre').toBe('blues');
   });
 
   it('acepta el fragmento con y sin almohadilla', () => {

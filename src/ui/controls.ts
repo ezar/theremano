@@ -66,9 +66,11 @@ export class Controls {
       if (event.key === 'Escape' && this.open) this.setOpen(false);
     });
 
-    this.deps.store.subscribe((settings) => {
-      for (const bind of this.binders) bind(settings);
-    });
+    // Por refresh() y no llamando a los enlaces directamente: ahi dentro hay ya
+    // dos cosas que hacer con los ajustes -poner cada control en su valor y
+    // esconder lo que no vale en bateria- y saltarse una de ellas es lo que
+    // dejaba el panel entero de melodia puesto con la bateria encendida.
+    this.deps.store.subscribe(() => this.refresh());
     // Cambiar de idioma reconstruye el panel entero. Es un puñado de nodos y
     // ocurre una vez cada muchos minutos: no compensa mantener una referencia
     // por etiqueta solo para reescribir su texto.
@@ -111,14 +113,37 @@ export class Controls {
     if (activeId && cameras.some((c) => c.deviceId === activeId)) select.value = activeId;
   }
 
+  private melodyOnly: HTMLElement[] = [];
+
   private refresh(): void {
     const settings = this.deps.store.get();
     for (const bind of this.binders) bind(settings);
+    // Escala, tonica, octava, rango, timbre y la melodia guiada no hacen nada en
+    // bateria. Dejarlos puestos no es solo ruido: invita a moverlos y a esperar
+    // que cambie algo, y lo unico que cambia es el instrumento al que se vuelva.
+    for (const node of this.melodyOnly) node.hidden = settings.drums;
+  }
+
+  /**
+   * Recoge lo que se anada aqui dentro como "solo melodia".
+   *
+   * Se apunta el trozo de panel en lugar de una referencia por control porque
+   * hay que esconder tambien los rotulos de seccion y las notas al pie, que no
+   * son controles y no tienen enlace.
+   */
+  private melodic(build: () => void): void {
+    const from = this.panel.childElementCount;
+    build();
+    for (let i = from; i < this.panel.childElementCount; i += 1) {
+      const node = this.panel.children[i];
+      if (node instanceof HTMLElement) this.melodyOnly.push(node);
+    }
   }
 
   private build(): void {
     const s = t().settings;
     this.panel.replaceChildren();
+    this.melodyOnly = [];
 
     this.select(
       'language',
@@ -174,36 +199,38 @@ export class Controls {
 
     this.section(s.instrumentSection);
 
-    this.select(
-      'scale',
-      s.scale,
-      SCALES.map((scale) => ({ value: scale.id, label: t().scales[scale.id] })),
-      (settings) => settings.scale,
-      (value) => this.deps.store.set({ scale: value as ScaleId }),
-    );
+    this.melodic(() => {
+      this.select(
+        'scale',
+        s.scale,
+        SCALES.map((scale) => ({ value: scale.id, label: t().scales[scale.id] })),
+        (settings) => settings.scale,
+        (value) => this.deps.store.set({ scale: value as ScaleId }),
+      );
 
-    const tonicSelect = this.select(
-      'tonic',
-      s.tonic,
-      t().notes.map((name, index) => ({ value: String(index), label: name })),
-      (settings) => String(settings.tonicPc),
-      (value) => this.deps.store.set({ tonicPc: Number(value) }),
-    );
-    // En modo continuo no hay grados que anclar a una tonica.
-    this.binders.push((settings) => {
-      tonicSelect.disabled = settings.scale === 'continuous';
+      const tonicSelect = this.select(
+        'tonic',
+        s.tonic,
+        t().notes.map((name, index) => ({ value: String(index), label: name })),
+        (settings) => String(settings.tonicPc),
+        (value) => this.deps.store.set({ tonicPc: Number(value) }),
+      );
+      // En modo continuo no hay grados que anclar a una tonica.
+      this.binders.push((settings) => {
+        tonicSelect.disabled = settings.scale === 'continuous';
+      });
+
+      this.range('base-octave', s.baseOctave, 1, 5, 1, (x) => x.baseOctave, (v) => this.deps.store.set({ baseOctave: v }), (v) => `${v}`);
+      this.range('range', s.range, 1, 4, 1, (x) => x.octaves, (v) => this.deps.store.set({ octaves: v }), (v) => s.rangeUnit(v));
+
+      this.select(
+        'preset',
+        s.preset,
+        PRESETS.map((preset) => ({ value: preset.id, label: `${preset.fingers} · ${t().presets[preset.id]}` })),
+        (settings) => settings.preset,
+        (value) => this.deps.store.set({ preset: value as PresetId }),
+      );
     });
-
-    this.range('base-octave', s.baseOctave, 1, 5, 1, (x) => x.baseOctave, (v) => this.deps.store.set({ baseOctave: v }), (v) => `${v}`);
-    this.range('range', s.range, 1, 4, 1, (x) => x.octaves, (v) => this.deps.store.set({ octaves: v }), (v) => s.rangeUnit(v));
-
-    this.select(
-      'preset',
-      s.preset,
-      PRESETS.map((preset) => ({ value: preset.id, label: `${preset.fingers} · ${t().presets[preset.id]}` })),
-      (settings) => settings.preset,
-      (value) => this.deps.store.set({ preset: value as PresetId }),
-    );
 
     this.range(
       'base-volume',
@@ -222,23 +249,26 @@ export class Controls {
     this.checkbox('metronome', s.metronome, (x) => x.metronome, (v) => this.deps.store.set({ metronome: v }));
     this.hint(s.metronomeHint);
 
-    this.section(s.guideSection);
-    // Diez entradas seguidas no dicen cual es una cancion y cual un ejercicio de
-    // los que hay aqui dentro. Los grupos lo dicen sin gastar una linea de texto.
-    const melodyOf = (kind: MelodyKind) =>
-      MELODIES.filter((m) => m.kind === kind).map((m) => ({ value: m.id, label: t().melodies[m.id]?.name ?? m.id }));
-    this.select(
-      'melody',
-      s.melody,
-      [
-        { value: '', label: s.melodyNone },
-        { group: s.melodySongs, options: melodyOf('song') },
-        { group: s.melodyExercises, options: melodyOf('exercise') },
-      ],
-      (settings) => settings.melodyId,
-      (value) => this.deps.onMelodyChange(value),
-    );
-    this.hint(s.melodyHint);
+    // La guia entera, rotulo incluido: apunta a notas, y en bateria no las hay.
+    this.melodic(() => {
+      this.section(s.guideSection);
+      // Diez entradas seguidas no dicen cual es una cancion y cual un ejercicio de
+      // los que hay aqui dentro. Los grupos lo dicen sin gastar una linea de texto.
+      const melodyOf = (kind: MelodyKind) =>
+        MELODIES.filter((m) => m.kind === kind).map((m) => ({ value: m.id, label: t().melodies[m.id]?.name ?? m.id }));
+      this.select(
+        'melody',
+        s.melody,
+        [
+          { value: '', label: s.melodyNone },
+          { group: s.melodySongs, options: melodyOf('song') },
+          { group: s.melodyExercises, options: melodyOf('exercise') },
+        ],
+        (settings) => settings.melodyId,
+        (value) => this.deps.onMelodyChange(value),
+      );
+      this.hint(s.melodyHint);
+    });
 
     this.section(s.cameraSection);
     this.cameraSelect = this.select('camera', s.device, [], (x) => x.cameraId ?? '', (value) => {

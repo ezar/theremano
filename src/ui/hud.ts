@@ -194,7 +194,9 @@ export class Hud {
       swatch.style.background = `hsl(${track.hue}, 90%, 62%)`;
       swatch.style.color = `hsl(${track.hue}, 90%, 62%)`;
       const text = document.createElement('span');
-      text.textContent = t().hud.layer(i + 1);
+      // Con cuatro capas mezcladas, "Capa 1 / Capa 2" no dice cual es el ritmo
+      // y cual la melodia, que es justo lo que uno quiere silenciar por separado.
+      text.textContent = track.drums ? t().hud.drumLayer(i + 1) : t().hud.layer(i + 1);
       lane.append(swatch, text);
       this.lanes.append(lane);
     }

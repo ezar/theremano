@@ -4,7 +4,7 @@ import { HoldGesture } from './holdGesture';
 import { ClosingSpeed } from './closingSpeed';
 import { VibratoDetector } from './vibrato';
 import { StrikeDetector } from './strike';
-import { pieceAt, type DrumPiece } from './kit';
+import { OPEN_HAT_PINCH, pieceAt, type DrumPiece } from './kit';
 import { PinchGate, type GateEvent } from './gate';
 import { createLayout, isContinuous, pitchAt, type PitchLayout } from './scales';
 import { getPreset, presetForFingerCount, type Preset, type PresetId } from '../audio/presets';
@@ -56,6 +56,8 @@ export interface DrumHit {
   piece: DrumPiece;
   /** Lo fuerte que ha entrado, de 0 a 1. */
   force: number;
+  /** Charles abierto: la mano golpeo con la pinza cerrada. */
+  open: boolean;
   /** Donde ha caido, en espacio de vista y sin normalizar: la salpicadura va ahi. */
   x: number;
   y: number;
@@ -455,7 +457,12 @@ export class Mapper {
     }
     const palm = palmCenter(tracked.hand.raw);
     const force = detector.push(timestamp, palm.y);
-    if (force > 0) this.strikes.push({ piece: pieceAt(normalize(palm.x)), force, x: palm.x, y: palm.y });
+    if (force === 0) return;
+    // La pinza se mira solo aqui, en el fotograma del golpe, y no en todos: es
+    // lo unico que se le pide en bateria, y hacerlo por fotograma seria pagarlo
+    // sesenta veces por segundo para leerlo una.
+    const open = pinchRatio(tracked.hand.raw) < OPEN_HAT_PINCH;
+    this.strikes.push({ piece: pieceAt(normalize(palm.x)), force, open, x: palm.x, y: palm.y });
   }
 
   /**

@@ -189,7 +189,13 @@ export class Overlay {
 
     this.visualizer.paintForeground(target, videoWidth, videoHeight);
     this.drawLoopRing(target, frame.loops);
-    if (options.caption) this.drawCaption(target, frame);
+    /*
+     * El rotulo grande del clip dice la nota, y en bateria no hay ninguna: hasta
+     * ahora escribia el nombre de una que no sonaba, en gris, en la esquina de un
+     * video que alguien va a compartir. Ahi el rotulo ya existe y son las bandas,
+     * cada una con su nombre y su color debajo de la mano.
+     */
+    if (options.caption && !frame.drums) this.drawCaption(target, frame);
     if (options.watermark) this.drawWatermark(target);
   }
 

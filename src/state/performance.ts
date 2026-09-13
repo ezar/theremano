@@ -55,10 +55,33 @@ const PARAM_RATES = [10, 5] as const;
 const BYTES_PER_EVENT = 6;
 
 /**
- * Un golpe cabe en tres bytes: catorce bits de tiempo, dos de pieza y ocho de
- * fuerza. Dos bits dan para cuatro piezas, que es exactamente el kit.
+ * Un golpe cabe en tres bytes: trece bits de tiempo, uno de charles abierto, dos
+ * de pieza y ocho de fuerza. Dos bits dan para cuatro piezas, que es exactamente
+ * el kit.
  */
 const BYTES_PER_HIT = 3;
+
+/**
+ * El bit del charles abierto, robado al campo de tiempo.
+ *
+ * Ese campo tenia catorce bits -163 segundos- para un ciclo que no pasa de
+ * veinte, asi que le sobraban tres. Quitarle uno lo deja en 81 segundos, sigue
+ * cuadruplicando el maximo, y a cambio el golpe sigue pesando tres bytes.
+ *
+ * Lo importante es que asi no se rompe nada de lo ya escrito: un enlace anterior
+ * lleva ahi un cero -ningun tiempo valido llega a ese bit-, de modo que se lee
+ * como charles cerrado, que es lo unico que existia entonces. No hace falta
+ * subir la version ni marcar la capa de otra forma.
+ *
+ * Al reves no, y no puede serlo: una copia vieja de la pagina que reciba un
+ * enlace con un charles abierto lee ese bit como tiempo, le salen ochenta
+ * segundos, y rechaza la interpretacion entera -capas de melodia incluidas-. Es
+ * inherente a validar en bloque, que es lo que se decidio para no reconstruir
+ * medio bucle de un enlace roto; y falla como debe, diciendo que el enlace trae
+ * algo que no puede reproducir, en vez de sonando mal.
+ */
+const OPEN_HAT_BIT = 1 << 13;
+const MAX_HIT_TIME_UNITS = 0x1fff;
 
 /**
  * Marca de capa de bateria en el byte donde una capa de melodia lleva su timbre.
@@ -156,13 +179,18 @@ export function decodePerformance(encoded: string): Performance | null {
         // fallar. Se comprueba igual: el dia que el kit tenga tres, un enlace
         // manipulado traeria un undefined golpeando.
         if (!piece) return null;
-        const t = (packed & MAX_TIME_UNITS) / TIME_SCALE;
+        const t = (packed & MAX_HIT_TIME_UNITS) / TIME_SCALE;
         if (t > cycleSeconds + 0.5) return null;
         // En orden, por el mismo motivo que en melodia: el reproductor programa
         // por instante y no por posicion en la lista.
         if (t < last) return null;
         last = t;
-        hits.push({ t, piece, force: (bytes[at + 2] ?? 0) / 255 });
+        hits.push({
+          t,
+          piece,
+          force: (bytes[at + 2] ?? 0) / 255,
+          open: (packed & OPEN_HAT_BIT) !== 0,
+        });
         at += BYTES_PER_HIT;
       }
       // Sin notas enteras que exigir: un golpe no deja nada abierto. Con que
@@ -296,14 +324,14 @@ function write(performance: Performance, paramHz: number): Uint8Array | null {
       writeUint16(bytes, at, hits.length);
       at += 2;
       for (const hit of hits) {
-        const units = Math.min(MAX_TIME_UNITS, Math.max(0, Math.round(hit.t * TIME_SCALE)));
+        const units = Math.min(MAX_HIT_TIME_UNITS, Math.max(0, Math.round(hit.t * TIME_SCALE)));
         const piece = KIT.indexOf(hit.piece);
         // Como con un timbre que no existe: se rechaza el enlace entero en vez
         // de escribir otra pieza en su sitio. Hoy el tipo lo impide, pero el dia
         // que el kit cambie es mejor no compartir nada que compartir un ritmo
         // con los golpes cambiados de sitio.
         if (piece < 0) return null;
-        writeUint16(bytes, at, (piece << 14) | units);
+        writeUint16(bytes, at, (piece << 14) | (hit.open ? OPEN_HAT_BIT : 0) | units);
         bytes[at + 2] = clampInt(Math.round(hit.force * 255), 0, 255);
         at += BYTES_PER_HIT;
       }

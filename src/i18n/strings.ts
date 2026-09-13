@@ -92,6 +92,8 @@ export interface Strings {
     lowPerformance: string;
     cameraSwitchFailed: string;
     layer: (index: number) => string;
+    /** La misma, cuando la capa es de ritmo: con cuatro no se distinguian. */
+    drumLayer: (index: number) => string;
     layerMuted: string;
     layerActive: string;
     /** Subtitulo del panel en modo bateria: ocupa el sitio de la escala. */

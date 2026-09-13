@@ -68,6 +68,7 @@ export const es: Strings = {
     lowPerformance: 'Rendimiento bajo: se reduce la cámara a 640x480',
     cameraSwitchFailed: 'No se ha podido cambiar de cámara',
     layer: (index) => `Capa ${index}`,
+    drumLayer: (index) => `Capa ${index} · ritmo`,
     layerMuted: 'Capa silenciada. Pulsa para activarla.',
     layerActive: 'Pulsa para silenciar esta capa.',
     kit: 'batería · 4 piezas',
@@ -128,7 +129,7 @@ export const es: Strings = {
       },
       drumPieces: {
         title: 'Ahora golpea en otro sitio',
-        body: 'Cada banda es una pieza: bombo y caja a la izquierda, charles y plato a la derecha. Se ven abajo, con su color.',
+        body: 'Cada banda es una pieza: bombo y caja a la izquierda, charles y plato a la derecha. El charles suena abierto si lo golpeas con la pinza cerrada.',
       },
       drumBoth: {
         title: 'Y las dos manos a la vez',
@@ -178,6 +179,10 @@ export const es: Strings = {
       {
         what: 'En batería: dónde está esa mano',
         does: 'Elige la pieza. Cuatro bandas a lo ancho: bombo y caja a la izquierda, charles y plato a la derecha.',
+      },
+      {
+        what: 'En batería: golpear el charles con la pinza cerrada',
+        does: 'Charles abierto. Junta pulgar e índice al golpearlo y suena abierto; el golpe siguiente sin pinza lo apaga, como el pedal. Con el ratón, manteniendo pulsado.',
       },
       {
         what: 'En batería: las dos manos',

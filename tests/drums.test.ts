@@ -273,6 +273,34 @@ describe('modo bateria', () => {
     expect(drumming.gain).toBeCloseTo(drumming.volume, 6);
   });
 
+  it('el charles solo se abre con la pinza cerrada', () => {
+    /*
+     * El gesto que se probo primero eran los dedos estirados, y estaba mal: una
+     * mano que baja a golpear los lleva extendidos casi siempre, de modo que
+     * abierto era lo que salia sin querer. Lo que tiene que salir sin pensar es
+     * el cerrado, que es el que suena cien veces por minuto.
+     */
+    const normal = new Session();
+    normal.strikes(3, { x: 0.62, y: 0.3 }, null);
+    expect(normal.hits.length).toBeGreaterThan(0);
+    expect(normal.hits.map((h) => h.piece)).toEqual(normal.hits.map(() => 'hat'));
+    expect(normal.hits.some((h) => h.open), 'la mano abierta no abre el charles').toBe(false);
+
+    const pinzado = new Session();
+    pinzado.strikes(3, { x: 0.62, y: 0.3, pinch: 0.1 }, null);
+    expect(pinzado.hits.length).toBeGreaterThan(0);
+    expect(pinzado.hits.every((h) => h.open), 'con la pinza cerrada, abierto').toBe(true);
+  });
+
+  it('y la pinza no cambia de pieza ni abre ninguna nota', () => {
+    // Lo que hace la pinza en bateria es esto y solo esto: ni elige pieza, que
+    // la elige la banda, ni reabre el gate, que sigue cerrado a la fuerza.
+    const session = new Session();
+    session.strikes(3, { x: 0.2, y: 0.3, pinch: 0.1 }, null);
+    expect(session.hits.map((h) => h.piece)).toEqual(session.hits.map(() => 'kick'));
+    expect(session.last.gateOpen).toBe(false);
+  });
+
   it('sin modo bateria no hay golpes por mucho que se baje la mano', () => {
     const session = new Session(DEFAULT_SETTINGS);
     session.strikes(4, { x: 0.2, y: 0.3 }, { x: 0.7, y: 0.3 });

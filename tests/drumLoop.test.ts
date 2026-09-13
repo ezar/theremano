@@ -18,7 +18,7 @@ import { KIT } from '../src/mapping/kit';
 const quiet: LiveSnapshot = { gateEvent: null, gateOpen: false, freq: 440, cutoffNorm: 0.5, gain: 0.8, strikes: [] };
 const beat = (...pieces: string[]): LiveSnapshot => ({
   ...quiet,
-  strikes: pieces.map((piece) => ({ piece: piece as (typeof KIT)[number], force: 0.7 })),
+  strikes: pieces.map((piece) => ({ piece: piece as (typeof KIT)[number], force: 0.7, open: false })),
 });
 
 describe('capa de bateria', () => {
@@ -76,10 +76,10 @@ describe('capa de bateria', () => {
 
 describe('la bateria dentro de un enlace', () => {
   const hits = [
-    { t: 0, piece: 'kick' as const, force: 1 },
-    { t: 0.5, piece: 'hat' as const, force: 0.4 },
-    { t: 1, piece: 'snare' as const, force: 0.75 },
-    { t: 1.5, piece: 'crash' as const, force: 0.2 },
+    { t: 0, piece: 'kick' as const, force: 1, open: false },
+    { t: 0.5, piece: 'hat' as const, force: 0.4, open: true },
+    { t: 1, piece: 'snare' as const, force: 0.75, open: false },
+    { t: 1.5, piece: 'crash' as const, force: 0.2, open: false },
   ];
 
   it('va y vuelve sin perder ni mover un golpe', () => {
@@ -105,6 +105,7 @@ describe('la bateria dentro de un enlace', () => {
       t: i * 0.05,
       piece: KIT[i % KIT.length]!,
       force: 0.5,
+      open: false,
     }));
     const encoded = encodePerformance({ cycleSeconds: 3.2, tracks: [{ presetId: 'theremin', events: [], hits: many, drums: true }] });
     expect(encoded?.tracks, 'sesenta y cuatro golpes entran de sobra').toBe(1);
@@ -145,6 +146,60 @@ describe('la bateria dentro de un enlace', () => {
     expect(back.tracks[0]!.hits ?? []).toEqual([]);
   });
 
+  it('el charles abierto viaja, y las demas piezas no se lo inventan', () => {
+    const back = decodePerformance(
+      encodePerformance({ cycleSeconds: 2, tracks: [{ presetId: 'theremin', events: [], hits, drums: true }] })!.encoded,
+    )!;
+    const abiertos = back.tracks[0]!.hits!.map((h) => h.open);
+    expect(abiertos).toEqual(hits.map((h) => h.open));
+    expect(abiertos.filter(Boolean), 'solo uno de los cuatro va abierto').toHaveLength(1);
+  });
+
+  it('el bit del charles no le come tiempo a un ciclo largo', () => {
+    /*
+     * El bit se le ha robado al campo de tiempo, que tenia de sobra: catorce
+     * bits para un ciclo que no pasa de veinte segundos. Con trece siguen
+     * cabiendo ochenta. Si alguien estrechara mas ese campo, un golpe al final
+     * de un ciclo largo se envolveria y sonaria al principio.
+     */
+    const late = [
+      { t: 0, piece: 'kick' as const, force: 1, open: false },
+      { t: 19.9, piece: 'snare' as const, force: 1, open: true },
+    ];
+    const back = decodePerformance(
+      encodePerformance({ cycleSeconds: 20, tracks: [{ presetId: 'theremin', events: [], hits: late, drums: true }] })!.encoded,
+    )!;
+    expect(back.tracks[0]!.hits![1]!.t).toBeCloseTo(19.9, 2);
+    expect(back.tracks[0]!.hits![1]!.open).toBe(true);
+  });
+
+  it('un enlace escrito antes de que existiera el charles abierto se lee cerrado', () => {
+    /*
+     * La compatibilidad de verdad: el bit vive en un sitio que los enlaces
+     * anteriores dejaban siempre a cero, asi que se leen como charles cerrado,
+     * que es lo unico que existia entonces. Se construye el enlace a mano con el
+     * formato viejo -sin el bit- para comprobarlo sin depender del codificador
+     * de ahora, que ya no lo escribe asi.
+     */
+    const viejo = new Uint8Array([
+      1, // version
+      200, 0, // ciclo: 2,00 s
+      1, // una capa
+      0xff, // marca de bateria
+      2, 0, // dos golpes
+      0, 0, 255, // kick en t=0, fuerza maxima
+      80, 0x40, 128, // snare (pieza 1) en t=0,80, fuerza media
+    ]);
+    const base64 = btoa(String.fromCharCode(...viejo)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const back = decodePerformance(base64)!;
+
+    expect(back, 'el enlace viejo sigue siendo legible').not.toBe(null);
+    const leidos = back.tracks[0]!.hits!;
+    expect(leidos.map((h) => h.piece)).toEqual(['kick', 'snare']);
+    expect(leidos.map((h) => h.open), 'ninguno abierto').toEqual([false, false]);
+    expect(leidos[1]!.t).toBeCloseTo(0.8, 2);
+  });
+
   it('una capa de bateria sin golpes no se codifica', () => {
     expect(encodePerformance({ cycleSeconds: 2, tracks: [{ presetId: 'theremin', events: [], hits: [], drums: true }] })).toBe(null);
   });
@@ -164,8 +219,8 @@ describe('la bateria dentro de un enlace', () => {
           events: [],
           drums: true,
           hits: [
-            { t: 1.5, piece: 'kick', force: 1 },
-            { t: 0.2, piece: 'snare', force: 1 },
+            { t: 1.5, piece: 'kick', force: 1, open: false },
+            { t: 0.2, piece: 'snare', force: 1, open: false },
           ],
         },
       ],
@@ -177,7 +232,7 @@ describe('la bateria dentro de un enlace', () => {
   it('un golpe fuera del ciclo se rechaza', () => {
     const encoded = encodePerformance({
       cycleSeconds: 2,
-      tracks: [{ presetId: 'theremin', events: [], drums: true, hits: [{ t: 9, piece: 'kick', force: 1 }] }],
+      tracks: [{ presetId: 'theremin', events: [], drums: true, hits: [{ t: 9, piece: 'kick', force: 1, open: false }] }],
     });
     expect(decodePerformance(encoded!.encoded)).toBe(null);
   });
