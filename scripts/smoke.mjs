@@ -477,7 +477,29 @@ const afterDemo = await demoPage.evaluate(() => ({
   rotulo: !document.getElementById('demo-banner')?.hidden,
   vuelveLaPantallaInicial: document.getElementById('splash')?.hidden === false,
 }));
-console.log(JSON.stringify({ beforeDemo, playing, afterDemo, erroresDemostracion: demoLogs }, null, 2));
+
+/*
+ * Y la demostracion del otro instrumento, que es otra coreografia entera.
+ *
+ * La misma pestana: lo que se comprueba es justamente que el boton ensena lo
+ * que esta elegido en el mando y no siempre lo mismo. El pico se pone a cero
+ * con el ritmo ya sonando, y no antes: la ventana del analizador guarda casi un
+ * segundo de historia, asi que un cero puesto en el instante de arrancar se
+ * leeria con la cola de la demostracion anterior todavia dentro.
+ */
+await demoPage.click('#mode-drums');
+await demoPage.click('#demo-button');
+await demoPage.waitForTimeout(2000);
+await demoPage.evaluate(() => window.__resetPeak?.());
+await demoPage.waitForTimeout(2500);
+const drumming = await demoPage.evaluate(() => ({
+  rotulo: document.getElementById('demo-label')?.textContent,
+  rotuloArriba: document.getElementById('demo-banner')?.classList.contains('drums'),
+  picoDeAudio: Number((window.__peak ?? 0).toFixed(4)),
+}));
+await demoPage.click('#demo-stop');
+await demoPage.waitForTimeout(600);
+console.log(JSON.stringify({ beforeDemo, playing, afterDemo, drumming, erroresDemostracion: demoLogs }, null, 2));
 await demoPage.close();
 await demo.close();
 

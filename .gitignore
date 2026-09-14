@@ -9,3 +9,6 @@ dist-ssr
 # Activos descargados o copiados en tiempo de build (ver scripts/fetch-assets.mjs)
 public/models/*.task
 public/wasm/*
+
+# Captura que deja la prueba de humo al pasar (ver scripts/smoke.mjs)
+smoke.png

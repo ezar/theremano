@@ -552,6 +552,19 @@ html, body {
   border: 1px solid var(--edge);
 }
 
+/*
+ * En bateria el rotulo se va arriba del todo.
+ *
+ * Abajo tapa los nombres de las piezas, que estan escritos al pie de cada banda
+ * y son justo lo que hay que poder leer mientras suena: sin ellos las cuatro
+ * bandas son cuatro rectangulos de colores. En la melodica se queda abajo, que
+ * es donde no hay nada escrito.
+ */
+#demo-banner.drums {
+  bottom: auto;
+  top: calc(18px + var(--safe-t));
+}
+
 #demo-label { font-size: 0.86rem; font-weight: 600; white-space: nowrap; }
 #demo-hint { font-size: 0.78rem; color: var(--muted); line-height: 1.4; }
 

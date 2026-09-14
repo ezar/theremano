@@ -60,8 +60,18 @@ export interface Strings {
   };
   demo: {
     playing: (melody: string) => string;
+    /** Lo mismo, cuando lo que se ensena es el ritmo: no hay cancion que nombrar. */
+    drums: string;
     /** Que hay que mirar. Sin esto la demostracion se ve, pero no se lee. */
     hint: string;
+    /**
+     * Y lo que hay que mirar en la bateria, que no se parece en nada.
+     *
+     * Ahi el gesto no es la pinza sino la caida, y lo que desconcierta es que el
+     * golpe suene antes de que la mano llegue abajo: quien no lo tiene avisado
+     * lo lee como que la aplicacion se adelanta.
+     */
+    drumHint: string;
     stop: string;
   };
   loading: {

@@ -37,7 +37,9 @@ export const en: Strings = {
   },
   demo: {
     playing: (melody: string) => `Demo: ${melody}`,
+    drums: 'Demo: a two-handed beat',
     hint: 'The hand travels with the fingers apart and pinches thumb and index to make a note.',
+    drumHint: 'Each hand drops onto its piece, and the hit sounds before the hand lands.',
     stop: 'Exit',
   },
   loading: {
