@@ -13,23 +13,23 @@ import { BAND, KIT, bandCenter, pieceAt, pieceIndexAt } from '../src/mapping/kit
 describe('reparto de la bateria', () => {
   it('el centro de cada banda suena su pieza', () => {
     for (let i = 0; i < KIT.length; i += 1) {
-      expect(pieceAt(bandCenter(i)), `banda ${i}`).toBe(KIT[i]);
+      expect(pieceAt(KIT, bandCenter(i)), `banda ${i}`).toBe(KIT[i]);
     }
   });
 
   it('la mano pegada a cualquiera de los dos bordes sigue teniendo pieza', () => {
     // El uno exacto cae fuera al dividir, y es una postura normal: el encuadre
     // util ya viene recortado, asi que su borde no es el borde de la imagen.
-    expect(pieceAt(0)).toBe(KIT[0]);
-    expect(pieceAt(1)).toBe(KIT[KIT.length - 1]);
+    expect(pieceAt(KIT, 0)).toBe(KIT[0]);
+    expect(pieceAt(KIT, 1)).toBe(KIT[KIT.length - 1]);
   });
 
   it('y fuera del rango no se sale de la lista', () => {
     // Nadie deberia llamar con esto, pero normalize() recorta a 0..1 y quien
     // recorta puede dejar de hacerlo: el precio de equivocarse aqui es un
     // undefined golpeando.
-    expect(pieceAt(-3)).toBe(KIT[0]);
-    expect(pieceAt(9)).toBe(KIT[KIT.length - 1]);
+    expect(pieceAt(KIT, -3)).toBe(KIT[0]);
+    expect(pieceAt(KIT, 9)).toBe(KIT[KIT.length - 1]);
   });
 
   it('la frontera pertenece a la banda de la derecha, y solo a una', () => {
@@ -45,7 +45,7 @@ describe('reparto de la bateria', () => {
     // seria mas dificil de dar sin que nada en pantalla lo explicara.
     expect(BAND * KIT.length).toBeCloseTo(1, 10);
     const seen = new Set<string>();
-    for (let x = 0; x <= 1; x += 0.001) seen.add(pieceAt(x));
+    for (let x = 0; x <= 1; x += 0.001) seen.add(pieceAt(KIT, x));
     expect(seen.size).toBe(KIT.length);
   });
 
@@ -53,10 +53,10 @@ describe('reparto de la bateria', () => {
     // No es una preferencia estetica: una mano alterna bombo y caja mientras la
     // otra lleva el pulso en el charles, y eso solo funciona si cada pareja cabe
     // en la mitad de su mano.
-    expect(pieceAt(0.2)).toBe('kick');
-    expect(pieceAt(0.4)).toBe('snare');
-    expect(pieceAt(0.6)).toBe('hat');
-    expect(pieceAt(0.8)).toBe('crash');
+    expect(pieceAt(KIT, 0.2)).toBe('kick');
+    expect(pieceAt(KIT, 0.4)).toBe('snare');
+    expect(pieceAt(KIT, 0.6)).toBe('hat');
+    expect(pieceAt(KIT, 0.8)).toBe('crash');
   });
 
   it('el plato es el de la esquina, que es el que menos se usa', () => {

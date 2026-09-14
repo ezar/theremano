@@ -17,6 +17,7 @@ import { LandmarkFilter } from './filter/vectorFilter';
 import { Mapper } from './mapping/mapper';
 import { midiToName } from './mapping/scales';
 import { denormalize } from './mapping/features';
+import { kitTrim } from './mapping/kit';
 import { drawnScale, phantomHand, type HandPose } from './tracking/phantom';
 import { RoleTracker } from './tracking/handedness';
 import { Landmarker } from './tracking/landmarker';
@@ -639,10 +640,11 @@ class Theremano {
     this.engine.setMuted(false);
     // El kit no se monta en el arranque del motor: hay que pedirlo, igual que al
     // entrar a tocar. Sin esto los golpes salen y no suena ninguno.
+    this.applyKitTrim(settings);
     this.engine.setDrums(true);
     this.mapper.syncSettings(settings);
 
-    this.drumDemo = new DrumDemoPerformance();
+    this.drumDemo = new DrumDemoPerformance(this.mapper.currentBands);
     this.showDemo(t().demo.drums, t().demo.drumHint, this.drumDemoFrame);
   }
 
@@ -698,6 +700,7 @@ class Theremano {
       volume: output.volume,
       loops: this.looper.state,
       drums: false,
+      kit: this.mapper.currentBands,
       // La marca de la rejilla senala la nota a la que va la mano: se ve el
       // destino antes que el movimiento, que es como se entiende el movimiento.
       targetZone: performance.zoneAt(elapsed),
@@ -759,6 +762,7 @@ class Theremano {
       volume: output.volume,
       loops: this.looper.state,
       drums: true,
+      kit: this.mapper.currentBands,
       targetZone: null,
       drone: null,
       showRawTrace: false,
@@ -1039,6 +1043,7 @@ class Theremano {
       this.looper.attach(this.engine.loopOutput);
       // El kit tampoco se monta solo: el motor no lee los ajustes, y esto se
       // guarda entre sesiones igual que la claqueta.
+      this.applyKitTrim(settings);
       this.engine.setDrums(settings.drums);
       // La claqueta se guarda entre sesiones, y el bucle de fotogramas solo
       // entera al looper de los cambios: la primera vez hay que decirselo.
@@ -1259,6 +1264,7 @@ class Theremano {
       targetZone: this.guide && !this.guide.finished ? this.guide.targetZone : null,
       drone: output.drone > 0 ? output.droneMidi : null,
       drums: settings.drums,
+      kit: this.mapper.currentBands,
       showRawTrace: settings.showRawTrace,
     };
 
@@ -1500,6 +1506,20 @@ class Theremano {
     this.video.classList.toggle('camera-hidden', mode === 'hands');
   }
 
+  /**
+   * La afinacion y el volumen de cada pieza, a los dos sitios donde hay un kit.
+   *
+   * El del motor es el que suena bajo las manos y el de cada capa de bucle es su
+   * propio kit, que existe para poder silenciarla sola. Si solo se afinara el
+   * primero, mover el mando con una vuelta girando cambiaria la mano y dejaria
+   * lo grabado como estaba, que es justo lo que uno esta comparando.
+   */
+  private applyKitTrim(settings: Readonly<Settings>): void {
+    const trim = kitTrim(settings.kitTuning, settings.kitLevel);
+    this.engine.setKitTrim(trim);
+    this.looper.setKitTrim(trim);
+  }
+
   private onSettingsChanged(settings: Readonly<Settings>, changed: ReadonlySet<keyof Settings>): void {
     if (
       changed.has('scale') ||
@@ -1534,6 +1554,10 @@ class Theremano {
       this.guide.relayout(this.mapper.currentLayout);
     }
     if (changed.has('metronome')) this.looper.setMetronome(settings.metronome);
+    // El reparto de las bandas solo lo lee el mapeador, que es quien decide que
+    // pieza hay debajo de la palma; el overlay lo recibe en cada fotograma.
+    if (changed.has('kitBands')) this.mapper.syncSettings(settings);
+    if (changed.has('kitTuning') || changed.has('kitLevel')) this.applyKitTrim(settings);
     if (changed.has('drums')) {
       this.mapper.syncSettings(settings);
       this.engine.setDrums(settings.drums);

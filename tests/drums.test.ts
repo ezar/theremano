@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Mapper, type DrumHit } from '../src/mapping/mapper';
 import { normalize, palmCenter } from '../src/mapping/features';
-import { pieceAt } from '../src/mapping/kit';
+import { KIT, pieceAt } from '../src/mapping/kit';
 import { DEFAULT_SETTINGS } from '../src/state/store';
 import { makeHand } from './helpers';
 import type { Landmark, RoleAssignment } from '../src/tracking/types';
@@ -121,7 +121,7 @@ function tracked(landmarks: Landmark[]) {
 
 /** Que pieza hay de verdad debajo de una mano puesta en esa x. */
 function pieceUnder(x: number): string {
-  return pieceAt(normalize(palmCenter(makeHand(x, 0.35)).x));
+  return pieceAt(KIT, normalize(palmCenter(makeHand(x, 0.35)).x));
 }
 
 describe('modo bateria', () => {
@@ -137,6 +137,49 @@ describe('modo bateria', () => {
     expect(new Set(right)).toEqual(new Set([pieceUnder(0.62)]));
     // Y no es la misma pieza dos veces: si lo fuera, la prueba no diria nada.
     expect(pieceUnder(0.12)).not.toBe(pieceUnder(0.62));
+  });
+
+  it('golpea la pieza que el reparto haya puesto debajo, no la de fabrica', () => {
+    /*
+     * El reparto se puede cambiar, y cambiarlo tiene que cambiar lo que suena en
+     * cada sitio: es la unica razon para poder cambiarlo. Con el reparto dado la
+     * vuelta, la mano de la izquierda -que de fabrica da al bombo- tiene que dar
+     * al plato, y la de la derecha al reves.
+     */
+    const bands = [...KIT].reverse();
+    const session = new Session({ ...SETTINGS, kitBands: bands });
+    session.strikes(3, { x: 0.12, y: 0.3 }, { x: 0.62, y: 0.3 });
+
+    const left = new Set(session.hits.filter((h) => h.x < 0.4).map((h) => h.piece));
+    const right = new Set(session.hits.filter((h) => h.x > 0.4).map((h) => h.piece));
+    expect(left).toEqual(new Set([pieceAt(bands, normalize(palmCenter(makeHand(0.12, 0.35)).x))]));
+    expect(right).toEqual(new Set([pieceAt(bands, normalize(palmCenter(makeHand(0.62, 0.35)).x))]));
+    // Y de verdad ha cambiado algo: con el reparto de fabrica eran otras dos.
+    expect(left).not.toEqual(new Set([pieceUnder(0.12)]));
+    expect(right).not.toEqual(new Set([pieceUnder(0.62)]));
+  });
+
+  it('el reparto que reparte es el mismo que se dibuja', () => {
+    /*
+     * Tres sitios tienen que estar de acuerdo sobre que pieza hay en cada banda:
+     * el que suena, las bandas que se pintan y la mano de la demostracion. Si
+     * cada uno arreglase un reparto incompleto por su cuenta, arreglarian
+     * distinto y saldrian unas bandas que dicen una pieza y suenan otra. Por eso
+     * los tres leen esto, y por eso esto sale entero pase lo que pase.
+     */
+    const mapper = new Mapper({ ...SETTINGS, kitBands: ['crash'] as never });
+    expect(mapper.currentBands).toHaveLength(KIT.length);
+    expect(new Set(mapper.currentBands)).toEqual(new Set(KIT));
+    expect(mapper.currentBands[0]).toBe('crash');
+  });
+
+  it('un reparto imposible no deja ninguna banda muda', () => {
+    // Nadie escribe esto a mano, pero sale de un almacenamiento de otra version.
+    // Una banda sin pieza detras no da un error: da un golpe que no suena.
+    const session = new Session({ ...SETTINGS, kitBands: [] });
+    session.strikes(3, { x: 0.12, y: 0.3 }, { x: 0.62, y: 0.3 });
+    expect(session.hits.length).toBeGreaterThanOrEqual(4);
+    for (const hit of session.hits) expect(KIT).toContain(hit.piece);
   });
 
   it('las dos manos pueden caer en el mismo fotograma', () => {
