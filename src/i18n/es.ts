@@ -37,7 +37,9 @@ export const es: Strings = {
   },
   demo: {
     playing: (melody: string) => `Demostración: ${melody}`,
+    drums: 'Demostración: un ritmo a dos manos',
     hint: 'La mano viaja con los dedos separados y junta pulgar e índice para que suene.',
+    drumHint: 'Cada mano deja caer la palma sobre su pieza, y el golpe suena antes de llegar abajo.',
     stop: 'Salir',
   },
   loading: {

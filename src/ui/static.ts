@@ -67,7 +67,6 @@ export function applyStaticStrings(drums = false): void {
   setText('splash-status', s.splash.permissionNote);
   setText('demo-button', s.splash.demo);
   setText('pointer-button', s.splash.pointer);
-  setText('demo-hint', s.demo.hint);
   setText('demo-stop', s.demo.stop);
 
   setText('hint', s.hud.hint);

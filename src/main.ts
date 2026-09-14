@@ -5,6 +5,7 @@ import { Looper } from './audio/looper';
 import { getPreset } from './audio/presets';
 import { ClipRecorder, clipRecordingSupported, deliverClip } from './capture/recorder';
 import { DemoPerformance } from './mapping/demo';
+import { DrumDemoPerformance } from './mapping/drumDemo';
 import { PointerPlayer } from './mapping/pointer';
 import { GuideSession, getMelody } from './mapping/melodies';
 import { decodeSettings, hasShareableKeys, readPerformanceParam, shareUrl } from './state/share';
@@ -120,6 +121,7 @@ class Theremano {
   private readonly pointerButton = must<HTMLButtonElement>('pointer-button');
   private readonly demoBanner = must('demo-banner');
   private readonly demoLabel = must('demo-label');
+  private readonly demoHint = must('demo-hint');
   private readonly splashInvite = must('splash-invite');
 
   /** Un filtro de overlay por rol: los puntos de cada mano tienen su historia. */
@@ -152,8 +154,9 @@ class Theremano {
   /** Nota pedal que suena ahora mismo, en Hz. */
   private drone = 0;
 
-  /** La demostracion en marcha, o null. */
+  /** La demostracion en marcha, o null. Hay una por cada instrumento. */
   private demo: DemoPerformance | null = null;
+  private drumDemo: DrumDemoPerformance | null = null;
   private demoHandle: number | null = null;
   private demoStartedAt = 0;
   private splashHideHandle: number | null = null;
@@ -262,7 +265,7 @@ class Theremano {
     });
 
     document.addEventListener('keydown', (event) => {
-      if (this.demo) {
+      if (this.demo || this.drumDemo) {
         if (event.key === 'Escape') this.stopDemo();
         return;
       }
@@ -551,7 +554,7 @@ class Theremano {
   // ------------------------------------------------------------ demostracion
 
   /**
-   * El instrumento tocandose solo, con una mano dibujada.
+   * El instrumento tocandose solo, con manos dibujadas.
    *
    * Es la respuesta a la primera pregunta que tiene cualquiera que llega aqui,
    * que no es "como suena" sino "que tengo que hacer con las manos". Contarlo
@@ -562,9 +565,15 @@ class Theremano {
    * una de verdad, asi que el gate, la cuantizacion y la fuerza de cada nota son
    * las del instrumento. Si algun dia se desafina, la demostracion se desafina
    * con el.
+   *
+   * Ensena lo que esta elegido en el mando de la portada y no siempre lo mismo.
+   * Son dos instrumentos con dos gestos que no se parecen -uno se toca cerrando
+   * la pinza y el otro dejando caer la mano-, asi que una demostracion melodica
+   * a quien acaba de elegir bateria no le ensena su instrumento: le ensena el
+   * otro, y ademas le hace creer que el mando no hizo nada.
    */
   private async toggleDemo(): Promise<void> {
-    if (this.demo) {
+    if (this.demo || this.drumDemo) {
       this.stopDemo();
       return;
     }
@@ -572,51 +581,87 @@ class Theremano {
     this.demoButton.disabled = true;
     this.splashError.hidden = true;
     try {
-      const chosen = this.store.get().melodyId || DEMO_MELODY;
-      // La melodia trae su escala y su rango, y aqui hay que aplicarlos igual
-      // que al elegirla a mano: sin eso se ensenaria la version aproximada de la
-      // cancion, con notas cayendo en la zona de al lado.
-      if (chosen === this.store.get().melodyId) this.syncGuide(chosen, { applySuggestedScale: true });
-      else this.store.set({ melodyId: chosen });
-
-      const melody = getMelody(chosen);
-      if (!melody) return;
-      const performance = new DemoPerformance(melody, this.mapper.currentLayout);
-      // Sin zonas no hay donde apuntar. No deberia pasar, porque ninguna melodia
-      // sugiere el modo continuo, pero una demostracion muda seria peor que un
-      // aviso.
-      if (performance.notes === 0) {
-        this.showSplashError(t().toast.guideNeedsScale);
-        return;
-      }
-
-      const settings = this.store.get();
-      await this.engine.start(settings.preset, settings.masterVolume);
-      this.engine.setMuted(false);
-      /*
-       * La demostracion toca una melodia, y comparte mapeador con el
-       * instrumento. Si los ajustes se quedaron en bateria, ese mapeador cierra
-       * la pinza a la fuerza y la demostracion sale muda: la mano dibujada se
-       * pasea por la rejilla sin que suene nada. Se le pide melodia mientras
-       * dura, y al salir se devuelven los ajustes de verdad.
-       */
-      this.mapper.syncSettings({ ...settings, drums: false });
-
-      this.demo = performance;
-      this.demoStartedAt = 0;
-      this.lastEffectsTime = 0;
-      this.overlay.resize();
-      this.overlay.resetEffects();
-      this.demoLabel.textContent = t().demo.playing(t().melodies[melody.id]?.name ?? melody.id);
-      this.demoBanner.hidden = false;
-      this.hideSplash();
-      this.demoHandle = requestAnimationFrame(this.demoFrame);
+      if (this.store.get().drums) await this.startDrumDemo();
+      else await this.startMelodyDemo();
     } catch (error) {
       this.stopDemo();
       this.showStartError(error);
     } finally {
       this.demoButton.disabled = false;
     }
+  }
+
+  private async startMelodyDemo(): Promise<void> {
+    const chosen = this.store.get().melodyId || DEMO_MELODY;
+    // La melodia trae su escala y su rango, y aqui hay que aplicarlos igual que
+    // al elegirla a mano: sin eso se ensenaria la version aproximada de la
+    // cancion, con notas cayendo en la zona de al lado.
+    if (chosen === this.store.get().melodyId) this.syncGuide(chosen, { applySuggestedScale: true });
+    else this.store.set({ melodyId: chosen });
+
+    const melody = getMelody(chosen);
+    if (!melody) return;
+    const performance = new DemoPerformance(melody, this.mapper.currentLayout);
+    // Sin zonas no hay donde apuntar. No deberia pasar, porque ninguna melodia
+    // sugiere el modo continuo, pero una demostracion muda seria peor que un
+    // aviso.
+    if (performance.notes === 0) {
+      this.showSplashError(t().toast.guideNeedsScale);
+      return;
+    }
+
+    const settings = this.store.get();
+    await this.engine.start(settings.preset, settings.masterVolume);
+    this.engine.setMuted(false);
+    // El mapeador viene de los ajustes de verdad, y aqui los ajustes dicen
+    // melodia: a esta demostracion se llega justo por eso.
+    this.mapper.syncSettings(settings);
+
+    this.demo = performance;
+    this.showDemo(
+      t().demo.playing(t().melodies[melody.id]?.name ?? melody.id),
+      t().demo.hint,
+      this.demoFrame,
+    );
+  }
+
+  /**
+   * El ritmo tocandose solo, con dos manos dibujadas.
+   *
+   * Dos y no una porque el kit esta repartido a lo ancho y esa es justo la
+   * pregunta que trae quien elige bateria: donde pongo las manos. Una sola mano
+   * cruzando el encuadre en cada negra ensenaria lo contrario de lo que hay que
+   * hacer.
+   */
+  private async startDrumDemo(): Promise<void> {
+    const settings = this.store.get();
+    await this.engine.start(settings.preset, settings.masterVolume);
+    this.engine.setMuted(false);
+    // El kit no se monta en el arranque del motor: hay que pedirlo, igual que al
+    // entrar a tocar. Sin esto los golpes salen y no suena ninguno.
+    this.engine.setDrums(true);
+    this.mapper.syncSettings(settings);
+
+    this.drumDemo = new DrumDemoPerformance();
+    this.showDemo(t().demo.drums, t().demo.drumHint, this.drumDemoFrame);
+  }
+
+  /** Lo que las dos demostraciones hacen igual: tapar la portada y arrancar. */
+  private showDemo(label: string, hint: string, frame: FrameRequestCallback): void {
+    this.demoStartedAt = 0;
+    this.lastEffectsTime = 0;
+    this.overlay.resize();
+    this.overlay.resetEffects();
+    this.demoLabel.textContent = label;
+    // El rotulo de que hay que mirar lo pone cada demostracion: los dos gestos
+    // no se parecen en nada, y el de la otra seria una instruccion equivocada.
+    this.demoHint.textContent = hint;
+    // Y en bateria el rotulo entero se va arriba, que es donde no tapa los
+    // nombres de las piezas. Quien llama ya ha dejado puesta su demostracion.
+    this.demoBanner.classList.toggle('drums', this.drumDemo !== null);
+    this.demoBanner.hidden = false;
+    this.hideSplash();
+    this.demoHandle = requestAnimationFrame(frame);
   }
 
   private readonly demoFrame = (now: number): void => {
@@ -652,8 +697,6 @@ class Theremano {
       gateOpen: output.gateOpen,
       volume: output.volume,
       loops: this.looper.state,
-      // La demostracion toca la melodia: ensena la escala aunque los ajustes
-      // esten en bateria, porque lo que se esta viendo es lo otro.
       drums: false,
       // La marca de la rejilla senala la nota a la que va la mano: se ve el
       // destino antes que el movimiento, que es como se entiende el movimiento.
@@ -675,6 +718,66 @@ class Theremano {
       return;
     }
     this.demoHandle = requestAnimationFrame(this.demoFrame);
+  };
+
+  /**
+   * El fotograma de la demostracion de bateria.
+   *
+   * Es el mismo bucle que el de la melodia con otro reparto: dos manos en vez de
+   * una, golpes en vez de notas y las bandas del kit en vez de la rejilla de la
+   * escala. Lo que no cambia es lo que importa: todo sale del mapeador de
+   * verdad, asi que la fuerza de cada golpe y la pieza que suena son las que
+   * saldrian con las manos delante de la camara.
+   */
+  private readonly drumDemoFrame = (now: number): void => {
+    const performance = this.drumDemo;
+    if (!performance) return;
+    if (this.demoStartedAt === 0) this.demoStartedAt = now;
+    const elapsed = (now - this.demoStartedAt) / 1000;
+    const seconds = now / 1000;
+
+    const target = this.overlay.screenTarget;
+    const aspect = target.width / target.height;
+    const pose = performance.poseAt(elapsed);
+    const assignment: RoleAssignment = {
+      melody: this.drawnHand(pose.melody, aspect),
+      expression: this.drawnHand(pose.expression, aspect),
+    };
+
+    const output = this.mapper.update(assignment, seconds);
+    // El golpe primero, como en el instrumento: es lo unico de este bucle que se
+    // oye tarde si se atiende un fotograma despues.
+    for (const hit of output.strikes) this.engine.hit(hit.piece, hit.force, hit.open);
+    this.engine.setVolume(output.gain);
+
+    const frame: OverlayFrame = {
+      assignment,
+      layout: this.mapper.currentLayout,
+      pitchX: output.pitchX,
+      midi: output.midi,
+      gateOpen: output.gateOpen,
+      volume: output.volume,
+      loops: this.looper.state,
+      drums: true,
+      targetZone: null,
+      drone: null,
+      showRawTrace: false,
+    };
+
+    const dt = this.lastEffectsTime > 0 ? (now - this.lastEffectsTime) / 1000 : 1 / 60;
+    this.lastEffectsTime = now;
+    // La salpicadura es la mitad de la explicacion: ensena que el golpe suena
+    // antes de que la mano acabe de bajar, que es lo primero que desconcierta al
+    // tocar y lo que nadie se cree hasta que lo ve.
+    for (const hit of output.strikes) this.overlay.splash(hit.x, hit.y, hit.piece);
+    this.overlay.update(frame, dt);
+    this.overlay.paint(target, frame, 0, 0, { backdrop: true, caption: true });
+
+    if (performance.finishedAt(elapsed)) {
+      this.stopDemo();
+      return;
+    }
+    this.demoHandle = requestAnimationFrame(this.drumDemoFrame);
   };
 
   /**
@@ -814,15 +917,17 @@ class Theremano {
   private stopDemo(): void {
     if (this.demoHandle !== null) cancelAnimationFrame(this.demoHandle);
     this.demoHandle = null;
-    if (!this.demo) return;
+    if (!this.demo && !this.drumDemo) return;
     this.demo = null;
+    this.drumDemo = null;
     this.demoStartedAt = 0;
     this.lastEffectsTime = 0;
     // Parar a mitad de una nota deja el oscilador abierto: hay que cerrarlo por
-    // el mismo camino que lo cierra perder la pestana.
+    // el mismo camino que lo cierra perder la pestana. Un golpe no hace falta
+    // cortarlo: se apaga solo, que es lo que es un golpe.
     if (this.mapper.silence() === 'release') this.engine.release();
-    // Y se le devuelve el modo que tenian los ajustes, que la demostracion le
-    // habia quitado para poder sonar.
+    // El mapeador vuelve a los ajustes por si la demostracion llego a moverlos:
+    // la melodica aplica la escala que sugiere la cancion.
     this.mapper.syncSettings(this.store.get());
     this.overlay.resetEffects();
     this.overlay.clear();
