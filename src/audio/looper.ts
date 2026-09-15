@@ -2,6 +2,7 @@ import * as Tone from 'tone';
 import { getPreset, type Preset, type PresetId } from './presets';
 import { LoopTake, MAX_TRACKS, type DrumHitEvent, type LiveSnapshot, type LoopEvent } from './loopTake';
 import { DrumKit } from './drums';
+import type { KitTrim } from '../mapping/kit';
 import { beatsInCycle, beatsLeft, isAccent, isDue, isMissed, planCountIn, type CountInPlan } from './countIn';
 
 export type { DrumHitEvent, LoopEvent } from './loopTake';
@@ -142,9 +143,13 @@ class DrumLoopVoice {
   private readonly kit: DrumKit;
   private readonly gain: Tone.Gain;
 
-  constructor(output: Tone.InputNode) {
+  constructor(output: Tone.InputNode, trim: KitTrim | null) {
     this.gain = new Tone.Gain(1).connect(output);
-    this.kit = new DrumKit(this.gain);
+    this.kit = new DrumKit(this.gain, trim ?? undefined);
+  }
+
+  trim(trim: KitTrim): void {
+    this.kit.trim(trim);
   }
 
   schedule(hits: readonly DrumHitEvent[], cycleStart: number): void {
@@ -234,6 +239,7 @@ export class Looper {
   private click: ClickVoice | null = null;
   private metronome = false;
   private beatId: number | null = null;
+  private kitTrim: KitTrim | null = null;
 
   attach(output: Tone.InputNode): void {
     this.output = output;
@@ -517,7 +523,23 @@ export class Looper {
 
   private makeVoice(track: LoopTrack): LoopVoice | DrumLoopVoice {
     const output = this.output!;
-    return track.drums ? new DrumLoopVoice(output) : new LoopVoice(getPreset(track.presetId), output);
+    return track.drums ? new DrumLoopVoice(output, this.kitTrim) : new LoopVoice(getPreset(track.presetId), output);
+  }
+
+  /**
+   * Afina tambien lo grabado.
+   *
+   * Cada capa de bateria tiene su propio kit -hace falta para poder silenciarla
+   * sola- y eso significa cuatro voces mas por capa que nadie afinaria. Sin esto,
+   * mover la afinacion con una vuelta girando dejaria la mano sonando de una
+   * forma y lo grabado de otra, que es justo lo que uno esta comparando mientras
+   * mueve el mando.
+   */
+  setKitTrim(trim: KitTrim): void {
+    this.kitTrim = trim;
+    for (const voice of this.voices.values()) {
+      if (voice instanceof DrumLoopVoice) voice.trim(trim);
+    }
   }
 
   private startTransport(): void {

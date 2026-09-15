@@ -1,6 +1,6 @@
 import * as Tone from 'tone';
 import { DrumKit } from './drums';
-import type { DrumPiece } from '../mapping/kit';
+import type { DrumPiece, KitTrim } from '../mapping/kit';
 import { getPreset, type Preset, type PresetId } from './presets';
 
 /**
@@ -91,6 +91,14 @@ export class AudioEngine {
   private drone: Tone.Synth | null = null;
   private droneFreq = 0;
   private drum: DrumKit | null = null;
+  /**
+   * La afinacion y el volumen de cada pieza, que sobreviven al kit.
+   *
+   * Se guardan aqui y no solo dentro del kit porque el kit se monta y se
+   * desmonta al encender y apagar el modo: sin esto, salir a la melodia y volver
+   * devolveria las cuatro piezas a como vienen de fabrica.
+   */
+  private kitTrim: KitTrim | null = null;
   /**
    * Bus propio de la bateria, hermano del de los bucles y por el mismo motivo.
    *
@@ -363,11 +371,17 @@ export class AudioEngine {
     if (!this.started || !this.drumBus) return;
     if (on === (this.drum !== null)) return;
     if (on) {
-      this.drum = new DrumKit(this.drumBus);
+      this.drum = new DrumKit(this.drumBus, this.kitTrim ?? undefined);
       return;
     }
     this.drum?.dispose();
     this.drum = null;
+  }
+
+  /** Afina el kit y le pone el volumen de cada pieza. */
+  setKitTrim(trim: KitTrim): void {
+    this.kitTrim = trim;
+    this.drum?.trim(trim);
   }
 
   /**

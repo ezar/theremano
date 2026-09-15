@@ -196,6 +196,21 @@ export interface Strings {
     /** Claqueta continua mientras gira el bucle. */
     metronome: string;
     metronomeHint: string;
+    /** Los ajustes del kit, que solo estan a la vista en bateria. */
+    kitSection: string;
+    kitHint: string;
+    /**
+     * En que banda esta cada pieza.
+     *
+     * Se elige por pieza y no por banda a proposito: lo que uno quiere mover es
+     * el plato, no la banda tres. Elegir una banda ocupada cambia las dos de
+     * sitio, porque las cuatro piezas tienen que seguir estando.
+     */
+    kitBand: string;
+    /** Afinacion de una pieza. Lleva la unidad dentro: son semitonos. */
+    kitTuning: string;
+    /** Volumen de una pieza, sobre el suyo de fabrica. */
+    kitLevel: string;
     showDiagnostics: string;
     showRawTrace: string;
     reset: string;

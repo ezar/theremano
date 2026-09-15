@@ -4,7 +4,7 @@ import { HoldGesture } from './holdGesture';
 import { ClosingSpeed } from './closingSpeed';
 import { VibratoDetector } from './vibrato';
 import { StrikeDetector } from './strike';
-import { OPEN_HAT_PINCH, pieceAt, type DrumPiece } from './kit';
+import { OPEN_HAT_PINCH, normalizeLayout, pieceAt, type DrumPiece, type KitLayout } from './kit';
 import { PinchGate, type GateEvent } from './gate';
 import { createLayout, isContinuous, pitchAt, type PitchLayout } from './scales';
 import { getPreset, presetForFingerCount, type Preset, type PresetId } from '../audio/presets';
@@ -158,6 +158,8 @@ export class Mapper {
   private readonly expressionStrike = new StrikeDetector();
   private readonly strikes: DrumHit[] = [];
   private drums = false;
+  /** Que pieza hay debajo de cada banda. Viene de los ajustes. */
+  private bands: KitLayout = [];
   private lastTimestamp = -1;
   /** Fuerza de la nota que suena ahora, fijada en su ataque. */
   private velocity = 1;
@@ -181,12 +183,14 @@ export class Mapper {
     this.spaceFilter = new OneEuroFilter({ ...control, minCutoff: control.minCutoff * SPACE_SMOOTHING });
     this.volume = settings.masterVolume;
     this.currentPreset = getPreset(settings.preset);
+    this.setBands(settings.kitBands);
     this.setDrums(settings.drums, settings.masterVolume);
   }
 
   /** Se llama solo cuando cambian los ajustes, no por fotograma. */
   syncSettings(settings: Readonly<Settings>): void {
     this.layout = createLayout(settings.scale, settings.tonicPc, settings.baseOctave, settings.octaves);
+    this.setBands(settings.kitBands);
     this.pitchFilter.setParams({ minCutoff: settings.pitchMinCutoff, beta: settings.pitchBeta });
     const control = { minCutoff: settings.controlMinCutoff, beta: settings.controlBeta };
     this.cutoffFilter.setParams(control);
@@ -194,6 +198,31 @@ export class Mapper {
     this.spaceFilter.setParams({ ...control, minCutoff: control.minCutoff * SPACE_SMOOTHING });
     this.currentPreset = getPreset(settings.preset);
     this.setDrums(settings.drums, settings.masterVolume);
+  }
+
+  /**
+   * El reparto se sanea aqui y no solo al cargarlo de los ajustes.
+   *
+   * Quien construye un mapeador con unos ajustes armados a mano -una prueba, un
+   * enlace- no tiene por que acordarse de que esta lista tiene una forma, y una
+   * banda sin pieza detras no da un error: da un golpe que no suena.
+   */
+  private setBands(bands: readonly DrumPiece[]): void {
+    this.bands = normalizeLayout(bands);
+  }
+
+  /**
+   * El reparto ya saneado, para quien tenga que estar de acuerdo con el.
+   *
+   * Lo miran tres: este mapeador para saber que pieza hay debajo de la palma, el
+   * overlay para dibujar las bandas y la demostracion para saber adonde llevar la
+   * mano. Los tres leen esto y no los ajustes en crudo, porque cada uno tendria
+   * que arreglar un reparto incompleto por su cuenta y lo arreglarian distinto:
+   * saldrian unas bandas que dicen una pieza y suenan otra, que es peor que
+   * cualquiera de los tres errores por separado.
+   */
+  get currentBands(): KitLayout {
+    return this.bands;
   }
 
   /**
@@ -462,7 +491,7 @@ export class Mapper {
     // lo unico que se le pide en bateria, y hacerlo por fotograma seria pagarlo
     // sesenta veces por segundo para leerlo una.
     const open = pinchRatio(tracked.hand.raw) < OPEN_HAT_PINCH;
-    this.strikes.push({ piece: pieceAt(normalize(palm.x)), force, open, x: palm.x, y: palm.y });
+    this.strikes.push({ piece: pieceAt(this.bands, normalize(palm.x)), force, open, x: palm.x, y: palm.y });
   }
 
   /**

@@ -1,4 +1,11 @@
-import type { DrumPiece } from '../mapping/kit';
+import {
+  KIT,
+  MAX_LEVEL,
+  TUNING_RANGE,
+  normalizeLayout,
+  normalizePieceNumbers,
+  type DrumPiece,
+} from '../mapping/kit';
 import type { ScaleId } from '../mapping/scales';
 import type { PresetId } from '../audio/presets';
 import type { ClipAspect } from '../capture/recorder';
@@ -55,6 +62,17 @@ export interface Settings {
    * dado en el aire llega a tiempo al altavoz.
    */
   drums: boolean;
+  /**
+   * Que pieza hay debajo de cada banda, de izquierda a derecha.
+   *
+   * Siempre las cuatro y una sola vez cada una: elegir una pieza para una banda
+   * la cambia por la que hubiera, no la duplica.
+   */
+  kitBands: DrumPiece[];
+  /** Afinacion de cada pieza, en semitonos sobre la de fabrica. */
+  kitTuning: Record<DrumPiece, number>;
+  /** Volumen de cada pieza, multiplicando el de fabrica. */
+  kitLevel: Record<DrumPiece, number>;
   /** Melodia guiada activa. Cadena vacia si no hay ninguna. */
   melodyId: string;
   /** true en cuanto se ha visto la introduccion, se complete o se salte. */
@@ -84,6 +102,9 @@ export const DEFAULT_SETTINGS: Settings = {
   stageMode: 'camera',
   metronome: false,
   drums: false,
+  kitBands: [...KIT],
+  kitTuning: { kick: 0, snare: 0, hat: 0, crash: 0 },
+  kitLevel: { kick: 1, snare: 1, hat: 1, crash: 1 },
   melodyId: '',
   onboarded: false,
   locale: 'auto',
@@ -91,14 +112,34 @@ export const DEFAULT_SETTINGS: Settings = {
 
 const STORAGE_KEY = 'theremano.settings.v1';
 
+/**
+ * Una copia de los ajustes de fabrica con los tres del kit aparte.
+ *
+ * Son los unicos que no son un numero, una cadena ni un booleano, y una copia
+ * superficial los compartiria con la constante. Hoy nadie escribe dentro de
+ * ellos -el panel siempre pone uno nuevo- asi que no hay nada roto que arreglar;
+ * esto es para que no lo haya nunca. El dia que alguien escriba dentro en vez de
+ * sustituir, lo que reescribiria son los propios valores de fabrica, y ya no
+ * habria a donde volver: ni en esta sesion ni en las siguientes, porque de ahi
+ * sale tambien lo que se guarda.
+ */
+function freshDefaults(): Settings {
+  return {
+    ...DEFAULT_SETTINGS,
+    kitBands: [...DEFAULT_SETTINGS.kitBands],
+    kitTuning: { ...DEFAULT_SETTINGS.kitTuning },
+    kitLevel: { ...DEFAULT_SETTINGS.kitLevel },
+  };
+}
+
 type Listener = (settings: Settings, changed: ReadonlySet<keyof Settings>) => void;
 
 function loadPersisted(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS };
+    if (!raw) return freshDefaults();
     const parsed = JSON.parse(raw) as Partial<Settings>;
-    const merged: Settings = { ...DEFAULT_SETTINGS };
+    const merged: Settings = freshDefaults();
     for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]) {
       const value = parsed[key];
       // Solo se acepta lo que coincide en tipo con el valor por defecto: un
@@ -107,9 +148,21 @@ function loadPersisted(): Settings {
         (merged[key] as unknown) = value;
       }
     }
+    /*
+     * Y los tres del kit, aparte.
+     *
+     * De los demas basta con el tipo, porque un numero es un numero. De estos
+     * no: "object" es lo que dice typeof de una lista vacia, de un objeto sin
+     * ninguna pieza dentro y de uno con un NaN en la afinacion, y las tres cosas
+     * se cuelan por esa puerta. La primera deja una banda golpeando un undefined
+     * y la ultima apaga la pieza entera sin decir nada.
+     */
+    merged.kitBands = normalizeLayout(merged.kitBands);
+    merged.kitTuning = normalizePieceNumbers(merged.kitTuning, 0, -TUNING_RANGE, TUNING_RANGE);
+    merged.kitLevel = normalizePieceNumbers(merged.kitLevel, 1, 0, MAX_LEVEL);
     return merged;
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return freshDefaults();
   }
 }
 
@@ -141,7 +194,7 @@ export class SettingsStore {
   }
 
   reset(): void {
-    this.set({ ...DEFAULT_SETTINGS, cameraId: this.state.cameraId });
+    this.set({ ...freshDefaults(), cameraId: this.state.cameraId });
   }
 
   private scheduleSave(): void {

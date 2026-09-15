@@ -295,7 +295,11 @@ console.log(JSON.stringify({ recording, loops }, null, 2));
 // El panel de ajustes tiene que abrir y responder.
 await page.click('#settings-toggle');
 await page.waitForTimeout(400);
-const fields = await page.evaluate(() => document.querySelectorAll('#settings-panel .field').length);
+// Los que se ven, no los que existen: el panel esconde los que no valen para
+// el instrumento elegido, y contarlos todos daria el mismo numero siempre.
+const fields = await page.evaluate(
+  () => [...document.querySelectorAll('#settings-panel .field')].filter((f) => !f.hidden).length,
+);
 
 // --- Legibilidad del desplegable. La lista que abre un select la pinta el
 // navegador con el fondo del propio select: si es translucido, sale casi blanca
@@ -443,7 +447,38 @@ const drumEnd = await drumPage.evaluate(() => ({
   sub: document.getElementById('note-sub')?.textContent ?? '',
   bandas: [...document.querySelectorAll('#coach-dots span')].length,
 }));
-console.log(JSON.stringify({ drumCoach, drumEnd }, null, 2));
+
+/*
+ * Y los ajustes del kit, que solo existen aqui.
+ *
+ * Lo que se comprueba es el cambio de sitio, que es la unica parte con logica:
+ * llevar una pieza a una banda ocupada tiene que cambiarlas de sitio, porque las
+ * cuatro tienen que seguir estando. Una banda repetida deja otra pieza sin
+ * ningun sitio desde el que tocarla.
+ */
+await drumPage.click('#settings-toggle');
+await drumPage.waitForTimeout(400);
+const beforeSwap = await drumPage.inputValue('#set-kit-band-crash');
+await drumPage.selectOption('#set-kit-band-crash', '0');
+await drumPage.locator('#set-kit-level-hat').fill('0.4');
+// El guardado se agrupa cada 250 ms: hay que darle su vuelta antes de leerlo.
+await drumPage.waitForTimeout(900);
+const kit = await drumPage.evaluate((was) => {
+  const stored = JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}');
+  const slider = document.getElementById('set-kit-level-hat');
+  return {
+    platoEstaba: was,
+    bandas: stored.kitBands,
+    bombo: document.getElementById('set-kit-band-kick')?.value,
+    // El mando y lo guardado por separado: si alguna vez discrepan, lo que se
+    // ha roto es el guardado y no el panel, y al reves.
+    mandoDelCharles: slider?.value,
+    charlesALaVista: slider?.closest('.field')?.hidden === false,
+    volumenCharles: stored.kitLevel?.hat,
+    afinacionIntacta: JSON.stringify(stored.kitTuning),
+  };
+}, beforeSwap);
+console.log(JSON.stringify({ drumCoach, drumEnd, kit }, null, 2));
 await drumCtx.close();
 
 // --- Demostracion: el instrumento tocandose solo, sin camara y sin permiso.

@@ -1,6 +1,7 @@
 import { PRESETS, type PresetId } from '../audio/presets';
 import { MELODIES, type MelodyKind } from '../mapping/melodies';
 import { SCALES, type ScaleId } from '../mapping/scales';
+import { KIT, MAX_LEVEL, TUNING_RANGE, type DrumPiece } from '../mapping/kit';
 import { i18n, t } from '../i18n';
 import type { Settings, SettingsStore, StageMode } from '../state/store';
 import type { CameraInfo } from '../camera/stream';
@@ -114,6 +115,7 @@ export class Controls {
   }
 
   private melodyOnly: HTMLElement[] = [];
+  private drumOnly: HTMLElement[] = [];
 
   private refresh(): void {
     const settings = this.deps.store.get();
@@ -122,6 +124,9 @@ export class Controls {
     // bateria. Dejarlos puestos no es solo ruido: invita a moverlos y a esperar
     // que cambie algo, y lo unico que cambia es el instrumento al que se vuelva.
     for (const node of this.melodyOnly) node.hidden = settings.drums;
+    // Y al reves con los del kit, que son doce: con la bateria apagada no hay
+    // ninguna pieza que afinar y lo unico que aportan es tapar lo que si vale.
+    for (const node of this.drumOnly) node.hidden = !settings.drums;
   }
 
   /**
@@ -132,11 +137,20 @@ export class Controls {
    * son controles y no tienen enlace.
    */
   private melodic(build: () => void): void {
+    this.collect(this.melodyOnly, build);
+  }
+
+  /** Lo mismo para lo que solo vale en bateria: el kit entero. */
+  private percussive(build: () => void): void {
+    this.collect(this.drumOnly, build);
+  }
+
+  private collect(into: HTMLElement[], build: () => void): void {
     const from = this.panel.childElementCount;
     build();
     for (let i = from; i < this.panel.childElementCount; i += 1) {
       const node = this.panel.children[i];
-      if (node instanceof HTMLElement) this.melodyOnly.push(node);
+      if (node instanceof HTMLElement) into.push(node);
     }
   }
 
@@ -144,6 +158,7 @@ export class Controls {
     const s = t().settings;
     this.panel.replaceChildren();
     this.melodyOnly = [];
+    this.drumOnly = [];
 
     this.select(
       'language',
@@ -249,6 +264,8 @@ export class Controls {
     this.checkbox('metronome', s.metronome, (x) => x.metronome, (v) => this.deps.store.set({ metronome: v }));
     this.hint(s.metronomeHint);
 
+    this.percussive(() => this.kit());
+
     // La guia entera, rotulo incluido: apunta a notas, y en bateria no las hay.
     this.melodic(() => {
       this.section(s.guideSection);
@@ -307,6 +324,83 @@ export class Controls {
 
     actions.append(reset, close);
     this.panel.append(actions);
+  }
+
+  /**
+   * Los ajustes del kit, agrupados por pieza y no por ajuste.
+   *
+   * Tres mandos por pieza y cuatro piezas son doce, y el orden importa: quien
+   * abre esto viene de oir una pieza concreta -el charles tapa, el bombo no se
+   * oye- y quiere los mandos de esa pieza juntos, no tres listas de cuatro donde
+   * hay que contar posiciones para encontrar la suya.
+   */
+  private kit(): void {
+    const s = t().settings;
+    this.section(s.kitSection);
+    this.hint(s.kitHint);
+
+    for (const piece of KIT) {
+      this.section(t().pieces[piece]);
+
+      this.select(
+        `kit-band-${piece}`,
+        s.kitBand,
+        KIT.map((_, index) => ({ value: String(index), label: String(index + 1) })),
+        (settings) => String(settings.kitBands.indexOf(piece)),
+        (value) => this.moveToBand(piece, Number(value)),
+      );
+
+      this.range(
+        `kit-tuning-${piece}`,
+        s.kitTuning,
+        -TUNING_RANGE,
+        TUNING_RANGE,
+        1,
+        (settings) => settings.kitTuning[piece],
+        (v) => this.setPiece('kitTuning', piece, v),
+        (v) => (v > 0 ? `+${v}` : String(v)),
+      );
+
+      this.range(
+        `kit-level-${piece}`,
+        s.kitLevel,
+        0,
+        MAX_LEVEL,
+        0.05,
+        (settings) => settings.kitLevel[piece],
+        (v) => this.setPiece('kitLevel', piece, v),
+        (v) => `${Math.round(v * 100)}%`,
+      );
+    }
+  }
+
+  /**
+   * Lleva una pieza a una banda cambiandola por la que estuviera alli.
+   *
+   * No es una lista libre: las cuatro piezas tienen que seguir estando, porque
+   * una banda repetida deja otra pieza sin ningun sitio desde el que tocarla.
+   * Cambiarlas de sitio es ademas lo que uno espera al mover algo a un hueco
+   * ocupado.
+   */
+  private moveToBand(piece: DrumPiece, band: number): void {
+    const bands = [...this.deps.store.get().kitBands];
+    const from = bands.indexOf(piece);
+    const displaced = bands[band];
+    if (from < 0 || from === band || displaced === undefined) return;
+    bands[band] = piece;
+    bands[from] = displaced;
+    this.deps.store.set({ kitBands: bands });
+  }
+
+  /**
+   * Un ajuste de una pieza, sin tocar los de las otras tres.
+   *
+   * Siempre sobre lo que hay en el store en este instante y no sobre lo que
+   * recibio el enlace: arrastrar un deslizador dispara un cambio por pixel, y
+   * partir de una copia vieja devolveria a su sitio lo que se acabase de mover.
+   */
+  private setPiece(key: 'kitTuning' | 'kitLevel', piece: DrumPiece, value: number): void {
+    this.deps.store.set({ [key]: { ...this.deps.store.get()[key], [piece]: value } });
   }
 
   private section(title: string): void {

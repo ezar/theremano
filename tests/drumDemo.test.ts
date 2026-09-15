@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BEAT_SECONDS, DrumDemoPerformance, LEAD_IN_SECONDS } from '../src/mapping/drumDemo';
 import { drawnScale, phantomHand } from '../src/tracking/phantom';
+import { KIT } from '../src/mapping/kit';
 import { Mapper, type DrumHit } from '../src/mapping/mapper';
 import { DEFAULT_SETTINGS } from '../src/state/store';
 
@@ -22,9 +23,9 @@ interface Played extends DrumHit {
 }
 
 /** Toca la demostracion entera y devuelve los golpes que sonaron. */
-function play(fps: number, aspect = WIDE): Played[] {
-  const mapper = new Mapper({ ...DEFAULT_SETTINGS, drums: true });
-  const performance = new DrumDemoPerformance();
+function play(fps: number, aspect = WIDE, bands = KIT): Played[] {
+  const mapper = new Mapper({ ...DEFAULT_SETTINGS, drums: true, kitBands: [...bands] });
+  const performance = new DrumDemoPerformance(bands);
   const played: Played[] = [];
   const dt = 1 / fps;
   const hand = (pose: { x: number; y: number; pinch: number; tilt: number }) => {
@@ -94,6 +95,22 @@ describe('la demostracion de bateria', () => {
       return hits.reduce((sum, h) => sum + h.force, 0) / hits.length;
     };
     expect(average('snare')).toBeGreaterThan(average('hat') + 0.2);
+  });
+
+  it('sigue al kit: el mismo ritmo con las piezas cambiadas de sitio', () => {
+    /*
+     * El ritmo esta escrito en piezas y no en bandas, asi que quien haya movido
+     * el plato a la izquierda tiene que ver a la mano irse a la izquierda a
+     * buscarlo y oir el mismo ritmo. Si la coreografia mirase el reparto de
+     * fabrica, las manos golpearian en el mismo sitio de siempre y lo que
+     * sonaria seria otra cosa: el ritmo del reves.
+     */
+    const bands = [...KIT].reverse();
+    const moved = play(60, WIDE, bands);
+    const factory = play(60);
+    expect(moved.map((h) => h.piece)).toEqual(factory.map((h) => h.piece));
+    // Y las manos han ido de verdad a otro sitio, o esto no probaria nada.
+    expect(moved[0]!.x).not.toBeCloseTo(factory[0]!.x, 2);
   });
 
   it('tambien suena a treinta fotogramas y en vertical', () => {

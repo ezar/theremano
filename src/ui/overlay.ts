@@ -5,7 +5,7 @@ import { t } from '../i18n';
 import type { LoopState } from '../audio/looper';
 import { Visualizer } from './visualizer';
 import { coverRect, pitchHue, PIECE_HUE, type RenderTarget } from './target';
-import { BAND, KIT, bandCenter, type DrumPiece } from '../mapping/kit';
+import { BAND, KIT, bandCenter, type DrumPiece, type KitLayout } from '../mapping/kit';
 
 /**
  * Todo lo que se ve encima del video: esqueleto, rejilla de la escala, efectos y
@@ -44,6 +44,14 @@ export interface OverlayFrame {
   drone: number | null;
   /** Modo bateria: en vez de la rejilla de la escala se dibuja la del kit. */
   drums: boolean;
+  /**
+   * Que pieza hay debajo de cada banda. Solo se mira en bateria.
+   *
+   * Viene en el fotograma y no de una constante porque el reparto se puede
+   * cambiar: lo que se dibuja tiene que ser lo que suena al golpear ahi, o las
+   * bandas pasan de ser la explicacion a ser la mentira.
+   */
+  kit: KitLayout;
   showRawTrace: boolean;
 }
 
@@ -162,7 +170,7 @@ export class Overlay {
     // La rejilla se calibro contra una imagen de camara. Sobre el fondo oscuro
     // del modo de solo manos, con esos mismos valores, casi no se ve: hay que
     // subirla, porque ahi es de lo poco que queda en pantalla.
-    if (frame.drums) this.drawKit(target, rect, options.backdrop ? 1.7 : 1);
+    if (frame.drums) this.drawKit(target, rect, frame.kit, options.backdrop ? 1.7 : 1);
     else this.drawGrid(target, rect, frame, options.backdrop ? 1.7 : 1);
 
     const melody = frame.assignment.melody;
@@ -258,7 +266,7 @@ export class Overlay {
    * dejarian lo unico que importa —donde acaba una pieza y empieza la otra— sin
    * dibujar.
    */
-  private drawKit(target: RenderTarget, rect: Rect2, lift: number): void {
+  private drawKit(target: RenderTarget, rect: Rect2, bands: KitLayout, lift: number): void {
     const { ctx } = target;
     const top = target.height * 0.08;
     const bottom = target.height * 0.84;
@@ -271,7 +279,10 @@ export class Overlay {
     ctx.textAlign = 'center';
 
     for (let i = 0; i < KIT.length; i += 1) {
-      const piece = KIT[i]!;
+      // El reparto llega ya saneado del mapeador, que es el mismo que decide
+      // que suena al golpear ahi: no hay forma de que la banda diga una pieza y
+      // suene otra. El respaldo es para el compilador, que eso no lo sabe.
+      const piece = bands[i] ?? KIT[i]!;
       const hue = PIECE_HUE[piece];
       const left = rect.x + denormalize(i * BAND) * rect.w;
       const right = rect.x + denormalize((i + 1) * BAND) * rect.w;

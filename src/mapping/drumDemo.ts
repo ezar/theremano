@@ -1,4 +1,4 @@
-import { KIT, bandCenter, type DrumPiece } from './kit';
+import { bandCenter, bandOf, type DrumPiece, type KitLayout } from './kit';
 import { denormalize } from './features';
 import { CLOSED_PINCH, OPEN_PINCH, edgeLean, type HandPose } from '../tracking/phantom';
 
@@ -97,8 +97,8 @@ const smooth = (t: number): number => {
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
 /** Centro de la banda de una pieza, en el encuadre util. */
-function pieceX(piece: DrumPiece): number {
-  return bandCenter(KIT.indexOf(piece));
+function pieceX(layout: KitLayout, piece: DrumPiece): number {
+  return bandCenter(bandOf(layout, piece));
 }
 
 function liftOf(stroke: Stroke): number {
@@ -171,6 +171,14 @@ const LAST_BEAT = Math.max(
 );
 
 export class DrumDemoPerformance {
+  /**
+   * @param layout donde esta cada pieza ahora mismo. El ritmo esta escrito en
+   * piezas y no en bandas, asi que quien haya movido el plato a la izquierda ve
+   * a la mano irse a la izquierda a buscarlo: la demostracion ensena el kit que
+   * hay, no el de fabrica.
+   */
+  constructor(private readonly layout: KitLayout) {}
+
   get seconds(): number {
     return LEAD_IN_SECONDS + LAST_BEAT * BEAT_SECONDS + TAIL_SECONDS;
   }
@@ -189,8 +197,8 @@ export class DrumDemoPerformance {
    */
   poseAt(seconds: number): { melody: HandPose; expression: HandPose } {
     return {
-      melody: lanePose(KICK_SNARE, seconds, 0),
-      expression: lanePose(HAT_CRASH, seconds, Math.PI),
+      melody: lanePose(this.layout, KICK_SNARE, seconds, 0),
+      expression: lanePose(this.layout, HAT_CRASH, seconds, Math.PI),
     };
   }
 }
@@ -207,7 +215,7 @@ export class DrumDemoPerformance {
  * @param phase desfase del ladeo de adorno, para que las dos manos no se
  * balanceen a la vez como un metronomo.
  */
-function lanePose(strokes: readonly Stroke[], seconds: number, phase: number): HandPose {
+function lanePose(layout: KitLayout, strokes: readonly Stroke[], seconds: number, phase: number): HandPose {
   const sway = SWAY * Math.sin((seconds / SWAY_PERIOD) * Math.PI * 2 + phase);
   const pose = (x: number, y: number, pinch: number): HandPose => ({
     // La x va en el encuadre util, que es donde estan repartidas las bandas; la
@@ -235,14 +243,14 @@ function lanePose(strokes: readonly Stroke[], seconds: number, phase: number): H
     // La pinza tambien se recoge, y por el mismo camino: si el ultimo golpe
     // fuera un charles abierto, devolverla de golpe seria un salto.
     return pose(
-      pieceX(last.piece),
+      pieceX(layout, last.piece),
       lerp(HIT_Y, rest, recovered),
       lerp(pinchOf(last), OPEN_PINCH, recovered),
     );
   }
 
   const stroke = strokes[next]!;
-  const x = pieceX(stroke.piece);
+  const x = pieceX(layout, stroke.piece);
   const top = HIT_Y - liftOf(stroke);
   const landing = timeOf(stroke);
   const falling = seconds - (landing - FALL_SECONDS);
@@ -260,7 +268,7 @@ function lanePose(strokes: readonly Stroke[], seconds: number, phase: number): H
   const from = timeOf(previous);
   const travel = smooth((seconds - from) / (landing - FALL_SECONDS - from));
   return pose(
-    lerp(pieceX(previous.piece), x, travel),
+    lerp(pieceX(layout, previous.piece), x, travel),
     lerp(HIT_Y, top, travel),
     lerp(pinchOf(previous), pinchOf(stroke), travel),
   );
