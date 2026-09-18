@@ -1,6 +1,6 @@
 import { bandCenter, bandOf, type DrumPiece, type KitLayout } from './kit';
-import { denormalize } from './features';
-import { CLOSED_PINCH, OPEN_PINCH, edgeLean, type HandPose } from '../tracking/phantom';
+import { HARD_LIFT, SOFT_LIFT, strokePose, type Stroke } from './strokes';
+import { CLOSED_PINCH, OPEN_PINCH, type HandPose } from '../tracking/phantom';
 
 /**
  * La coreografia de la demostracion de bateria: un ritmo tocado a dos manos.
@@ -26,7 +26,13 @@ import { CLOSED_PINCH, OPEN_PINCH, edgeLean, type HandPose } from '../tracking/p
  * dinamica sale de que el charles se levanta poco y la caja se levanta mucho.
  */
 
-interface Stroke {
+/**
+ * Un golpe del patron, escrito como se escribe un ritmo: en negras y por pieza.
+ *
+ * La coreografia -el viaje, la caida, la altura- vive aparte y habla de
+ * segundos y de sitios. Aqui solo esta lo que se decide al componer.
+ */
+interface Beat {
   /** Cuando aterriza la mano, en negras desde el principio del ritmo. */
   at: number;
   piece: DrumPiece;
@@ -49,24 +55,13 @@ export const BEAT_SECONDS = 60 / BPM;
 /** Tiempo de manos quietas antes del primer golpe, para verlas enteras. */
 export const LEAD_IN_SECONDS = 0.9;
 
-/**
- * Lo que dura la caida de un golpe, desde arriba del todo hasta el parche.
- *
- * Es igual para todos los golpes, y eso es lo que mantiene el ritmo recto. El
- * golpe no suena al aterrizar sino a mitad de la caida -el detector dispara en
- * cuanto la mano supera cierta velocidad, que es como se recupera el retraso de
- * la camara-, asi que cada golpe se adelanta unas centesimas respecto a donde se
- * ve aterrizar. Con una caida de duracion fija ese adelanto es el mismo para
- * todos y el ritmo sale igual de recto que si no existiera; con caidas de
- * duracion distinta, los golpes fuertes llegarian antes que los flojos.
- *
- * Y tiene que caber en el hueco mas corto del patron, que es media negra: lo que
- * queda entre dos golpes es el viaje, y un viaje de duracion negativa no existe.
- */
-const FALL_SECONDS = 0.1;
+/** Silencio final, para que el plato acabe de sonar. */
+const TAIL_SECONDS = 1.6;
 
-/** Altura de la palma al aterrizar, en el encuadre entero. */
-const HIT_Y = 0.62;
+/** Centro de la banda de una pieza, en el encuadre util. */
+function pieceX(layout: KitLayout, piece: DrumPiece): number {
+  return bandCenter(bandOf(layout, piece));
+}
 
 /**
  * Desde donde cae cada golpe. Aqui esta toda la dinamica del ritmo.
@@ -75,43 +70,27 @@ const HIT_Y = 0.62;
  * detector a partir de la velocidad de caida, y con la duracion de la caida fija
  * la velocidad la decide la altura. Levantar mas es pegar mas fuerte, que es
  * ademas lo que hace cualquiera con dos baquetas en la mano.
+ *
+ * El charles lleva el pulso y suena por debajo de todo lo demas: si se levantara
+ * como la caja, cada corchea taparia el ritmo entero.
  */
-const SOFT_LIFT = 0.17;
-const HARD_LIFT = 0.29;
+const liftOf = (beat: Beat): number => (beat.piece === 'hat' ? SOFT_LIFT : HARD_LIFT);
 
-/** Lo que tarda la mano en volver a su altura de reposo al acabar el ritmo. */
-const RECOVER_SECONDS = 0.5;
+const pinchOf = (beat: Beat): number => (beat.open ? CLOSED_PINCH : OPEN_PINCH);
 
-/** Silencio final, para que el plato acabe de sonar. */
-const TAIL_SECONDS = 1.6;
-
-/** Ladeo de adorno, para que las dos manos no parezcan dos pegatinas. */
-const SWAY = 0.05;
-const SWAY_PERIOD = 5.3;
-
-const smooth = (t: number): number => {
-  const u = t < 0 ? 0 : t > 1 ? 1 : t;
-  return u * u * (3 - 2 * u);
-};
-
-const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-
-/** Centro de la banda de una pieza, en el encuadre util. */
-function pieceX(layout: KitLayout, piece: DrumPiece): number {
-  return bandCenter(bandOf(layout, piece));
+/** Del patron a la coreografia: de negras y piezas a segundos y sitios. */
+function choreograph(layout: KitLayout, beats: readonly Beat[]): Stroke[] {
+  return beats.map((beat) => ({
+    at: LEAD_IN_SECONDS + beat.at * BEAT_SECONDS,
+    x: pieceX(layout, beat.piece),
+    lift: liftOf(beat),
+    pinch: pinchOf(beat),
+  }));
 }
-
-function liftOf(stroke: Stroke): number {
-  // El charles lleva el pulso y suena por debajo de todo lo demas: si se
-  // levantara como la caja, cada corchea taparia el ritmo entero.
-  return stroke.piece === 'hat' ? SOFT_LIFT : HARD_LIFT;
-}
-
-const pinchOf = (stroke: Stroke): number => (stroke.open ? CLOSED_PINCH : OPEN_PINCH);
 
 /** Las corcheas seguidas del charles, que son casi todo el trabajo de esa mano. */
-function eighths(from: number, to: number): Stroke[] {
-  const out: Stroke[] = [];
+function eighths(from: number, to: number): Beat[] {
+  const out: Beat[] = [];
   for (let at = from; at < to; at += 0.5) out.push({ at, piece: 'hat', open: false });
   return out;
 }
@@ -124,7 +103,7 @@ function eighths(from: number, to: number): Stroke[] {
  * esta para que se vea que la mano puede volver a caer sin subir del todo, que
  * es lo que no se deduce mirando negras.
  */
-const KICK_SNARE: readonly Stroke[] = [
+const KICK_SNARE: readonly Beat[] = [
   { at: 0, piece: 'kick', open: false },
   { at: 1, piece: 'snare', open: false },
   { at: 2, piece: 'kick', open: false },
@@ -151,7 +130,7 @@ const KICK_SNARE: readonly Stroke[] = [
  * "abierto", se oye como un charles raro. Asi se oye primero lo que dura y
  * despues como el golpe cerrado lo apaga, que es lo que hace el pedal.
  */
-const HAT_CRASH: readonly Stroke[] = [
+const HAT_CRASH: readonly Beat[] = [
   ...eighths(0, 10.5),
   { at: 10.5, piece: 'hat', open: true },
   { at: 11.5, piece: 'hat', open: false },
@@ -177,7 +156,13 @@ export class DrumDemoPerformance {
    * a la mano irse a la izquierda a buscarlo: la demostracion ensena el kit que
    * hay, no el de fabrica.
    */
-  constructor(private readonly layout: KitLayout) {}
+  private readonly melodyStrokes: readonly Stroke[];
+  private readonly expressionStrokes: readonly Stroke[];
+
+  constructor(layout: KitLayout) {
+    this.melodyStrokes = choreograph(layout, KICK_SNARE);
+    this.expressionStrokes = choreograph(layout, HAT_CRASH);
+  }
 
   get seconds(): number {
     return LEAD_IN_SECONDS + LAST_BEAT * BEAT_SECONDS + TAIL_SECONDS;
@@ -197,79 +182,9 @@ export class DrumDemoPerformance {
    */
   poseAt(seconds: number): { melody: HandPose; expression: HandPose } {
     return {
-      melody: lanePose(this.layout, KICK_SNARE, seconds, 0),
-      expression: lanePose(this.layout, HAT_CRASH, seconds, Math.PI),
+      // Nunca son null: los dos patrones tienen golpes escritos aqui al lado.
+      melody: strokePose(this.melodyStrokes, seconds, 0)!,
+      expression: strokePose(this.expressionStrokes, seconds, Math.PI)!,
     };
   }
-}
-
-/**
- * Donde esta una mano en un instante cualquiera.
- *
- * Entre dos golpes solo hay dos cosas: el viaje -que sube la mano hasta arriba
- * de la pieza siguiente, la lleva a lo ancho hasta su banda y abre o cierra la
- * pinza por el camino- y la caida. El viaje ocupa todo el hueco que queda, asi
- * que en las corcheas del charles es corto y en un silencio es largo y la mano
- * espera arriba: igual que una baqueta.
- *
- * @param phase desfase del ladeo de adorno, para que las dos manos no se
- * balanceen a la vez como un metronomo.
- */
-function lanePose(layout: KitLayout, strokes: readonly Stroke[], seconds: number, phase: number): HandPose {
-  const sway = SWAY * Math.sin((seconds / SWAY_PERIOD) * Math.PI * 2 + phase);
-  const pose = (x: number, y: number, pinch: number): HandPose => ({
-    // La x va en el encuadre util, que es donde estan repartidas las bandas; la
-    // altura va en el encuadre entero, porque lo que la lee es el detector de
-    // golpes y ese mide sobre la palma cruda.
-    x: denormalize(x),
-    y,
-    pinch,
-    tilt: sway + edgeLean(x),
-  });
-
-  const timeOf = (stroke: Stroke): number => LEAD_IN_SECONDS + stroke.at * BEAT_SECONDS;
-
-  let next = 0;
-  while (next < strokes.length && timeOf(strokes[next]!) <= seconds) next += 1;
-  const previous = next > 0 ? strokes[next - 1] : undefined;
-
-  if (next >= strokes.length) {
-    // Se acabo el ritmo: la mano se recoge a su altura de espera y se queda
-    // ahi. Dejarla en el parche daria la impresion de que todavia falta algo.
-    const last = previous!;
-    const since = seconds - timeOf(last);
-    const rest = HIT_Y - liftOf(last);
-    const recovered = smooth(since / RECOVER_SECONDS);
-    // La pinza tambien se recoge, y por el mismo camino: si el ultimo golpe
-    // fuera un charles abierto, devolverla de golpe seria un salto.
-    return pose(
-      pieceX(layout, last.piece),
-      lerp(HIT_Y, rest, recovered),
-      lerp(pinchOf(last), OPEN_PINCH, recovered),
-    );
-  }
-
-  const stroke = strokes[next]!;
-  const x = pieceX(layout, stroke.piece);
-  const top = HIT_Y - liftOf(stroke);
-  const landing = timeOf(stroke);
-  const falling = seconds - (landing - FALL_SECONDS);
-
-  if (falling >= 0) {
-    // La caida se acelera, que es lo que hace un brazo que se deja ir. Ademas es
-    // lo que separa un golpe de colocar la mano: a velocidad constante, bajar
-    // despacio y bajar deprisa se parecen demasiado al principio del recorrido.
-    const u = falling / FALL_SECONDS;
-    return pose(x, top + liftOf(stroke) * u * u, pinchOf(stroke));
-  }
-
-  if (!previous) return pose(x, top, pinchOf(stroke));
-
-  const from = timeOf(previous);
-  const travel = smooth((seconds - from) / (landing - FALL_SECONDS - from));
-  return pose(
-    lerp(pieceX(layout, previous.piece), x, travel),
-    lerp(HIT_Y, top, travel),
-    lerp(pinchOf(previous), pinchOf(stroke), travel),
-  );
 }

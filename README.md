@@ -25,6 +25,13 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
   claqueta por delante de la primera. Esa marca el compás; las siguientes se
   graban encima sin esperar a que la vuelta termine, y con una claqueta continua
   que reparte la propia vuelta para poder entrar a tiempo. Tecla **M**.
+- **Tocar entre dos** — dos personas delante de la misma cámara, cada una con su
+  instrumento entero: su voz, su filtro y su pedal. A media pantalla cada una
+  tiene sus dos manos y la escala completa en su mitad; a una mano cada una
+  compartís el encuadre y podéis cruzaros. Tecla **D**.
+- **Las manos de cada capa** — una capa no guarda sonido, guarda el gesto, así
+  que mientras suena se vuelve a dibujar la mano que la tocó, en el color de su
+  carril. Se pone la propia encima y se copia. Tecla **G**.
 - **Clip para compartir** — graba imagen y sonido en 9:16, hasta un minuto, con
   la nota y la marca sobreimpresas, y lo entrega por la hoja de compartir del
   móvil o como descarga.
@@ -254,7 +261,9 @@ la introducción, opcional, remata la faena: se cierra solo cuando el cambio de
 timbre ocurre de verdad, no cuando se levantan dedos.
 
 Con teclado: **espacio** graba una capa de bucle, **C** graba un clip, **Z**
-quita la última capa, **V** oculta o muestra la cámara, **H** abre la ayuda.
+quita la última capa, **V** oculta o muestra la cámara, **G** muestra u oculta
+las manos de las capas, **D** cambia entre tocar solo y las dos formas de tocar
+en dúo, **H** abre la ayuda.
 
 ### Solo manos
 
@@ -461,6 +470,107 @@ un dedo más corto y algo arqueado, no como un dedo que se tuerce de lado.
 Si hay una melodía elegida, se toca esa; si no, «Estrellita», que se reconoce en
 dos notas y cabe en una octava. En cualquier caso queda elegida al salir, así
 que quien entre después se encuentra guiada la que acaba de ver.
+
+---
+
+## Sobre tocar entre dos
+
+El instrumento es monofónico porque una persona tiene una voz. Con dos personas
+deja de serlo, y eso no se consigue añadiéndole voces a un instrumento: se
+consigue añadiendo instrumentos. Cada una tiene el suyo entero —su mapeador, sus
+filtros, su gate, su pedal y su voz— sin compartir un solo campo. Salió más
+barato de lo que parece porque el mapeador ya era una cosa por instancia; lo que
+hubo que separar fue la voz en directo, que vivía dentro del motor de audio y era
+la única que había.
+
+Hay dos maneras de repartirse y no sobra ninguna. **A media pantalla**, cada una
+tiene su mitad y dentro de ella toca con sus dos manos, igual que siempre: hay
+mano de melodía y mano de expresión, con su volumen y su pedal. **A una mano cada
+una**, las dos sobre el encuadre completo: se pierde la mano de expresión y a
+cambio las dos tocan el mismo rango, que es lo que hace falta para perseguirse,
+doblar una melodía o repartirse un acorde.
+
+Dentro de su mitad, cada persona tiene la escala entera. Media escala por cabeza
+no sería un dúo, sería un instrumento partido. Y los márgenes de las dos mitades
+se juntan en el centro y forman una tierra de nadie, que no es un efecto
+secundario sino lo que hace falta: sin ella, acercarse al centro sería tocar la
+nota más aguda de tu mitad mientras la otra persona toca la más grave de la suya
+a un dedo de distancia.
+
+Lo único de verdad nuevo es de quién es cada mano, que es una pregunta que hasta
+ahora no se hacía nadie porque la respuesta era siempre la misma. El reparto de
+papeles de siempre —melodía y expresión por continuidad entre fotogramas— es
+exactamente lo que hace falta *dentro* de una persona y exactamente lo que no
+vale *entre* dos: la mano derecha de quien está a la izquierda y la izquierda de
+quien está a la derecha son vecinas en pantalla, así que con un solo reparto
+acabarían siendo la melodía y la expresión de un mismo instrumento fantasma que
+no toca nadie. Hay uno por persona.
+
+Y una cosa que hubo que arreglar de camino: dos manos que se cruzan se
+intercambiaban el papel para siempre. En el fotograma del cruce están las dos en
+el mismo sitio, la más cercana a donde estaba cada una es la otra, y a partir de
+ahí se quedan cambiadas. Ahora la posición se adelanta con la velocidad que trae
+la mano antes de buscarle pareja, que lo arregla porque una mano que cruza
+*sigue*, y donde va a estar ya no es donde va a estar la otra. No hay que adivinar
+nada: la velocidad es la que trae, medida entre fotogramas. A una mano cada una
+eso era lo peor que podía pasar —la nota de cada una salta a la de la otra— y
+tocando solo tampoco era gracioso, porque la mano que llevaba la nota pasaba a
+llevar el volumen.
+
+Lo que el dúo **no** hace todavía: la segunda persona no graba en la estación de
+bucles, no mueve el rótulo de la nota y no lleva la melodía guiada. Las tres son
+de una sola persona —una capa es monofónica, el rótulo dice una nota y la guía
+apunta a una mano— y repartirlas entre dos pide decidir de quién son. Los golpes
+de batería sí suenan para las dos: el kit es uno y está en el encuadre.
+
+---
+
+## Sobre las manos de cada capa
+
+Una capa de bucle no guarda sonido. Guarda el gesto, y lo guarda ya convertido en
+lo que el gesto significaba: una frecuencia, un corte de filtro, un golpe con su
+fuerza. Esa conversión tiene vuelta, y esto es la vuelta. Deshecha, una capa deja
+de ser algo que solo se oye y pasa a ser algo que se puede mirar: la mano que la
+tocó, dibujada donde estuvo, para poner la propia encima.
+
+Y como las capas viajan en el enlace, lo que se comparte deja de ser una
+grabación y pasa a ser una lección. Al otro lado no llega el sonido: llegan las
+manos. Sin vídeo, sin servidor y sin un solo byte de más, porque todo esto ya
+estaba guardado y nadie lo estaba leyendo al revés.
+
+No es una reconstrucción exacta y no puede serlo, así que conviene decir qué se
+recupera y qué se inventa. De la melodía vuelve la posición con la precisión con
+la que se guardó —la nota, no el milímetro: en cuantizado la mano aparece en el
+centro de su zona, que es justo donde hay que ponerla— y el camino entre dos
+notas se dibuja recto, porque la capa guardó el cuándo pero no el por dónde. El
+gate, en cambio, es exacto: la pinza se cierra y se abre en el instante grabado,
+sin suavizar. De la batería vuelven el instante, el sitio y la fuerza; el viaje
+hasta cada golpe lo dibuja la misma coreografía que usa la demostración, leída
+al revés.
+
+Dos decisiones que no se ven pero se notan. La primera: una capa de batería
+guarda los golpes de las dos manos en la misma lista y sin decir cuál fue cuál
+—al sonar da igual—, así que se reparten por mitades del kit y se dibujan dos
+manos. Con una sola, el bombo y el charles que caen a la vez en casi cualquier
+compás obligarían a esa mano a estar en dos sitios, y además sería la lección
+equivocada: lo que hay que enseñar es justo que son dos.
+
+La segunda: la fuerza que guarda una capa no es la del brazo, es la del brazo por
+el volumen que había al grabar, porque una capa suena para siempre al volumen con
+el que se tocó. Eso es lo que hay que oír y lo contrario de lo que hay que ver.
+Medido con el ritmo de la demostración al volumen de fábrica: los golpes del
+charles se guardan entre 0,46 y 0,54, enteros por debajo del golpe flojo de
+referencia, así que todos se recortaban a la misma altura mínima y esa mano se
+dibujaba plana. El volumen no se guarda en ninguna parte, así que se estima —el
+golpe más fuerte de la capa se toma por un golpe fuerte—. No sale clavado, se
+queda corto en torno a un diez por ciento, pero eso mueve todas las alturas a la
+vez y no toca lo que separa un golpe de otro. Cuando la capa no trae ningún golpe
+fuerte se dibuja entera más alta de lo que se tocó; lo que no cambia nunca es
+cuál de los golpes fue más fuerte que cuál, que es lo que se enseña.
+
+Y se dibuja con la escala y el reparto de **ahora**, no con los de la grabación:
+lo que promete el fantasma es «pon la mano aquí y sonará esto», y dónde hay que
+ponerla depende de cómo esté repartido el encuadre en este momento.
 
 ---
 

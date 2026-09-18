@@ -2,6 +2,7 @@ import * as Tone from 'tone';
 import { DrumKit } from './drums';
 import type { DrumPiece, KitTrim } from '../mapping/kit';
 import { getPreset, type Preset, type PresetId } from './presets';
+import { GAIN_EPSILON, LiveVoice } from './voice';
 
 /**
  * Grafo de audio y aplicacion de parametros.
@@ -14,82 +15,34 @@ import { getPreset, type Preset, type PresetId } from './presets';
  * 2. `lookAhead` se baja a 10 ms. El valor por defecto de Tone.js es 100 ms, que
  *    por si solo destruye la sensacion de instrumento: el gesto y el sonido dejan
  *    de sentirse simultaneos.
+ *
+ * Lo que queda aqui es lo que se comparte: el contexto, el limitador, los buses
+ * de bucles y bateria, el kit y la toma para grabar video. Las voces en directo
+ * -una por persona- viven en `voice.ts`, porque un duo no es un instrumento con
+ * mas voces sino dos instrumentos, y cada uno trae lo suyo. Casi todos los
+ * metodos de aqui llevan un numero de persona que por defecto es la primera: sin
+ * duo hay una sola y nadie tiene que enterarse de que existe la segunda.
  */
 
 /** Latencia de planificacion de Tone.js, en segundos. */
 const LOOK_AHEAD = 0.01;
 
-/** Rampas de los parametros continuos, en segundos. */
+/** Rampa del volumen, en segundos. */
 const VOLUME_RAMP = 0.05;
-const CUTOFF_RAMP = 0.03;
-/*
- * El espacio va mucho mas lento que los demas. Una reverberacion que cambia en
- * treinta milisegundos no suena a moverse por una sala, suena a un mando que
- * alguien esta girando.
- */
-const SPACE_RAMP = 0.25;
-/*
- * El vibrato entra y sale rapido, pero no de golpe: un salto en la profundidad
- * de la modulacion se oye como un tropiezo en mitad de la nota.
- */
-const VIBRATO_RAMP = 0.08;
-
-/**
- * Lo mas que anade la mano a la profundidad del timbre.
- *
- * Por encima de esto deja de sonar a vibrato y empieza a sonar a sirena: la
- * modulacion se come el intervalo entero hasta la nota de al lado.
- */
-const HAND_VIBRATO = 0.35;
-
-/**
- * La nota pedal suena por debajo de la melodia.
- *
- * Es un acompanamiento, no una segunda melodia: si entrara al mismo volumen, las
- * dos voces se pelearian por la atencion y ademas sumarian hasta hacer trabajar
- * al limitador en cada nota.
- */
-const DRONE_GAIN = 0.45;
-
-/**
- * Entra y sale mas despacio que una nota.
- *
- * Un pedal que aparece de golpe suena a error; uno que entra en una decima y se
- * apaga en medio segundo suena a que alguien lo ha puesto ahi. Se toma lo mas
- * lento entre esto y lo que pida el timbre, para no acortar un timbre que ya sea
- * mas lento de por si.
- */
-const DRONE_ATTACK = 0.12;
-const DRONE_RELEASE = 0.5;
-
-/** Zonas muertas: por debajo de esto no se reprograma nada. */
-const FREQ_EPSILON_CENTS = 0.5;
-const GAIN_EPSILON = 0.002;
-const CUTOFF_EPSILON_RATIO = 0.01;
-const SPACE_EPSILON = 0.01;
-const VIBRATO_EPSILON = 0.01;
-const RATE_EPSILON = 0.15;
 
 export class AudioEngine {
-  private synth: Tone.Synth | null = null;
-  private vibrato: Tone.Vibrato | null = null;
-  private filter: Tone.Filter | null = null;
-  private delay: Tone.FeedbackDelay | null = null;
-  private reverb: Tone.Freeverb | null = null;
-  private master: Tone.Gain | null = null;
+  /**
+   * Una voz por persona. Sin duo hay una, que es el caso de siempre.
+   *
+   * En orden: la primera es quien toca sola o quien tiene la mitad izquierda.
+   * El orden importa porque la bateria y el volumen maestro cuelgan de ella.
+   */
+  private readonly voices: LiveVoice[] = [];
   private limiter: Tone.Limiter | null = null;
   private loopBus: Tone.Gain | null = null;
   private captureTap: MediaStreamAudioDestinationNode | null = null;
 
   private preset: Preset = getPreset('theremin');
-  private lastFreq = 0;
-  private lastCutoff = 0;
-  private lastSpace = -1;
-  private droneGain: Tone.Gain | null = null;
-  private lastVibrato = -1;
-  private lastVibratoRate = -1;
-  private drone: Tone.Synth | null = null;
-  private droneFreq = 0;
   private drum: DrumKit | null = null;
   /**
    * La afinacion y el volumen de cada pieza, que sobreviven al kit.
@@ -111,11 +64,10 @@ export class AudioEngine {
    */
   private drumBus: Tone.Gain | null = null;
   private lastDrumGain = 0;
-  private lastGain = 0;
+  /** El volumen que manda sobre la bateria: el de la primera persona. */
   private targetVolume = 0.75;
   private muted = false;
   private started = false;
-  private gateOpen = false;
 
   get isStarted(): boolean {
     return this.started;
@@ -151,46 +103,44 @@ export class AudioEngine {
     this.targetVolume = volume;
 
     this.limiter = new Tone.Limiter(-1).toDestination();
-    this.master = new Tone.Gain(0).connect(this.limiter);
     // Los bucles no pasan por el volumen maestro: si lo hicieran, bajar la mano
     // de expresion apagaria tambien lo ya grabado, que no es lo que hace un
     // pedal de bucles ni lo que espera nadie.
     this.loopBus = new Tone.Gain(1).connect(this.limiter);
     this.drumBus = new Tone.Gain(volume).connect(this.limiter);
     this.lastDrumGain = volume;
-    this.reverb = new Tone.Freeverb({ roomSize: 0.7, dampening: 2600, wet: this.preset.reverbWet }).connect(
-      this.master,
-    );
-    this.delay = new Tone.FeedbackDelay({
-      delayTime: this.preset.delay.time,
-      feedback: this.preset.delay.feedback,
-      wet: this.preset.delay.wet,
-      maxDelay: 1,
-    }).connect(this.reverb);
-    this.filter = new Tone.Filter({ type: 'lowpass', frequency: 2000, Q: this.preset.filter.q }).connect(this.delay);
-    this.vibrato = new Tone.Vibrato({
-      frequency: this.preset.vibrato.frequency || 5,
-      depth: this.preset.vibrato.depth,
-    }).connect(this.filter);
-    this.synth = new Tone.Synth({
-      oscillator: this.preset.oscillator as Tone.SynthOptions['oscillator'],
-      envelope: this.preset.envelope,
-      portamento: 0,
-    }).connect(this.vibrato);
-    // El pedal entra por el mismo sitio que la melodia: mismo vibrato, mismo
-    // filtro, mismo espacio y mismo volumen maestro. Es la misma voz sostenida,
-    // no otro instrumento pegado al lado.
-    this.droneGain = new Tone.Gain(DRONE_GAIN).connect(this.vibrato);
-    this.drone = new Tone.Synth({
-      oscillator: this.preset.oscillator as Tone.SynthOptions['oscillator'],
-      envelope: this.droneEnvelope(),
-      portamento: 0,
-    }).connect(this.droneGain);
 
-    this.lastCutoff = 2000;
-    this.lastSpace = -1;
-    this.lastGain = 0;
+    this.voices.push(new LiveVoice(this.preset, volume, this.limiter));
     this.started = true;
+  }
+
+  /**
+   * Cuantas personas tocan. Monta o desmonta voces para que cuadre.
+   *
+   * Una voz son siete nodos que el navegador procesa en cada bloque suene o no,
+   * asi que la segunda se monta al encender el duo y se tira al apagarlo, igual
+   * que la bateria y por lo mismo. Y se monta ahi y no en el primer gesto: crear
+   * un sintetizador es justo lo que no se puede hacer en el instante en que la
+   * latencia importa.
+   */
+  setPlayers(count: number): void {
+    if (!this.started || !this.limiter) return;
+    const wanted = Math.max(1, Math.round(count));
+    while (this.voices.length > wanted) {
+      // Al tirarla, lo que estuviera sonando en ella se va con ella: sin el
+      // panic de dispose, apagar el duo dejaria la nota de la segunda persona
+      // sonando para siempre sin nadie que pudiera soltarla.
+      this.voices.pop()?.dispose();
+    }
+    while (this.voices.length < wanted) {
+      const voice = new LiveVoice(this.preset, this.targetVolume, this.limiter);
+      voice.setMuted(this.muted);
+      this.voices.push(voice);
+    }
+  }
+
+  get playerCount(): number {
+    return this.voices.length;
   }
 
   /** Punto de conexion de las capas de bucle. */
@@ -219,142 +169,42 @@ export class AudioEngine {
     return this.captureTap.stream;
   }
 
+  /**
+   * El timbre es de los dos.
+   *
+   * Un solo ajuste, asi que un solo timbre: dejar que cada persona eligiera el
+   * suyo pide un sitio donde elegirlo, y ese sitio no existe todavia. Se lo come
+   * cada voz por su cuenta, que es donde esta el salto de fase que hay que tapar.
+   */
   setPreset(preset: Preset): void {
     if (!this.started || preset.id === this.preset.id) return;
     this.preset = preset;
-
-    // Cambiar el tipo de oscilador con la nota sonando produce un salto de fase.
-    // Un hueco de unos milisegundos lo tapa por completo y es imperceptible.
-    // El espacio se recalcula desde cero con el timbre nuevo: `apply()` devuelve
-    // la reverberacion y el eco al valor seco del preset, y sin invalidar esto la
-    // zona muerta de setSpace se tragaria la correccion. El gesto se quedaba sin
-    // efecto hasta que la mano volvia a moverse en profundidad.
-    this.lastSpace = -1;
-    const dipping = this.gateOpen && !this.muted;
-    if (dipping) this.master?.gain.rampTo(0, 0.012);
-
-    const apply = () => {
-      this.synth?.set({
-        oscillator: preset.oscillator as Tone.SynthOptions['oscillator'],
-        envelope: preset.envelope,
-      });
-      this.drone?.set({
-        oscillator: preset.oscillator as Tone.SynthOptions['oscillator'],
-        envelope: this.droneEnvelope(),
-      });
-      this.filter?.Q.rampTo(preset.filter.q, 0.05);
-      this.reverb?.wet.rampTo(preset.reverbWet, 0.05);
-      if (this.delay) {
-        this.delay.delayTime.rampTo(preset.delay.time, 0.08);
-        this.delay.feedback.rampTo(preset.delay.feedback, 0.05);
-        this.delay.wet.rampTo(preset.delay.wet, 0.05);
-      }
-      if (this.vibrato) {
-        this.vibrato.depth.rampTo(preset.vibrato.depth, 0.05);
-        if (preset.vibrato.frequency > 0) this.vibrato.frequency.rampTo(preset.vibrato.frequency, 0.05);
-        // El timbre acaba de pisar los dos valores: lo que recordaba el vibrato
-        // de la mano ya no es lo que hay puesto, y sin esto se quedaria sin
-        // volver a escribirlo hasta que cambiara de sitio.
-        this.lastVibrato = -1;
-        this.lastVibratoRate = -1;
-      }
-      this.lastGain = -1;
-      this.applyGain(0.03);
-    };
-
-    if (dipping) window.setTimeout(apply, 16);
-    else apply();
+    for (const voice of this.voices) voice.setPreset(preset);
   }
 
   /** @param glide portamento en segundos. */
-  setFrequency(hz: number, glide: number): void {
-    if (!this.synth || hz <= 0) return;
-    const cents = this.lastFreq > 0 ? Math.abs(1200 * Math.log2(hz / this.lastFreq)) : Infinity;
-    if (cents < FREQ_EPSILON_CENTS) return;
-    this.lastFreq = hz;
-    this.synth.frequency.rampTo(hz, Math.max(0.005, glide + this.preset.glide));
+  setFrequency(hz: number, glide: number, player = 0): void {
+    this.voices[player]?.setFrequency(hz, glide);
   }
 
   /** @param norm 0 = oscuro (mano abajo), 1 = brillante (mano arriba). */
-  setCutoffNorm(norm: number): void {
-    if (!this.filter) return;
-    const { minHz, maxHz } = this.preset.filter;
-    const clamped = Math.min(1, Math.max(0, norm));
-    // Interpolacion logaritmica: el oido percibe el corte en octavas, no en Hz.
-    const hz = minHz * (maxHz / minHz) ** clamped;
-    if (this.lastCutoff > 0 && Math.abs(hz - this.lastCutoff) / this.lastCutoff < CUTOFF_EPSILON_RATIO) return;
-    this.lastCutoff = hz;
-    this.filter.frequency.rampTo(hz, CUTOFF_RAMP);
+  setCutoffNorm(norm: number, player = 0): void {
+    this.voices[player]?.setCutoffNorm(norm);
   }
 
-  /**
-   * Espacio, de 0 (cerca y seco) a 1 (lejos y grande).
-   *
-   * Mueve la reverberacion y el eco a la vez, porque lo que se busca no es "mas
-   * reverb" sino la sensacion de alejarse: una sala grande tiene las dos cosas.
-   * El minimo no queda seco del todo —una voz sola completamente seca suena a
-   * ejercicio— y el maximo se queda por debajo de lo que emborrona la afinacion.
-   *
-   * El timbre manda: cada preset trae su cantidad de espacio y el gesto la
-   * recorre alrededor, en vez de imponer la suya y borrar la diferencia entre
-   * un theremin y un bajo.
-   */
-  setSpace(norm: number): void {
-    const clamped = Math.min(1, Math.max(0, norm));
-    if (Math.abs(clamped - this.lastSpace) < SPACE_EPSILON) return;
-    this.lastSpace = clamped;
-    this.reverb?.wet.rampTo(Math.min(0.95, this.preset.reverbWet * (0.45 + 1.15 * clamped)), SPACE_RAMP);
-    this.delay?.wet.rampTo(Math.min(0.9, this.preset.delay.wet * (0.4 + 1.2 * clamped)), SPACE_RAMP);
+  /** Espacio, de 0 (cerca y seco) a 1 (lejos y grande). */
+  setSpace(norm: number, player = 0): void {
+    this.voices[player]?.setSpace(norm);
   }
 
-  /** @param volume 0..1 de la mano de expresion. */
-  /**
-   * Vibrato de la mano, por encima del que trae el timbre.
-   *
-   * Se suma al del timbre en lugar de sustituirlo: el theremin ya vibra un poco
-   * solo, y quitarselo para poner el de la mano lo dejaria mas plano que antes
-   * mientras la mano esta quieta. El ritmo, en cambio, si lo manda la mano
-   * cuando la mano manda: que se oiga el temblor que se esta haciendo, y no uno
-   * parecido.
-   *
-   * @param depth de 0 a 1, lo que pide la mano.
-   * @param hz a que ritmo, o 0 para dejar el del timbre.
-   */
-  setVibrato(depth: number, hz: number): void {
-    if (!this.vibrato) return;
-    const target = Math.min(1, this.preset.vibrato.depth + depth * HAND_VIBRATO);
-    if (Math.abs(target - this.lastVibrato) > VIBRATO_EPSILON) {
-      this.lastVibrato = target;
-      this.vibrato.depth.rampTo(target, VIBRATO_RAMP);
-    }
-    const rate = hz > 0 ? hz : this.preset.vibrato.frequency;
-    if (rate > 0 && Math.abs(rate - this.lastVibratoRate) > RATE_EPSILON) {
-      this.lastVibratoRate = rate;
-      this.vibrato.frequency.rampTo(rate, VIBRATO_RAMP);
-    }
+  /** Vibrato de la mano, por encima del que trae el timbre. */
+  setVibrato(depth: number, hz: number, player = 0): void {
+    this.voices[player]?.setVibrato(depth, hz);
   }
 
-  /**
-   * La nota pedal: una segunda voz que se queda sonando.
-   *
-   * Es lo que convierte el instrumento de monofonico a "una melodia encima de
-   * algo". La sostiene la mano, no el bucle, asi que no hay nada que arrancar ni
-   * que parar: mientras se pida, suena.
-   *
-   * @param hz la nota que se sostiene, o 0 para soltarla.
-   */
-  setDrone(hz: number): void {
-    if (!this.drone || hz === this.droneFreq) return;
-    if (hz <= 0) {
-      this.droneFreq = 0;
-      this.drone.triggerRelease();
-      return;
-    }
-    // Cambiar de nota con la voz abierta suena a glissando de sirena: se suelta
-    // y se vuelve a atacar, que es lo que hace una mano al cambiar de pedal.
-    if (this.droneFreq > 0) this.drone.triggerRelease();
-    this.droneFreq = hz;
-    this.drone.triggerAttack(hz, undefined, 1);
+  /** La nota pedal: una segunda voz que se queda sonando. */
+  setDrone(hz: number, player = 0): void {
+    this.voices[player]?.setDrone(hz);
   }
 
   /**
@@ -394,33 +244,28 @@ export class AudioEngine {
     this.drum?.hit(piece, force, undefined, open);
   }
 
-  /** Envolvente del pedal: la del timbre, pero nunca mas rapida que esto. */
-  private droneEnvelope(): Tone.SynthOptions['envelope'] {
-    const envelope = this.preset.envelope;
-    return {
-      ...envelope,
-      attack: Math.max(envelope.attack as number, DRONE_ATTACK),
-      release: Math.max(envelope.release as number, DRONE_RELEASE),
-    } as Tone.SynthOptions['envelope'];
-  }
-
-  setVolume(volume: number): void {
+  /**
+   * @param volume 0..1 de la mano de expresion.
+   *
+   * La bateria sigue a la primera persona y no a la suma de las dos: es un mando
+   * de volumen, y dos manos tirando de el en direcciones distintas no dan un
+   * volumen, dan un temblor. En duo a media pantalla cada una tiene ademas su
+   * propia mano de expresion para su propia voz, que es donde ese gesto significa
+   * algo sin ambiguedad.
+   */
+  setVolume(volume: number, player = 0): void {
+    this.voices[player]?.setVolume(volume);
+    if (player !== 0) return;
     this.targetVolume = Math.min(1, Math.max(0, volume));
-    this.applyGain(VOLUME_RAMP);
+    this.applyDrumGain(VOLUME_RAMP);
   }
 
-  attack(hz: number): void {
-    if (!this.synth) return;
-    this.gateOpen = true;
-    this.lastFreq = hz;
-    this.synth.triggerAttack(hz, undefined, 1);
-    this.applyGain(VOLUME_RAMP);
+  attack(hz: number, player = 0): void {
+    this.voices[player]?.attack(hz);
   }
 
-  release(): void {
-    if (!this.synth) return;
-    this.gateOpen = false;
-    this.synth.triggerRelease();
+  release(player = 0): void {
+    this.voices[player]?.release();
   }
 
   /**
@@ -430,8 +275,9 @@ export class AudioEngine {
   setMuted(muted: boolean): void {
     if (this.muted === muted) return;
     this.muted = muted;
-    this.applyGain(0.04);
-    // Los bucles cuelgan de su propio bus, asi que silenciar el maestro no los
+    for (const voice of this.voices) voice.setMuted(muted);
+    this.applyDrumGain(0.04);
+    // Los bucles cuelgan de su propio bus, asi que silenciar las voces no los
     // toca. Sin esta linea, esconder la pestana dejaria el bucle sonando de
     // fondo, que es justo lo que no debe pasar.
     this.loopBus?.gain.rampTo(muted ? 0 : 1, 0.04);
@@ -439,12 +285,9 @@ export class AudioEngine {
 
   /** Corta todo de forma segura. */
   panic(): void {
-    this.release();
-    this.setDrone(0);
-    this.master?.gain.rampTo(0, 0.03);
+    for (const voice of this.voices) voice.panic();
     this.loopBus?.gain.rampTo(0, 0.03);
     this.drumBus?.gain.rampTo(0, 0.03);
-    this.lastGain = 0;
     this.lastDrumGain = 0;
   }
 
@@ -455,29 +298,16 @@ export class AudioEngine {
     // la bateria muda para siempre.
     this.drum?.dispose();
     this.drum = null;
-    for (const node of [this.synth, this.vibrato, this.filter, this.delay, this.reverb, this.master, this.loopBus, this.drumBus, this.limiter]) {
+    for (const voice of this.voices) voice.dispose();
+    this.voices.length = 0;
+    for (const node of [this.loopBus, this.drumBus, this.limiter]) {
       node?.dispose();
     }
-    this.synth = null;
-    this.vibrato = null;
-    this.filter = null;
-    this.delay = null;
-    this.reverb = null;
-    this.master = null;
     this.loopBus = null;
     this.drumBus = null;
     this.limiter = null;
     this.captureTap = null;
     this.started = false;
-  }
-
-  private applyGain(ramp: number): void {
-    this.applyDrumGain(ramp);
-    if (!this.master) return;
-    const target = this.muted ? 0 : this.targetVolume * this.preset.trim;
-    if (Math.abs(target - this.lastGain) < GAIN_EPSILON) return;
-    this.lastGain = target;
-    this.master.gain.rampTo(target, ramp);
   }
 
   /**

@@ -110,6 +110,46 @@ export function pitchAt(layout: PitchLayout, x: number): PitchResult {
   return { freq: midiToFreq(midi), midi, index };
 }
 
+/**
+ * La vuelta de pitchAt: donde habria que poner la mano para que suene esa nota.
+ *
+ * Existe porque una capa de bucle guarda el gesto y no el sonido, pero lo guarda
+ * ya convertido -la frecuencia, no la posicion-, y hay una cosa que necesita
+ * deshacer esa conversion: dibujar la mano que grabo la capa. La ida y la vuelta
+ * tienen que ser la misma funcion leida al reves o la mano saldria un dedo a la
+ * izquierda de donde estuvo.
+ *
+ * En cuantizado no siempre hay vuelta exacta: la capa pudo grabarse en otra
+ * escala, y entonces su nota no existe en esta. Se devuelve la zona de la nota
+ * mas cercana, que es lo unico util que se puede decir -ahi es donde hay que
+ * poner la mano AHORA para que suene lo mas parecido- y nunca un hueco.
+ */
+export function xForMidi(layout: PitchLayout, midi: number): number {
+  const n = layout.degrees.length;
+  if (n === 0) {
+    const span = layout.octaves * 12;
+    return span > 0 ? clamp01((midi - layout.baseMidi) / span) : 0.5;
+  }
+  if (n === 1) return 0.5;
+  const wanted = midi - layout.baseMidi;
+  let best = 0;
+  for (let i = 1; i < n; i += 1) {
+    const here = Math.abs((layout.degrees[i] ?? 0) - wanted);
+    if (here < Math.abs((layout.degrees[best] ?? 0) - wanted)) best = i;
+  }
+  return best / (n - 1);
+}
+
+/** Y la vuelta de midiToFreq, por el mismo motivo. */
+export function freqToMidi(freq: number): number {
+  // Una frecuencia de cero o negativa no sale de ningun gesto, pero si de una
+  // capa a medio leer, y el logaritmo de cero es un menos infinito que se
+  // propaga hasta la posicion de la mano.
+  return freq > 0 ? 69 + 12 * Math.log2(freq / 440) : 0;
+}
+
+const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+
 /** Centro horizontal de cada zona, para dibujar la rejilla. */
 export function zoneCenters(layout: PitchLayout): number[] {
   const n = layout.degrees.length;

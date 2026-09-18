@@ -1,8 +1,10 @@
 import { HAND_BONES, point, type Finger, type Landmark, type RoleAssignment } from '../tracking/types';
-import { denormalize, palmCenter } from '../mapping/features';
+import { FULL_LENS, denormalize, denormalizeIn, palmCenter, type Lens } from '../mapping/features';
 import { midiToName, zoneCenters, type PitchLayout } from '../mapping/scales';
 import { t } from '../i18n';
-import type { LoopState } from '../audio/looper';
+import { TrackGhost } from '../mapping/ghost';
+import { drawnScale, phantomHand } from '../tracking/phantom';
+import type { LoopState, LoopTrack } from '../audio/looper';
 import { Visualizer } from './visualizer';
 import { coverRect, pitchHue, PIECE_HUE, type RenderTarget } from './target';
 import { BAND, KIT, bandCenter, type DrumPiece, type KitLayout } from '../mapping/kit';
@@ -53,6 +55,33 @@ export interface OverlayFrame {
    */
   kit: KitLayout;
   showRawTrace: boolean;
+  /** Dibujar las manos que grabaron cada capa mientras la capa suena. */
+  ghosts: boolean;
+  /**
+   * La franja de quien toca. El encuadre entero salvo en duo a media pantalla.
+   *
+   * La rejilla y las bandas se dibujan dentro de ella, y ahi esta todo el
+   * asunto: sin esto, en duo a media pantalla las dos personas verian las notas
+   * donde no estan, que es peor que no ver rejilla ninguna.
+   */
+  lens: Lens;
+  /** La segunda persona, si hay duo. Se dibuja igual que la primera. */
+  partner: PartnerFrame | null;
+}
+
+/**
+ * Lo poco que hace falta para dibujar a la otra persona.
+ *
+ * No un OverlayFrame entero: casi todo lo que hay ahi -los bucles, la guia, el
+ * rotulo de la nota- es de una sola persona y ya esta puesto. Lo que cambia entre
+ * las dos es donde tienen las manos, en que franja tocan y que nota estan
+ * apuntando.
+ */
+export interface PartnerFrame {
+  assignment: RoleAssignment;
+  lens: Lens;
+  pitchX: number;
+  gateOpen: boolean;
 }
 
 export interface PaintOptions {
@@ -79,6 +108,16 @@ export class Overlay {
   private readonly visualizer = new Visualizer();
   /** Lo que le queda de destello a cada banda, de 1 a 0. */
   private readonly flashes: Record<DrumPiece, number> = { kick: 0, snare: 0, hat: 0, crash: 0 };
+  /**
+   * Un fantasma por capa, preparado una vez.
+   *
+   * Preparar uno cuesta recorrer la capa entera deshaciendo cada evento, y una
+   * capa no cambia nunca despues de cerrarse. Ademas se pinta dos veces por
+   * fotograma mientras se graba un clip -la pantalla y el video-, asi que sin
+   * esto seria el doble de un trabajo que ya sobraba entero.
+   */
+  private readonly ghosts = new Map<number, TrackGhost>();
+  private ghostCycle = 0;
   private dpr = 1;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -170,11 +209,32 @@ export class Overlay {
     // La rejilla se calibro contra una imagen de camara. Sobre el fondo oscuro
     // del modo de solo manos, con esos mismos valores, casi no se ve: hay que
     // subirla, porque ahi es de lo poco que queda en pantalla.
-    if (frame.drums) this.drawKit(target, rect, frame.kit, options.backdrop ? 1.7 : 1);
-    else this.drawGrid(target, rect, frame, options.backdrop ? 1.7 : 1);
+    const lift = options.backdrop ? 1.7 : 1;
+    const mine = { pitchX: frame.pitchX, gateOpen: frame.gateOpen };
+    const partner = frame.partner;
+    /*
+     * Una rejilla por franja, no una por persona.
+     *
+     * A media pantalla son dos cosas distintas y hay dos rejillas, cada una con
+     * su escala entera: sin la suya, la segunda persona no sabe donde estan sus
+     * notas, porque la de al lado no le sirve. A una mano cada una las dos
+     * franjas son la misma, y ahi dibujarla dos veces no anade nada: suma la
+     * misma linea sobre si misma y la deja del doble de fuerte.
+     */
+    const shared = partner !== null && partner.lens.from === frame.lens.from && partner.lens.to === frame.lens.to;
+    if (frame.drums) this.drawKit(target, rect, frame.kit, lift, frame.lens);
+    else this.drawGrid(target, rect, frame, lift, frame.lens, shared && partner ? [mine, partner] : [mine], frame.targetZone);
+    if (partner && !shared) {
+      if (frame.drums) this.drawKit(target, rect, frame.kit, lift, partner.lens);
+      else this.drawGrid(target, rect, frame, lift, partner.lens, [partner], null);
+      this.drawSplit(target, rect, frame);
+    }
 
     const melody = frame.assignment.melody;
     const expression = frame.assignment.expression;
+
+    // Debajo de las manos de verdad, que es el sitio: la propia va encima.
+    if (frame.ghosts) this.drawGhosts(target, rect, frame);
 
     if (expression) {
       // En bateria las dos manos hacen lo mismo, asi que la de expresion se
@@ -184,6 +244,23 @@ export class Overlay {
       if (!frame.drums) this.drawRoleTag(target, rect, expression.hand.landmarks, t().overlay.expressionTag, expression.held);
       if (frame.drone !== null) this.drawDrone(target, rect, expression.hand.landmarks, frame.drone);
     }
+    // La otra persona, antes que la propia: al cruzarse, las manos de uno tienen
+    // que quedar encima de las del otro, que es lo que dice cual es la tuya.
+    if (partner) {
+      for (const role of ['expression', 'melody'] as const) {
+        const tracked = partner.assignment[role];
+        if (!tracked) continue;
+        this.drawHand(target, rect, tracked.hand.landmarks, tracked.held, 1);
+        // Con su rotulo, igual que la propia: saber cual de tus dos manos lleva
+        // la nota es lo primero que hay que saber, y en duo hay cuatro manos
+        // repartidas en dos instrumentos.
+        if (!frame.drums) {
+          const label = role === 'melody' ? t().overlay.melodyTag : t().overlay.expressionTag;
+          this.drawRoleTag(target, rect, tracked.hand.landmarks, label, tracked.held);
+        }
+      }
+    }
+
     if (melody) {
       if (frame.showRawTrace) this.drawRawTrace(target, rect, melody.hand.raw);
       this.drawHand(target, rect, melody.hand.landmarks, melody.held, 1, frame.gateOpen);
@@ -266,7 +343,7 @@ export class Overlay {
    * dejarian lo unico que importa —donde acaba una pieza y empieza la otra— sin
    * dibujar.
    */
-  private drawKit(target: RenderTarget, rect: Rect2, bands: KitLayout, lift: number): void {
+  private drawKit(target: RenderTarget, rect: Rect2, bands: KitLayout, lift: number, lens: Lens = FULL_LENS): void {
     const { ctx } = target;
     const top = target.height * 0.08;
     const bottom = target.height * 0.84;
@@ -284,8 +361,8 @@ export class Overlay {
       // suene otra. El respaldo es para el compilador, que eso no lo sabe.
       const piece = bands[i] ?? KIT[i]!;
       const hue = PIECE_HUE[piece];
-      const left = rect.x + denormalize(i * BAND) * rect.w;
-      const right = rect.x + denormalize((i + 1) * BAND) * rect.w;
+      const left = rect.x + denormalizeIn(i * BAND, lens) * rect.w;
+      const right = rect.x + denormalizeIn((i + 1) * BAND, lens) * rect.w;
       const flash = this.flashes[piece];
 
       // El relleno permanente es casi invisible y aun asi hace todo el trabajo:
@@ -321,7 +398,23 @@ export class Overlay {
     ctx.restore();
   }
 
-  private drawGrid(target: RenderTarget, rect: Rect2, frame: OverlayFrame, lift: number): void {
+  /**
+   * @param lens la franja sobre la que se dibuja.
+   * @param highlights una columna encendida por persona que toque EN esta franja.
+   * Son varias porque a una mano cada una las dos comparten encuadre: ahi la
+   * rejilla es una sola y lo que hay que ver son las dos notas a la vez. A media
+   * pantalla es una por rejilla, que es el caso de siempre con otro nombre.
+   * @param targetZone la guia, que es de quien toca y no de la otra persona.
+   */
+  private drawGrid(
+    target: RenderTarget,
+    rect: Rect2,
+    frame: OverlayFrame,
+    lift: number,
+    lens: Lens,
+    highlights: readonly { pitchX: number; gateOpen: boolean }[],
+    targetZone: number | null,
+  ): void {
     const { ctx } = target;
     const centers = zoneCenters(frame.layout);
     if (centers.length === 0) return;
@@ -332,10 +425,12 @@ export class Overlay {
     const bottom = target.height * 0.84;
     const labelY = target.height * 0.885;
     const labelPad = 24 * target.unit;
-    const activeIndex =
-      frame.pitchX >= 0 && centers.length > 1
-        ? Math.round(Math.min(1, Math.max(0, frame.pitchX)) * (centers.length - 1))
-        : -1;
+    const actives = highlights
+      .filter((each) => each.pitchX >= 0 && centers.length > 1)
+      .map((each) => ({
+        index: Math.round(Math.min(1, Math.max(0, each.pitchX)) * (centers.length - 1)),
+        gateOpen: each.gateOpen,
+      }));
 
     ctx.save();
     ctx.font = `${11 * target.unit}px ui-monospace, monospace`;
@@ -343,23 +438,24 @@ export class Overlay {
 
     for (let i = 0; i < centers.length; i += 1) {
       const zone = centers[i] ?? 0;
-      const x = rect.x + denormalize(zone) * rect.w;
+      const x = rect.x + denormalizeIn(zone, lens) * rect.w;
       const semitone = frame.layout.degrees[i] ?? 0;
       const isTonic = semitone % 12 === 0;
-      const isActive = i === activeIndex;
-      const isTarget = i === frame.targetZone;
+      const active = actives.find((each) => each.index === i);
+      const isActive = active !== undefined;
+      const isTarget = i === targetZone;
 
       if (isActive) {
         // Columna de luz en la zona activa: el interprete ve donde esta antes de
         // que suene, que es lo que permite apuntar a una nota concreta.
         const hue = pitchHue(frame.layout.baseMidi + semitone);
         const column = ctx.createLinearGradient(x, top, x, bottom);
-        const alpha = frame.gateOpen ? 0.3 : 0.12;
+        const alpha = active!.gateOpen ? 0.3 : 0.12;
         column.addColorStop(0, `hsla(${hue}, 95%, 65%, 0)`);
         column.addColorStop(0.5, `hsla(${hue}, 95%, 65%, ${alpha})`);
         column.addColorStop(1, `hsla(${hue}, 95%, 65%, 0)`);
         ctx.fillStyle = column;
-        const halfWidth = (rect.w / Math.max(centers.length - 1, 1)) * 0.42;
+        const halfWidth = ((rect.w * (lens.to - lens.from)) / Math.max(centers.length - 1, 1)) * 0.42;
         ctx.fillRect(x - halfWidth, top, halfWidth * 2, bottom - top);
       }
 
@@ -544,6 +640,128 @@ export class Overlay {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.fillText(label, palm.x, palm.y - 14 * target.unit);
+    ctx.restore();
+  }
+
+  /**
+   * La tierra de nadie de en medio, en duo a media pantalla.
+   *
+   * Es el sitio donde no se toca: los margenes de las dos franjas juntos. Sin
+   * dibujarlo, las dos rejillas parecen una sola rejilla rara con un hueco en el
+   * centro, y quien esta cerca del borde no entiende por que su nota no se mueve.
+   * Con esto se ve que son dos instrumentos, uno al lado del otro.
+   */
+  private drawSplit(target: RenderTarget, rect: Rect2, frame: OverlayFrame): void {
+    const partner = frame.partner;
+    if (!partner || partner.lens.from === frame.lens.from) return;
+    const { ctx } = target;
+    const left = rect.x + denormalizeIn(1, frame.lens) * rect.w;
+    const right = rect.x + denormalizeIn(0, partner.lens) * rect.w;
+    if (right <= left) return;
+    const top = target.height * 0.08;
+    const bottom = target.height * 0.84;
+    ctx.save();
+    const band = ctx.createLinearGradient(left, top, left, bottom);
+    band.addColorStop(0, 'rgba(255,255,255,0)');
+    band.addColorStop(0.5, 'rgba(255,255,255,0.07)');
+    band.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = band;
+    ctx.fillRect(left, top, right - left, bottom - top);
+    ctx.restore();
+  }
+
+  /**
+   * Las manos que grabaron las capas, cada una en el color de la suya.
+   *
+   * Es lo que convierte un bucle en una leccion: la capa no guarda sonido, guarda
+   * el gesto, asi que se puede volver a dibujar la mano que lo hizo y poner la
+   * propia encima. Van debajo de las manos de verdad y translucidas -son una
+   * referencia, no el instrumento- y las silenciadas no salen, porque una mano
+   * moviendose sobre algo que no suena es exactamente la leccion equivocada.
+   *
+   * Y se dibujan con la escala y el reparto de AHORA: lo que ensenan es donde
+   * hay que poner la mano para que suene eso, y eso cambia si se cambia la
+   * escala o se mueve una pieza de banda.
+   */
+  private drawGhosts(target: RenderTarget, rect: Rect2, frame: OverlayFrame): void {
+    const { loops } = frame;
+    if (loops.playhead < 0 || loops.cycleSeconds <= 0) return;
+    const cycleTime = loops.playhead * loops.cycleSeconds;
+    /*
+     * La proporcion sale del recuadro que se esta pintando y no del video.
+     *
+     * Es lo mismo mientras haya camara, porque ese recuadro es justo el video
+     * recortado. Sin camara no lo es: el video mide cero por cero, y una
+     * proporcion de cero encoge el palmo hasta dejar la mano en una mota. Asi
+     * que se saca de donde la sacan las manos dibujadas de verdad -el propio
+     * destino, que es lo que vale cuando no hay video- y se comprueba, porque un
+     * destino de altura cero existe un fotograma al arrancar.
+     */
+    const measured = rect.w / rect.h;
+    const aspect = Number.isFinite(measured) && measured > 0 ? measured : 1;
+    const scale = drawnScale(aspect);
+    for (const track of loops.tracks) {
+      if (track.muted) continue;
+      for (const pose of this.ghostFor(track, loops).posesAt(cycleTime, frame.layout, frame.kit)) {
+        this.drawGhostHand(target, rect, phantomHand({ ...pose, aspect, scale }), track.hue);
+      }
+    }
+  }
+
+  private ghostFor(track: LoopTrack, loops: LoopState): TrackGhost {
+    // El compas lo fija la primera capa, asi que si cambia es que se vaciaron
+    // los bucles y lo que hay ahora es otra cosa con los mismos numeros.
+    if (loops.cycleSeconds !== this.ghostCycle) {
+      this.ghosts.clear();
+      this.ghostCycle = loops.cycleSeconds;
+    } else if (this.ghosts.size > loops.tracks.length) {
+      // Deshacer una capa la quita de la lista y deja aqui la suya: son cuatro
+      // como mucho a la vez, pero grabar y deshacer se puede hacer toda la tarde.
+      const live = new Set(loops.tracks.map((each) => each.id));
+      for (const id of [...this.ghosts.keys()]) if (!live.has(id)) this.ghosts.delete(id);
+    }
+    let ghost = this.ghosts.get(track.id);
+    if (!ghost) {
+      ghost = new TrackGhost(track, loops.cycleSeconds);
+      this.ghosts.set(track.id, ghost);
+    }
+    return ghost;
+  }
+
+  /**
+   * Una mano fantasma: el esqueleto entero de un color solo.
+   *
+   * Sin los colores por dedo de una mano de verdad, y a proposito: lo que tiene
+   * que decir de un vistazo es de que capa es, no que dedo es cual. El color es
+   * el mismo con el que esa capa sale en el anillo y en su carril.
+   */
+  private drawGhostHand(target: RenderTarget, rect: Rect2, landmarks: readonly Landmark[], hue: number): void {
+    if (landmarks.length < 21) return;
+    const { ctx } = target;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = `hsla(${hue}, 90%, 70%, 0.4)`;
+    ctx.lineWidth = 2 * target.unit;
+    ctx.beginPath();
+    for (const bone of HAND_BONES) {
+      for (const [a, b] of bone.pairs) {
+        const pa = this.toCanvas(rect, point(landmarks, a));
+        const pb = this.toCanvas(rect, point(landmarks, b));
+        ctx.moveTo(pa.x, pa.y);
+        ctx.lineTo(pb.x, pb.y);
+      }
+    }
+    ctx.stroke();
+
+    // La palma marcada, que es el punto que decide: la nota en melodia y la
+    // banda en bateria. Lo demas es la forma de la mano, no lo que hay que ir a
+    // buscar.
+    const palm = this.toCanvas(rect, palmCenter(landmarks));
+    ctx.fillStyle = `hsla(${hue}, 95%, 72%, 0.55)`;
+    ctx.beginPath();
+    ctx.arc(palm.x, palm.y, 4 * target.unit, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   }
 

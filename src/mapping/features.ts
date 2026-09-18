@@ -177,9 +177,53 @@ export function denormalize(v: number): number {
   return MARGIN + clamp01(v) * (1 - 2 * MARGIN);
 }
 
-export function melodyFeatures(landmarks: readonly Landmark[]): MelodyFeatures {
+/**
+ * La franja del encuadre en la que toca alguien.
+ *
+ * Existe para que quepan dos personas delante de la misma camara. Quien toca
+ * solo tiene el encuadre entero y no se entera de que esto existe; en duo a
+ * media pantalla, cada uno tiene su mitad y dentro de ella la escala completa,
+ * porque media escala por cabeza no es un duo, es un instrumento partido.
+ *
+ * Solo reparte a lo ancho. La altura -el brillo, el volumen, el pedal- es la
+ * misma para los dos: es lo alto que esta la mano, y eso no se puede repartir.
+ */
+export interface Lens {
+  /** Borde izquierdo de la franja, en espacio de vista. */
+  from: number;
+  /** Borde derecho. */
+  to: number;
+}
+
+export const FULL_LENS: Lens = { from: 0, to: 1 };
+
+/**
+ * Lo mismo que normalize pero dentro de una franja.
+ *
+ * El margen se aplica a la franja y no al encuadre, asi que en duo cada uno
+ * tiene el suyo a los dos lados. Los dos margenes de dentro se juntan en mitad
+ * de la pantalla y forman una tierra de nadie, que no es un efecto secundario
+ * sino lo que hace falta: sin ella, la mano de uno entrando en el lado del otro
+ * seguiria tocando la nota mas aguda de su propia mitad.
+ */
+export function normalizeIn(v: number, lens: Lens): number {
+  const span = lens.to - lens.from;
+  if (span <= 0) return 0;
+  return normalize((v - lens.from) / span);
+}
+
+/**
+ * Inversa de normalizeIn. La necesita el overlay por lo mismo que la otra: en
+ * duo, la rejilla de cada persona tiene que dibujarse sobre su mitad, que es
+ * donde de verdad hay que poner la mano.
+ */
+export function denormalizeIn(v: number, lens: Lens): number {
+  return lens.from + denormalize(v) * (lens.to - lens.from);
+}
+
+export function melodyFeatures(landmarks: readonly Landmark[], lens: Lens = FULL_LENS): MelodyFeatures {
   const palm = palmCenter(landmarks);
-  return { x: normalize(palm.x), y: normalize(palm.y), pinch: pinchRatio(landmarks) };
+  return { x: normalizeIn(palm.x, lens), y: normalize(palm.y), pinch: pinchRatio(landmarks) };
 }
 
 export function expressionFeatures(landmarks: readonly Landmark[]): ExpressionFeatures {

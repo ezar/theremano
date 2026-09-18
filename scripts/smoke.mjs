@@ -339,6 +339,67 @@ const afterScale = await page.evaluate(() => document.getElementById('note-sub')
 const persisted = await page.evaluate(() => localStorage.getItem('theremano.settings.v1'));
 console.log(JSON.stringify({ fields, afterScale, scale: JSON.parse(persisted ?? '{}').scale }, null, 2));
 
+/*
+ * --- El duo: dos personas delante de la misma camara.
+ *
+ * Delante de la camara falsa no hay manos, asi que aqui no se puede comprobar
+ * que suenen dos: eso lo comprueban las pruebas del reparto, que meten cuatro
+ * manos de mentira por el mapeador de verdad. Lo que se comprueba aqui es lo
+ * que aquellas no pueden: que encenderlo monte de verdad la segunda voz y
+ * cuatro manos en el detector sin tirar la pagina, que el ajuste y la tecla
+ * digan lo mismo, y que apagarlo lo desmonte. Es el recorrido que toca el motor
+ * de audio, que es lo unico de la aplicacion que no tiene pruebas en node.
+ */
+/*
+ * Se espera a que el valor aparezca, no un rato fijo.
+ *
+ * El guardado va agrupado con un temporizador de un cuarto de segundo, y esta
+ * pestana tiene la camara y el modelo comiendose el hilo principal: ese
+ * temporizador se retrasa lo que le apetezca. Medido aparte, el guardado
+ * aterriza entre 250 y 500 ms; dentro de la prueba completa, con un segundo de
+ * espera fija seguia leyendose el valor ANTERIOR. Esperar mas no arregla eso,
+ * solo mueve el limite: lo que hay que hacer es preguntar hasta que conteste.
+ */
+const savedDuo = async (wanted) => {
+  for (let tries = 0; tries < 40; tries += 1) {
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').duo);
+    if (saved === wanted) return saved;
+    await page.waitForTimeout(250);
+  }
+  return page.evaluate(() => JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').duo);
+};
+
+const duo = [];
+for (const wanted of ['halves', 'hands', 'off']) {
+  await page.selectOption('#set-duo', wanted);
+  const guardado = await savedDuo(wanted);
+  duo.push({ ajuste: await page.evaluate(() => document.getElementById('set-duo')?.value), guardado });
+}
+
+/*
+ * Y por la tecla, que es por donde se usa de verdad.
+ *
+ * Con el panel cerrado: con el abierto, el foco esta en un control y las teclas
+ * del instrumento se ignoran a proposito para no grabar mientras alguien
+ * escribe. Se cierra y se vuelve a abrir con el mismo boton, que es la unica
+ * forma de dejarlo como estaba.
+ */
+await page.click('#settings-toggle');
+await page.waitForTimeout(300);
+const duoKeys = [];
+for (let press = 0; press < 3; press += 1) {
+  await page.keyboard.press('d');
+  await page.waitForTimeout(350);
+  duoKeys.push(await page.evaluate(() => document.getElementById('toast')?.textContent ?? ''));
+}
+await page.click('#settings-toggle');
+await page.waitForTimeout(400);
+// Tres pulsaciones dan la vuelta entera: el desplegable tiene que haber vuelto a
+// donde estaba. Se mira ahi y no en el almacenamiento porque el desplegable
+// sigue al ajuste en el acto y el almacenamiento va agrupado.
+const duoAfterKeys = await page.evaluate(() => document.getElementById('set-duo')?.value);
+console.log(JSON.stringify({ duo, duoKeys, duoAfterKeys }, null, 2));
+
 // --- Cancion: elegirla amplia el rango si el encuadre se ha quedado corto.
 await page.evaluate(() => {
   const range = document.getElementById('set-range');
@@ -696,6 +757,56 @@ await pointerPage.evaluate(() => window.__resetPeak());
 await pointerPage.waitForTimeout(2500);
 const drumLoopAlone = Number((await pointerPage.evaluate(() => window.__peak)).toFixed(4));
 
+/*
+ * --- Las manos de la capa grabada.
+ *
+ * La capa no guarda sonido, guarda el gesto, asi que se puede volver a dibujar
+ * la mano que la toco. Aqui hay justo lo que hace falta para verlo: un ritmo
+ * grabado dando vueltas y el raton fuera del encuadre, asi que lo unico que se
+ * mueve en el lienzo son las dos manos del fantasma. Se cuenta lo que hay
+ * pintado con ellas y sin ellas, tomando el maximo de varios fotogramas porque
+ * las manos se mueven y un solo fotograma podria pillarlas encimadas.
+ *
+ * Es la unica prueba que mira lo que de verdad se dibuja: lo demas comprueba que
+ * la mano reconstruida cae donde tiene que caer, no que llegue al lienzo.
+ */
+const paintedPixels = async () => {
+  let most = 0;
+  for (let sample = 0; sample < 8; sample += 1) {
+    most = Math.max(most, await pointerPage.evaluate(() => {
+      const canvas = document.getElementById('overlay');
+      const ctx = canvas?.getContext('2d');
+      if (!ctx) return 0;
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      /*
+       * Lo que no es el fondo, y con el liston bajo.
+       *
+       * No vale contar lo que tiene alfa: en esta pestana el modo de solo manos
+       * rellena el lienzo entero con su fondo. Y el liston va bajo a proposito:
+       * el fondo suma unos sesenta de los setecientos sesenta y cinco posibles,
+       * pero una mano fantasma se dibuja translucida y, sobre ese fondo, suma
+       * poco mas de doscientos. Con el liston ahi arriba se contaba el centro de
+       * cada trazo y se perdian los bordes, que es casi todo: la diferencia
+       * salia de doscientos pixeles en vez de un par de miles.
+       */
+      let lit = 0;
+      for (let i = 0; i < data.length; i += 4) if (data[i] + data[i + 1] + data[i + 2] > 90) lit += 1;
+      return lit;
+    }));
+    await pointerPage.waitForTimeout(70);
+  }
+  return most;
+};
+const withGhosts = await paintedPixels();
+await pointerPage.keyboard.press('g');
+await pointerPage.waitForTimeout(300);
+const ghostsOffToast = await pointerPage.textContent('#toast');
+const withoutGhosts = await paintedPixels();
+await pointerPage.keyboard.press('g');
+await pointerPage.waitForTimeout(300);
+const ghostsOnToast = await pointerPage.textContent('#toast');
+console.log(JSON.stringify({ withGhosts, withoutGhosts, ghostsOffToast, ghostsOnToast }, null, 2));
+
 // Y de vuelta a la melodia sin parar, para tocar encima.
 await pointerPage.keyboard.press('b');
 await pointerPage.waitForTimeout(500);
@@ -832,6 +943,36 @@ if (drumLayer.capas !== 1) {
 }
 if (drumLoopAlone < 0.02) {
   console.error('\nFALLO: la capa de bateria no suena sola, sin manos delante');
+  process.exit(1);
+}
+/*
+ * Las manos de la capa tienen que ocupar sitio de verdad.
+ *
+ * Un liston en pixeles y no un "hay alguna diferencia" a proposito: la primera
+ * version sacaba la proporcion del video, que sin camara mide cero por cero, y
+ * con eso el palmo se encogia hasta dejar cada mano en una mota. Se dibujaban
+ * -la diferencia no era cero- y no se veian. Dos manos son miles de pixeles.
+ */
+if (withGhosts - withoutGhosts < 1500) {
+  console.error(`\nFALLO: las manos de la capa apenas se dibujan (${withGhosts - withoutGhosts} pixeles)`);
+  process.exit(1);
+}
+if (ghostsOffToast === ghostsOnToast) {
+  console.error('\nFALLO: la tecla G no dice si las manos de las capas se ven o no');
+  process.exit(1);
+}
+if (duo.some((each, i) => each.ajuste !== ['halves', 'hands', 'off'][i] || each.guardado !== each.ajuste)) {
+  console.error('\nFALLO: el duo no se elige o no se guarda', JSON.stringify(duo));
+  process.exit(1);
+}
+// Tres avisos distintos y vuelta al principio: la tecla ha pasado por los tres.
+// Si no rotara, o los tres avisos serian el mismo, o no volveria a 'off'.
+if (new Set(duoKeys).size !== 3) {
+  console.error('\nFALLO: los tres modos de duo no se anuncian distinto', JSON.stringify(duoKeys));
+  process.exit(1);
+}
+if (duoAfterKeys !== 'off') {
+  console.error(`\nFALLO: la tecla D no da la vuelta entera (acaba en ${duoAfterKeys})`);
   process.exit(1);
 }
 if (drumsOn.subtitulo === backToMelody.subtitulo) {
