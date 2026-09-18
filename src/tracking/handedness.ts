@@ -16,8 +16,33 @@ export const HOLD_MS = 500;
 interface Memory {
   hand: HandFrame;
   position: Vec2;
+  /** Por donde iba, en unidades de encuadre por milisegundo. */
+  velocity: Vec2;
   lastSeen: number;
 }
+
+/**
+ * Cuanto se adelanta la posicion de una mano antes de buscarle pareja.
+ *
+ * Sin adelantarla, dos manos que se cruzan se intercambian el papel: en el
+ * fotograma del cruce estan las dos en el mismo sitio, la mas cercana a donde
+ * estaba cada una es la otra, y a partir de ahi se quedan cambiadas. Con dos
+ * personas a una mano cada una eso es lo peor que puede pasar -la nota de cada
+ * una salta a la de la otra y ninguna entiende por que- y tocando solo tampoco
+ * es gracioso, porque la mano que llevaba la nota pasa a llevar el volumen.
+ *
+ * Adelantarla lo arregla porque una mano que cruza SIGUE, y donde va a estar ya
+ * no es donde va a estar la otra. No hay que adivinar nada: la velocidad es la
+ * que trae, medida entre fotogramas.
+ */
+const LOOK_AHEAD_MS = 60;
+
+/** Lo que pesa el ultimo fotograma en la velocidad. */
+const VELOCITY_MIX = 0.5;
+
+const STILL: Vec2 = { x: 0, y: 0 };
+
+const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
 export class RoleTracker {
   private melody: Memory | null = null;
@@ -44,9 +69,9 @@ export class RoleTracker {
     const [a, b] = candidates as [(typeof candidates)[number], (typeof candidates)[number]];
 
     let melodyIsA: boolean;
-    const previous = this.melody?.position;
+    const previous = this.melody ? this.predict(this.melody, now) : null;
     if (previous) {
-      // La mano de melodia es la que estaba mas cerca de donde estaba ella misma.
+      // La mano de melodia es la que esta mas cerca de donde iba ella misma.
       melodyIsA = distance(a.position, previous) <= distance(b.position, previous);
     } else {
       melodyIsA = this.bootstrapPrefers(a, b);
@@ -54,8 +79,36 @@ export class RoleTracker {
 
     const melody = melodyIsA ? a : b;
     const expression = melodyIsA ? b : a;
-    this.melody = { hand: melody.hand, position: melody.position, lastSeen: now };
-    this.expression = { hand: expression.hand, position: expression.position, lastSeen: now };
+    this.melody = this.remember(this.melody, melody, now);
+    this.expression = this.remember(this.expression, expression, now);
+  }
+
+  /** Donde estaria una mano ahora si hubiera seguido a lo suyo. */
+  private predict(memory: Memory, now: number): Vec2 {
+    const ahead = Math.min(Math.max(now - memory.lastSeen, 0), LOOK_AHEAD_MS);
+    return {
+      x: memory.position.x + memory.velocity.x * ahead,
+      y: memory.position.y + memory.velocity.y * ahead,
+    };
+  }
+
+  private remember(
+    previous: Memory | null,
+    found: { hand: HandFrame; position: Vec2 },
+    now: number,
+  ): Memory {
+    const elapsed = previous ? now - previous.lastSeen : 0;
+    // Dos fotogramas en el mismo milisegundo darian una velocidad infinita, y
+    // una mano que vuelve despues de medio segundo no trae ninguna velocidad
+    // util: lo que hizo mientras no se la veia no lo sabe nadie.
+    const usable = previous !== null && elapsed > 0 && elapsed <= LOOK_AHEAD_MS;
+    const velocity = usable
+      ? {
+          x: lerp(previous!.velocity.x, (found.position.x - previous!.position.x) / elapsed, VELOCITY_MIX),
+          y: lerp(previous!.velocity.y, (found.position.y - previous!.position.y) / elapsed, VELOCITY_MIX),
+        }
+      : STILL;
+    return { hand: found.hand, position: found.position, velocity, lastSeen: now };
   }
 
   private assignOne(candidate: { hand: HandFrame; position: Vec2 }, now: number): void {
@@ -66,19 +119,19 @@ export class RoleTracker {
     // Sin esta comprobacion, bajar la mano de melodia convertiria a la de
     // expresion en melodica y empezaria a disparar notas sin motivo.
     if (melodyAlive && expressionAlive && this.melody && this.expression) {
-      const toMelody = distance(candidate.position, this.melody.position);
-      const toExpression = distance(candidate.position, this.expression.position);
+      const toMelody = distance(candidate.position, this.predict(this.melody, now));
+      const toExpression = distance(candidate.position, this.predict(this.expression, now));
       if (toExpression < toMelody) {
-        this.expression = { hand: candidate.hand, position: candidate.position, lastSeen: now };
+        this.expression = this.remember(this.expression, candidate, now);
         return;
       }
-      this.melody = { hand: candidate.hand, position: candidate.position, lastSeen: now };
+      this.melody = this.remember(this.melody, candidate, now);
       return;
     }
 
     // Con una sola mano y sin ambiguedad, es la de melodia: es lo que espera
     // quien levanta una mano por primera vez.
-    this.melody = { hand: candidate.hand, position: candidate.position, lastSeen: now };
+    this.melody = this.remember(this.melody, candidate, now);
   }
 
   /**

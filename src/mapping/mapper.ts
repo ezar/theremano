@@ -1,5 +1,5 @@
 import { OneEuroFilter, DEFAULT_D_CUTOFF } from '../filter/oneEuro';
-import { attackVelocity, depthFromSize, expressionFeatures, melodyFeatures, middlePinchRatio, normalize, palmCenter, palmSize, pinchRatio } from './features';
+import { FULL_LENS, attackVelocity, depthFromSize, expressionFeatures, melodyFeatures, middlePinchRatio, normalizeIn, palmCenter, palmSize, pinchRatio, type Lens } from './features';
 import { HoldGesture } from './holdGesture';
 import { ClosingSpeed } from './closingSpeed';
 import { VibratoDetector } from './vibrato';
@@ -166,6 +166,15 @@ export class Mapper {
   private lastFreq = 440;
   private lastMidi = 69;
   private lastZone = -1;
+  /**
+   * La franja del encuadre que este mapeador mira.
+   *
+   * El encuadre entero mientras toque una sola persona, que es lo que hay hasta
+   * que alguien enciende el duo. Vive aqui y no en los ajustes porque no es una
+   * preferencia: es de que trozo de camara se ocupa ESTE mapeador, y en duo hay
+   * dos con dos respuestas distintas a la misma pregunta.
+   */
+  private lens: Lens = FULL_LENS;
 
   constructor(settings: Readonly<Settings>) {
     this.layout = createLayout(settings.scale, settings.tonicPc, settings.baseOctave, settings.octaves);
@@ -256,6 +265,24 @@ export class Mapper {
     return this.layout;
   }
 
+  get currentLens(): Lens {
+    return this.lens;
+  }
+
+  /**
+   * Cambia la franja y borra el filtro del tono.
+   *
+   * Sin borrarlo, pasar de tocar solo a tocar en duo mueve la nota de golpe -la
+   * misma mano cae en otro sitio de otra escala- y el filtro lo leeria como un
+   * movimiento rapidisimo de la mano: un glissando de un extremo al otro que
+   * nadie ha tocado.
+   */
+  setLens(lens: Lens): void {
+    if (lens.from === this.lens.from && lens.to === this.lens.to) return;
+    this.lens = lens;
+    this.pitchFilter.reset();
+  }
+
   setVolume(volume: number): void {
     this.volume = volume;
     this.volumeFilter.reset();
@@ -288,7 +315,7 @@ export class Mapper {
     this.strikes.length = 0;
 
     if (melody) {
-      const f = melodyFeatures(melody.hand.raw);
+      const f = melodyFeatures(melody.hand.raw, this.lens);
       pitchXRaw = f.x;
       pitchX = this.pitchFilter.filter(f.x, timestamp);
       // El corte va invertido respecto a la Y de la imagen: arriba es brillante.
@@ -491,7 +518,7 @@ export class Mapper {
     // lo unico que se le pide en bateria, y hacerlo por fotograma seria pagarlo
     // sesenta veces por segundo para leerlo una.
     const open = pinchRatio(tracked.hand.raw) < OPEN_HAT_PINCH;
-    this.strikes.push({ piece: pieceAt(this.bands, normalize(palm.x)), force, open, x: palm.x, y: palm.y });
+    this.strikes.push({ piece: pieceAt(this.bands, normalizeIn(palm.x, this.lens)), force, open, x: palm.x, y: palm.y });
   }
 
   /**

@@ -13,6 +13,9 @@ const base = import.meta.env.BASE_URL;
 const WASM_PATH = `${base}wasm`;
 const MODEL_PATH = `${base}models/hand_landmarker.task`;
 
+/** Las manos de una persona. El duo a media pantalla pide mas. */
+const DEFAULT_HANDS = 2;
+
 export interface DetectionResult {
   hands: HandFrame[];
   /** Milisegundos que ha costado la inferencia. */
@@ -23,6 +26,7 @@ export class Landmarker {
   private landmarker: HandLandmarker | null = null;
   private lastTimestamp = -1;
   private delegateUsed: 'GPU' | 'CPU' = 'GPU';
+  private hands = DEFAULT_HANDS;
 
   get delegate(): 'GPU' | 'CPU' {
     return this.delegateUsed;
@@ -36,7 +40,7 @@ export class Landmarker {
     const options = {
       baseOptions: { modelAssetPath: MODEL_PATH, delegate: 'GPU' as const },
       runningMode: 'VIDEO' as const,
-      numHands: 2,
+      numHands: this.hands,
       minHandDetectionConfidence: 0.5,
       minHandPresenceConfidence: 0.5,
       minTrackingConfidence: 0.5,
@@ -53,6 +57,31 @@ export class Landmarker {
         baseOptions: { ...options.baseOptions, delegate: 'CPU' },
       });
       this.delegateUsed = 'CPU';
+    }
+  }
+
+  /**
+   * Cuantas manos buscar a la vez.
+   *
+   * Sube a cuatro para el duo a media pantalla y vuelve a dos al salir, porque
+   * el detector cobra por mano y quien toca solo no tiene que pagar un duo que
+   * no esta usando. Se cambia en caliente y sin volver a cargar el modelo: lo
+   * que cambia es cuantas manos se buscan en el, no cual es.
+   *
+   * Se traga sus propios errores. Si cambiar la opcion fallara, lo que queda es
+   * el detector de antes funcionando: en el peor caso el duo a media pantalla ve
+   * dos manos en vez de cuatro y una de las dos personas se queda sin la suya de
+   * expresion. Tirar la excepcion aqui pararia el instrumento entero por eso.
+   */
+  async setHandCount(hands: number): Promise<void> {
+    const wanted = Math.max(1, Math.round(hands));
+    if (wanted === this.hands) return;
+    this.hands = wanted;
+    if (!this.landmarker) return;
+    try {
+      await this.landmarker.setOptions({ numHands: wanted });
+    } catch (error) {
+      console.warn('[theremano] no se ha podido cambiar el numero de manos', error);
     }
   }
 
