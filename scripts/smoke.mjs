@@ -884,6 +884,22 @@ if (drumLoopAlone < 0.02) {
   console.error('\nFALLO: la capa de bateria no suena sola, sin manos delante');
   process.exit(1);
 }
+/*
+ * Las manos de la capa tienen que ocupar sitio de verdad.
+ *
+ * Un liston en pixeles y no un "hay alguna diferencia" a proposito: la primera
+ * version sacaba la proporcion del video, que sin camara mide cero por cero, y
+ * con eso el palmo se encogia hasta dejar cada mano en una mota. Se dibujaban
+ * -la diferencia no era cero- y no se veian. Dos manos son miles de pixeles.
+ */
+if (withGhosts - withoutGhosts < 1500) {
+  console.error(`\nFALLO: las manos de la capa apenas se dibujan (${withGhosts - withoutGhosts} pixeles)`);
+  process.exit(1);
+}
+if (ghostsOffToast === ghostsOnToast) {
+  console.error('\nFALLO: la tecla G no dice si las manos de las capas se ven o no');
+  process.exit(1);
+}
 if (drumsOn.subtitulo === backToMelody.subtitulo) {
   console.error('\nFALLO: la tecla B no cambia de instrumento');
   process.exit(1);

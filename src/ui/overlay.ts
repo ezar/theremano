@@ -191,7 +191,7 @@ export class Overlay {
     const expression = frame.assignment.expression;
 
     // Debajo de las manos de verdad, que es el sitio: la propia va encima.
-    if (frame.ghosts) this.drawGhosts(target, rect, frame, videoWidth / Math.max(videoHeight, 1));
+    if (frame.ghosts) this.drawGhosts(target, rect, frame);
 
     if (expression) {
       // En bateria las dos manos hacen lo mismo, asi que la de expresion se
@@ -577,10 +577,22 @@ export class Overlay {
    * hay que poner la mano para que suene eso, y eso cambia si se cambia la
    * escala o se mueve una pieza de banda.
    */
-  private drawGhosts(target: RenderTarget, rect: Rect2, frame: OverlayFrame, aspect: number): void {
+  private drawGhosts(target: RenderTarget, rect: Rect2, frame: OverlayFrame): void {
     const { loops } = frame;
     if (loops.playhead < 0 || loops.cycleSeconds <= 0) return;
     const cycleTime = loops.playhead * loops.cycleSeconds;
+    /*
+     * La proporcion sale del recuadro que se esta pintando y no del video.
+     *
+     * Es lo mismo mientras haya camara, porque ese recuadro es justo el video
+     * recortado. Sin camara no lo es: el video mide cero por cero, y una
+     * proporcion de cero encoge el palmo hasta dejar la mano en una mota. Asi
+     * que se saca de donde la sacan las manos dibujadas de verdad -el propio
+     * destino, que es lo que vale cuando no hay video- y se comprueba, porque un
+     * destino de altura cero existe un fotograma al arrancar.
+     */
+    const measured = rect.w / rect.h;
+    const aspect = Number.isFinite(measured) && measured > 0 ? measured : 1;
     const scale = drawnScale(aspect);
     for (const track of loops.tracks) {
       if (track.muted) continue;
