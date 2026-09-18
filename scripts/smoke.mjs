@@ -353,24 +353,41 @@ console.log(JSON.stringify({ fields, afterScale, scale: JSON.parse(persisted ?? 
 const duo = [];
 for (const wanted of ['halves', 'hands', 'off']) {
   await page.selectOption('#set-duo', wanted);
-  await page.waitForTimeout(500);
+  // El guardado va agrupado con un temporizador de un cuarto de segundo, y esta
+  // pestana tiene la camara y el modelo corriendo: los temporizadores se
+  // retrasan. Con menos espera, lo que se lee del almacenamiento es el valor
+  // ANTERIOR y la prueba falla o pasa segun lo cargado que vaya el navegador.
+  await page.waitForTimeout(1200);
   duo.push(await page.evaluate(() => ({
     ajuste: document.getElementById('set-duo')?.value,
     guardado: JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').duo,
   })));
 }
-// Y por la tecla, que es por donde se usa de verdad: rota entre los tres.
-await page.click('#stage');
+
+/*
+ * Y por la tecla, que es por donde se usa de verdad.
+ *
+ * Con el panel cerrado: con el abierto, el foco esta en un control y las teclas
+ * del instrumento se ignoran a proposito para no grabar mientras alguien
+ * escribe. Se cierra y se vuelve a abrir con el mismo boton, que es la unica
+ * forma de dejarlo como estaba.
+ */
+await page.click('#settings-toggle');
+await page.waitForTimeout(300);
 const duoKeys = [];
 for (let press = 0; press < 3; press += 1) {
   await page.keyboard.press('d');
   await page.waitForTimeout(350);
-  duoKeys.push(await page.evaluate(() => ({
-    aviso: document.getElementById('toast')?.textContent ?? '',
-    ajuste: JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').duo,
-  })));
+  duoKeys.push(await page.evaluate(() => document.getElementById('toast')?.textContent ?? ''));
 }
-console.log(JSON.stringify({ duo, duoKeys }, null, 2));
+await page.click('#settings-toggle');
+await page.waitForTimeout(400);
+// Tres pulsaciones dan la vuelta entera: el desplegable tiene que haber vuelto a
+// donde estaba. Se mira ahi y no en el almacenamiento porque el desplegable
+// sigue al ajuste en el acto y el almacenamiento va agrupado.
+const duoAfterKeys = await page.evaluate(() => document.getElementById('set-duo')?.value);
+console.log(JSON.stringify({ duo, duoKeys, duoAfterKeys }, null, 2));
+
 await page.click('#settings-toggle');
 await page.waitForTimeout(300);
 
@@ -939,14 +956,14 @@ if (duo.some((each, i) => each.ajuste !== ['halves', 'hands', 'off'][i] || each.
   console.error('\nFALLO: el duo no se elige o no se guarda', JSON.stringify(duo));
   process.exit(1);
 }
-// Tres pulsaciones dan la vuelta entera, asi que se vuelve a donde estaba y por
-// el camino se ha pasado por los tres. Si la tecla no rotara, saldrian iguales.
-if (new Set(duoKeys.map((each) => each.ajuste)).size !== 3 || duoKeys[2].ajuste !== 'off') {
-  console.error('\nFALLO: la tecla D no rota entre los tres modos de duo', JSON.stringify(duoKeys));
+// Tres avisos distintos y vuelta al principio: la tecla ha pasado por los tres.
+// Si no rotara, o los tres avisos serian el mismo, o no volveria a 'off'.
+if (new Set(duoKeys).size !== 3) {
+  console.error('\nFALLO: los tres modos de duo no se anuncian distinto', JSON.stringify(duoKeys));
   process.exit(1);
 }
-if (new Set(duoKeys.map((each) => each.aviso)).size !== 3) {
-  console.error('\nFALLO: los tres modos de duo no se anuncian distinto', JSON.stringify(duoKeys));
+if (duoAfterKeys !== 'off') {
+  console.error(`\nFALLO: la tecla D no da la vuelta entera (acaba en ${duoAfterKeys})`);
   process.exit(1);
 }
 if (drumsOn.subtitulo === backToMelody.subtitulo) {
