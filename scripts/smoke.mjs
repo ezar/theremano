@@ -350,18 +350,30 @@ console.log(JSON.stringify({ fields, afterScale, scale: JSON.parse(persisted ?? 
  * digan lo mismo, y que apagarlo lo desmonte. Es el recorrido que toca el motor
  * de audio, que es lo unico de la aplicacion que no tiene pruebas en node.
  */
+/*
+ * Se espera a que el valor aparezca, no un rato fijo.
+ *
+ * El guardado va agrupado con un temporizador de un cuarto de segundo, y esta
+ * pestana tiene la camara y el modelo comiendose el hilo principal: ese
+ * temporizador se retrasa lo que le apetezca. Medido aparte, el guardado
+ * aterriza entre 250 y 500 ms; dentro de la prueba completa, con un segundo de
+ * espera fija seguia leyendose el valor ANTERIOR. Esperar mas no arregla eso,
+ * solo mueve el limite: lo que hay que hacer es preguntar hasta que conteste.
+ */
+const savedDuo = async (wanted) => {
+  for (let tries = 0; tries < 40; tries += 1) {
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').duo);
+    if (saved === wanted) return saved;
+    await page.waitForTimeout(250);
+  }
+  return page.evaluate(() => JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').duo);
+};
+
 const duo = [];
 for (const wanted of ['halves', 'hands', 'off']) {
   await page.selectOption('#set-duo', wanted);
-  // El guardado va agrupado con un temporizador de un cuarto de segundo, y esta
-  // pestana tiene la camara y el modelo corriendo: los temporizadores se
-  // retrasan. Con menos espera, lo que se lee del almacenamiento es el valor
-  // ANTERIOR y la prueba falla o pasa segun lo cargado que vaya el navegador.
-  await page.waitForTimeout(1200);
-  duo.push(await page.evaluate(() => ({
-    ajuste: document.getElementById('set-duo')?.value,
-    guardado: JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').duo,
-  })));
+  const guardado = await savedDuo(wanted);
+  duo.push({ ajuste: await page.evaluate(() => document.getElementById('set-duo')?.value), guardado });
 }
 
 /*
@@ -387,9 +399,6 @@ await page.waitForTimeout(400);
 // sigue al ajuste en el acto y el almacenamiento va agrupado.
 const duoAfterKeys = await page.evaluate(() => document.getElementById('set-duo')?.value);
 console.log(JSON.stringify({ duo, duoKeys, duoAfterKeys }, null, 2));
-
-await page.click('#settings-toggle');
-await page.waitForTimeout(300);
 
 // --- Cancion: elegirla amplia el rango si el encuadre se ha quedado corto.
 await page.evaluate(() => {
