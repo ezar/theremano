@@ -293,6 +293,8 @@ class Theremano {
         this.toggleMetronome();
       } else if (event.key.toLowerCase() === 'b') {
         this.toggleDrums();
+      } else if (event.key.toLowerCase() === 'g') {
+        this.toggleGhosts();
       } else if (event.key.toLowerCase() === 'v' && this.mode === 'camera') {
         // Sin camara no hay nada que ocultar: el fondo ya es el propio.
         this.toggleStageMode();
@@ -335,6 +337,20 @@ class Theremano {
     // dispara aunque no sea texto que nadie vaya a leer.
     const message = handsOnly ? t().toast.stageHands : t().toast.stageCamera;
     this.store.set({ stageMode: handsOnly ? 'hands' : 'camera' });
+    this.hud.toast(message);
+  }
+
+  /**
+   * Las manos de las capas.
+   *
+   * Tecla propia por lo mismo que la claqueta: se encienden para aprender el
+   * gesto de una capa y se apagan para tocar sin cuatro manos delante, y las dos
+   * cosas pasan tocando, no en un panel.
+   */
+  private toggleGhosts(): void {
+    const on = !this.store.get().ghosts;
+    const message = on ? t().toast.ghostsOn : t().toast.ghostsOff;
+    this.store.set({ ghosts: on });
     this.hud.toast(message);
   }
 
@@ -706,6 +722,8 @@ class Theremano {
       targetZone: performance.zoneAt(elapsed),
       drone: null,
       showRawTrace: false,
+      // En la demostracion no hay capas que dibujar, y el interruptor es de quien toca.
+      ghosts: false,
     };
 
     const dt = this.lastEffectsTime > 0 ? (now - this.lastEffectsTime) / 1000 : 1 / 60;
@@ -766,6 +784,8 @@ class Theremano {
       targetZone: null,
       drone: null,
       showRawTrace: false,
+      // En la demostracion no hay capas que dibujar, y el interruptor es de quien toca.
+      ghosts: false,
     };
 
     const dt = this.lastEffectsTime > 0 ? (now - this.lastEffectsTime) / 1000 : 1 / 60;
@@ -1266,6 +1286,7 @@ class Theremano {
       drums: settings.drums,
       kit: this.mapper.currentBands,
       showRawTrace: settings.showRawTrace,
+      ghosts: settings.ghosts,
     };
 
     // Los efectos avanzan una vez por fotograma aunque se pinten dos veces:

@@ -305,6 +305,7 @@ export class Controls {
     this.section(s.hudSection);
     this.checkbox('diagnostics', s.showDiagnostics, (x) => x.showDiagnostics, (v) => this.deps.store.set({ showDiagnostics: v }));
     this.checkbox('raw-trace', s.showRawTrace, (x) => x.showRawTrace, (v) => this.deps.store.set({ showRawTrace: v }));
+    this.checkbox('ghosts', s.ghosts, (x) => x.ghosts, (v) => this.deps.store.set({ ghosts: v }));
 
     const actions = document.createElement('div');
     actions.className = 'panel-actions';

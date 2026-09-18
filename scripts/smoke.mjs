@@ -696,6 +696,56 @@ await pointerPage.evaluate(() => window.__resetPeak());
 await pointerPage.waitForTimeout(2500);
 const drumLoopAlone = Number((await pointerPage.evaluate(() => window.__peak)).toFixed(4));
 
+/*
+ * --- Las manos de la capa grabada.
+ *
+ * La capa no guarda sonido, guarda el gesto, asi que se puede volver a dibujar
+ * la mano que la toco. Aqui hay justo lo que hace falta para verlo: un ritmo
+ * grabado dando vueltas y el raton fuera del encuadre, asi que lo unico que se
+ * mueve en el lienzo son las dos manos del fantasma. Se cuenta lo que hay
+ * pintado con ellas y sin ellas, tomando el maximo de varios fotogramas porque
+ * las manos se mueven y un solo fotograma podria pillarlas encimadas.
+ *
+ * Es la unica prueba que mira lo que de verdad se dibuja: lo demas comprueba que
+ * la mano reconstruida cae donde tiene que caer, no que llegue al lienzo.
+ */
+const paintedPixels = async () => {
+  let most = 0;
+  for (let sample = 0; sample < 8; sample += 1) {
+    most = Math.max(most, await pointerPage.evaluate(() => {
+      const canvas = document.getElementById('overlay');
+      const ctx = canvas?.getContext('2d');
+      if (!ctx) return 0;
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      /*
+       * Lo que no es el fondo, y con el liston bajo.
+       *
+       * No vale contar lo que tiene alfa: en esta pestana el modo de solo manos
+       * rellena el lienzo entero con su fondo. Y el liston va bajo a proposito:
+       * el fondo suma unos sesenta de los setecientos sesenta y cinco posibles,
+       * pero una mano fantasma se dibuja translucida y, sobre ese fondo, suma
+       * poco mas de doscientos. Con el liston ahi arriba se contaba el centro de
+       * cada trazo y se perdian los bordes, que es casi todo: la diferencia
+       * salia de doscientos pixeles en vez de un par de miles.
+       */
+      let lit = 0;
+      for (let i = 0; i < data.length; i += 4) if (data[i] + data[i + 1] + data[i + 2] > 90) lit += 1;
+      return lit;
+    }));
+    await pointerPage.waitForTimeout(70);
+  }
+  return most;
+};
+const withGhosts = await paintedPixels();
+await pointerPage.keyboard.press('g');
+await pointerPage.waitForTimeout(300);
+const ghostsOffToast = await pointerPage.textContent('#toast');
+const withoutGhosts = await paintedPixels();
+await pointerPage.keyboard.press('g');
+await pointerPage.waitForTimeout(300);
+const ghostsOnToast = await pointerPage.textContent('#toast');
+console.log(JSON.stringify({ withGhosts, withoutGhosts, ghostsOffToast, ghostsOnToast }, null, 2));
+
 // Y de vuelta a la melodia sin parar, para tocar encima.
 await pointerPage.keyboard.press('b');
 await pointerPage.waitForTimeout(500);

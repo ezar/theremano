@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { countExtendedFingers, palmCenter, pinchRatio } from '../src/mapping/features';
-import { buildDegreeTable, createLayout, isContinuous, midiToName, pitchAt, zoneCenters } from '../src/mapping/scales';
+import {
+  buildDegreeTable,
+  createLayout,
+  freqToMidi,
+  isContinuous,
+  midiToName,
+  pitchAt,
+  xForMidi,
+  zoneCenters,
+} from '../src/mapping/scales';
 import { es } from '../src/i18n/es';
 import { en } from '../src/i18n/en';
 
@@ -85,6 +94,52 @@ describe('escalas y cuantizacion', () => {
     expect(midiToName(69, en.notes)).toBe('A4');
     expect(midiToName(60, en.notes)).toBe('C4');
     expect(midiToName(61, en.notes)).toBe('C#4');
+  });
+
+  it('la vuelta lleva a la misma zona de la que salio, en cualquier escala', () => {
+    /*
+     * Deshacer la nota hasta la posicion es lo que permite dibujar la mano que
+     * grabo una capa de bucle. Si la ida y la vuelta se desalinearan aunque
+     * fuera media zona, esa mano senalaria la nota de al lado: una leccion
+     * equivocada se sigue igual de bien que una correcta.
+     */
+    for (const scale of ['pentatonic', 'major', 'blues'] as const) {
+      const layout = createLayout(scale, 4, 3, 2);
+      for (let zone = 0; zone < layout.degrees.length; zone += 1) {
+        const x = zone / Math.max(layout.degrees.length - 1, 1);
+        const back = xForMidi(layout, pitchAt(layout, x).midi);
+        expect(pitchAt(layout, back).index, `${scale} zona ${zone}`).toBe(zone);
+      }
+    }
+  });
+
+  it('y en continuo vuelve al punto exacto, que ahi no hay zonas', () => {
+    const layout = createLayout('continuous', 9, 3, 2);
+    for (const x of [0, 0.23, 0.5, 0.77, 1]) {
+      expect(xForMidi(layout, pitchAt(layout, x).midi)).toBeCloseTo(x, 9);
+    }
+  });
+
+  it('una nota que no existe en esta escala cae en la mas cercana', () => {
+    // Una capa grabada en otra escala trae notas que aqui no hay. Lo util es
+    // decir donde poner la mano para que suene lo mas parecido; lo inutil, y lo
+    // que hacia falta evitar, es no decir nada o senalar el borde.
+    const layout = createLayout('pentatonic', 9, 3, 2);
+    const laGrave = pitchAt(layout, 0).midi;
+    // Un semitono por encima de la tonica no es grado de la pentatonica menor.
+    const x = xForMidi(layout, laGrave + 1);
+    expect(pitchAt(layout, x).midi).toBe(laGrave);
+    expect(x).toBeGreaterThanOrEqual(0);
+    expect(x).toBeLessThanOrEqual(1);
+  });
+
+  it('la frecuencia tambien se deshace, y un cero no la vuelve infinita', () => {
+    expect(freqToMidi(440)).toBeCloseTo(69, 9);
+    expect(freqToMidi(880)).toBeCloseTo(81, 9);
+    // De una capa a medio leer puede llegar un cero, y log2(0) es un menos
+    // infinito que se propaga hasta la posicion de la mano.
+    expect(Number.isFinite(freqToMidi(0))).toBe(true);
+    expect(Number.isFinite(freqToMidi(-1))).toBe(true);
   });
 
   it('una posicion fuera de rango se recorta en lugar de romper', () => {

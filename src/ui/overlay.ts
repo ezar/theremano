@@ -2,7 +2,9 @@ import { HAND_BONES, point, type Finger, type Landmark, type RoleAssignment } fr
 import { denormalize, palmCenter } from '../mapping/features';
 import { midiToName, zoneCenters, type PitchLayout } from '../mapping/scales';
 import { t } from '../i18n';
-import type { LoopState } from '../audio/looper';
+import { TrackGhost } from '../mapping/ghost';
+import { drawnScale, phantomHand } from '../tracking/phantom';
+import type { LoopState, LoopTrack } from '../audio/looper';
 import { Visualizer } from './visualizer';
 import { coverRect, pitchHue, PIECE_HUE, type RenderTarget } from './target';
 import { BAND, KIT, bandCenter, type DrumPiece, type KitLayout } from '../mapping/kit';
@@ -53,6 +55,8 @@ export interface OverlayFrame {
    */
   kit: KitLayout;
   showRawTrace: boolean;
+  /** Dibujar las manos que grabaron cada capa mientras la capa suena. */
+  ghosts: boolean;
 }
 
 export interface PaintOptions {
@@ -79,6 +83,16 @@ export class Overlay {
   private readonly visualizer = new Visualizer();
   /** Lo que le queda de destello a cada banda, de 1 a 0. */
   private readonly flashes: Record<DrumPiece, number> = { kick: 0, snare: 0, hat: 0, crash: 0 };
+  /**
+   * Un fantasma por capa, preparado una vez.
+   *
+   * Preparar uno cuesta recorrer la capa entera deshaciendo cada evento, y una
+   * capa no cambia nunca despues de cerrarse. Ademas se pinta dos veces por
+   * fotograma mientras se graba un clip -la pantalla y el video-, asi que sin
+   * esto seria el doble de un trabajo que ya sobraba entero.
+   */
+  private readonly ghosts = new Map<number, TrackGhost>();
+  private ghostCycle = 0;
   private dpr = 1;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -175,6 +189,9 @@ export class Overlay {
 
     const melody = frame.assignment.melody;
     const expression = frame.assignment.expression;
+
+    // Debajo de las manos de verdad, que es el sitio: la propia va encima.
+    if (frame.ghosts) this.drawGhosts(target, rect, frame, videoWidth / Math.max(videoHeight, 1));
 
     if (expression) {
       // En bateria las dos manos hacen lo mismo, asi que la de expresion se
@@ -544,6 +561,89 @@ export class Overlay {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.fillText(label, palm.x, palm.y - 14 * target.unit);
+    ctx.restore();
+  }
+
+  /**
+   * Las manos que grabaron las capas, cada una en el color de la suya.
+   *
+   * Es lo que convierte un bucle en una leccion: la capa no guarda sonido, guarda
+   * el gesto, asi que se puede volver a dibujar la mano que lo hizo y poner la
+   * propia encima. Van debajo de las manos de verdad y translucidas -son una
+   * referencia, no el instrumento- y las silenciadas no salen, porque una mano
+   * moviendose sobre algo que no suena es exactamente la leccion equivocada.
+   *
+   * Y se dibujan con la escala y el reparto de AHORA: lo que ensenan es donde
+   * hay que poner la mano para que suene eso, y eso cambia si se cambia la
+   * escala o se mueve una pieza de banda.
+   */
+  private drawGhosts(target: RenderTarget, rect: Rect2, frame: OverlayFrame, aspect: number): void {
+    const { loops } = frame;
+    if (loops.playhead < 0 || loops.cycleSeconds <= 0) return;
+    const cycleTime = loops.playhead * loops.cycleSeconds;
+    const scale = drawnScale(aspect);
+    for (const track of loops.tracks) {
+      if (track.muted) continue;
+      for (const pose of this.ghostFor(track, loops).posesAt(cycleTime, frame.layout, frame.kit)) {
+        this.drawGhostHand(target, rect, phantomHand({ ...pose, aspect, scale }), track.hue);
+      }
+    }
+  }
+
+  private ghostFor(track: LoopTrack, loops: LoopState): TrackGhost {
+    // El compas lo fija la primera capa, asi que si cambia es que se vaciaron
+    // los bucles y lo que hay ahora es otra cosa con los mismos numeros.
+    if (loops.cycleSeconds !== this.ghostCycle) {
+      this.ghosts.clear();
+      this.ghostCycle = loops.cycleSeconds;
+    } else if (this.ghosts.size > loops.tracks.length) {
+      // Deshacer una capa la quita de la lista y deja aqui la suya: son cuatro
+      // como mucho a la vez, pero grabar y deshacer se puede hacer toda la tarde.
+      const live = new Set(loops.tracks.map((each) => each.id));
+      for (const id of [...this.ghosts.keys()]) if (!live.has(id)) this.ghosts.delete(id);
+    }
+    let ghost = this.ghosts.get(track.id);
+    if (!ghost) {
+      ghost = new TrackGhost(track, loops.cycleSeconds);
+      this.ghosts.set(track.id, ghost);
+    }
+    return ghost;
+  }
+
+  /**
+   * Una mano fantasma: el esqueleto entero de un color solo.
+   *
+   * Sin los colores por dedo de una mano de verdad, y a proposito: lo que tiene
+   * que decir de un vistazo es de que capa es, no que dedo es cual. El color es
+   * el mismo con el que esa capa sale en el anillo y en su carril.
+   */
+  private drawGhostHand(target: RenderTarget, rect: Rect2, landmarks: readonly Landmark[], hue: number): void {
+    if (landmarks.length < 21) return;
+    const { ctx } = target;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = `hsla(${hue}, 90%, 70%, 0.4)`;
+    ctx.lineWidth = 2 * target.unit;
+    ctx.beginPath();
+    for (const bone of HAND_BONES) {
+      for (const [a, b] of bone.pairs) {
+        const pa = this.toCanvas(rect, point(landmarks, a));
+        const pb = this.toCanvas(rect, point(landmarks, b));
+        ctx.moveTo(pa.x, pa.y);
+        ctx.lineTo(pb.x, pb.y);
+      }
+    }
+    ctx.stroke();
+
+    // La palma marcada, que es el punto que decide: la nota en melodia y la
+    // banda en bateria. Lo demas es la forma de la mano, no lo que hay que ir a
+    // buscar.
+    const palm = this.toCanvas(rect, palmCenter(landmarks));
+    ctx.fillStyle = `hsla(${hue}, 95%, 72%, 0.55)`;
+    ctx.beginPath();
+    ctx.arc(palm.x, palm.y, 4 * target.unit, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   }
 

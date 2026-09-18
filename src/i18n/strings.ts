@@ -213,6 +213,8 @@ export interface Strings {
     kitLevel: string;
     showDiagnostics: string;
     showRawTrace: string;
+    /** Las manos que grabaron cada capa, dibujadas mientras suena. */
+    ghosts: string;
     reset: string;
   };
 
@@ -246,6 +248,8 @@ export interface Strings {
     clipSaveFailed: string;
     stageHands: string;
     stageCamera: string;
+    ghostsOn: string;
+    ghostsOff: string;
     linkCopied: string;
     performanceCopied: (tracks: number) => string;
     performanceEmpty: string;

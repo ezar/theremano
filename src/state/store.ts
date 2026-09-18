@@ -56,6 +56,13 @@ export interface Settings {
   /** Claqueta continua mientras gira el bucle. */
   metronome: boolean;
   /**
+   * Las manos que grabaron cada capa, dibujadas mientras la capa suena.
+   *
+   * Se puede apagar porque con cuatro capas hay hasta cinco manos en pantalla y
+   * eso, para quien solo quiere tocar encima de su propio bucle, es ruido.
+   */
+  ghosts: boolean;
+  /**
    * Modo bateria: la mano golpea en lugar de sostener notas.
    *
    * De momento una sola voz y un tanteo: lo que se esta midiendo es si un golpe
@@ -101,6 +108,7 @@ export const DEFAULT_SETTINGS: Settings = {
   clipAspect: 'vertical',
   stageMode: 'camera',
   metronome: false,
+  ghosts: true,
   drums: false,
   kitBands: [...KIT],
   kitTuning: { kick: 0, snare: 0, hat: 0, crash: 0 },
