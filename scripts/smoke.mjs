@@ -339,6 +339,41 @@ const afterScale = await page.evaluate(() => document.getElementById('note-sub')
 const persisted = await page.evaluate(() => localStorage.getItem('theremano.settings.v1'));
 console.log(JSON.stringify({ fields, afterScale, scale: JSON.parse(persisted ?? '{}').scale }, null, 2));
 
+/*
+ * --- El duo: dos personas delante de la misma camara.
+ *
+ * Delante de la camara falsa no hay manos, asi que aqui no se puede comprobar
+ * que suenen dos: eso lo comprueban las pruebas del reparto, que meten cuatro
+ * manos de mentira por el mapeador de verdad. Lo que se comprueba aqui es lo
+ * que aquellas no pueden: que encenderlo monte de verdad la segunda voz y
+ * cuatro manos en el detector sin tirar la pagina, que el ajuste y la tecla
+ * digan lo mismo, y que apagarlo lo desmonte. Es el recorrido que toca el motor
+ * de audio, que es lo unico de la aplicacion que no tiene pruebas en node.
+ */
+const duo = [];
+for (const wanted of ['halves', 'hands', 'off']) {
+  await page.selectOption('#set-duo', wanted);
+  await page.waitForTimeout(500);
+  duo.push(await page.evaluate(() => ({
+    ajuste: document.getElementById('set-duo')?.value,
+    guardado: JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').duo,
+  })));
+}
+// Y por la tecla, que es por donde se usa de verdad: rota entre los tres.
+await page.click('#stage');
+const duoKeys = [];
+for (let press = 0; press < 3; press += 1) {
+  await page.keyboard.press('d');
+  await page.waitForTimeout(350);
+  duoKeys.push(await page.evaluate(() => ({
+    aviso: document.getElementById('toast')?.textContent ?? '',
+    ajuste: JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').duo,
+  })));
+}
+console.log(JSON.stringify({ duo, duoKeys }, null, 2));
+await page.click('#settings-toggle');
+await page.waitForTimeout(300);
+
 // --- Cancion: elegirla amplia el rango si el encuadre se ha quedado corto.
 await page.evaluate(() => {
   const range = document.getElementById('set-range');
@@ -898,6 +933,20 @@ if (withGhosts - withoutGhosts < 1500) {
 }
 if (ghostsOffToast === ghostsOnToast) {
   console.error('\nFALLO: la tecla G no dice si las manos de las capas se ven o no');
+  process.exit(1);
+}
+if (duo.some((each, i) => each.ajuste !== ['halves', 'hands', 'off'][i] || each.guardado !== each.ajuste)) {
+  console.error('\nFALLO: el duo no se elige o no se guarda', JSON.stringify(duo));
+  process.exit(1);
+}
+// Tres pulsaciones dan la vuelta entera, asi que se vuelve a donde estaba y por
+// el camino se ha pasado por los tres. Si la tecla no rotara, saldrian iguales.
+if (new Set(duoKeys.map((each) => each.ajuste)).size !== 3 || duoKeys[2].ajuste !== 'off') {
+  console.error('\nFALLO: la tecla D no rota entre los tres modos de duo', JSON.stringify(duoKeys));
+  process.exit(1);
+}
+if (new Set(duoKeys.map((each) => each.aviso)).size !== 3) {
+  console.error('\nFALLO: los tres modos de duo no se anuncian distinto', JSON.stringify(duoKeys));
   process.exit(1);
 }
 if (drumsOn.subtitulo === backToMelody.subtitulo) {

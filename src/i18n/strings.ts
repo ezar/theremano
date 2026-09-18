@@ -215,6 +215,12 @@ export interface Strings {
     showRawTrace: string;
     /** Las manos que grabaron cada capa, dibujadas mientras suena. */
     ghosts: string;
+    /** Dos personas delante de la misma camara. */
+    duo: string;
+    duoOptionOff: string;
+    duoOptionHalves: string;
+    duoOptionHands: string;
+    duoHint: string;
     reset: string;
   };
 
@@ -250,6 +256,10 @@ export interface Strings {
     stageCamera: string;
     ghostsOn: string;
     ghostsOff: string;
+    /** El duo, que rota entre tres con la tecla D. */
+    duoOff: string;
+    duoHalves: string;
+    duoHands: string;
     linkCopied: string;
     performanceCopied: (tracks: number) => string;
     performanceEmpty: string;

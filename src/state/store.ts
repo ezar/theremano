@@ -6,6 +6,7 @@ import {
   normalizePieceNumbers,
   type DrumPiece,
 } from '../mapping/kit';
+import { isDuoMode, type DuoMode } from '../tracking/duo';
 import type { ScaleId } from '../mapping/scales';
 import type { PresetId } from '../audio/presets';
 import type { ClipAspect } from '../capture/recorder';
@@ -55,6 +56,15 @@ export interface Settings {
   stageMode: StageMode;
   /** Claqueta continua mientras gira el bucle. */
   metronome: boolean;
+  /**
+   * Dos personas delante de la misma camara.
+   *
+   * 'off' es una sola, que es lo de siempre. 'halves' les da media pantalla a
+   * cada una, con sus dos manos y la escala entera dentro de su mitad. 'hands'
+   * les da una mano a cada una sobre el encuadre completo, sin mano de
+   * expresion y pudiendo cruzarse.
+   */
+  duo: DuoMode;
   /**
    * Las manos que grabaron cada capa, dibujadas mientras la capa suena.
    *
@@ -108,6 +118,7 @@ export const DEFAULT_SETTINGS: Settings = {
   clipAspect: 'vertical',
   stageMode: 'camera',
   metronome: false,
+  duo: 'off',
   ghosts: true,
   drums: false,
   kitBands: [...KIT],
@@ -165,6 +176,9 @@ function loadPersisted(): Settings {
      * se cuelan por esa puerta. La primera deja una banda golpeando un undefined
      * y la ultima apaga la pieza entera sin decir nada.
      */
+    // Una cadena cualquiera pasa la puerta del tipo y aqui dejaria un duo que no
+    // existe: dos manos repartidas en dos instrumentos sin la segunda voz.
+    if (!isDuoMode(merged.duo)) merged.duo = DEFAULT_SETTINGS.duo;
     merged.kitBands = normalizeLayout(merged.kitBands);
     merged.kitTuning = normalizePieceNumbers(merged.kitTuning, 0, -TUNING_RANGE, TUNING_RANGE);
     merged.kitLevel = normalizePieceNumbers(merged.kitLevel, 1, 0, MAX_LEVEL);

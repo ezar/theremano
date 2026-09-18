@@ -212,6 +212,15 @@ export function normalizeIn(v: number, lens: Lens): number {
   return normalize((v - lens.from) / span);
 }
 
+/**
+ * Inversa de normalizeIn. La necesita el overlay por lo mismo que la otra: en
+ * duo, la rejilla de cada persona tiene que dibujarse sobre su mitad, que es
+ * donde de verdad hay que poner la mano.
+ */
+export function denormalizeIn(v: number, lens: Lens): number {
+  return lens.from + denormalize(v) * (lens.to - lens.from);
+}
+
 export function melodyFeatures(landmarks: readonly Landmark[], lens: Lens = FULL_LENS): MelodyFeatures {
   const palm = palmCenter(landmarks);
   return { x: normalizeIn(palm.x, lens), y: normalize(palm.y), pinch: pinchRatio(landmarks) };

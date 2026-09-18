@@ -1,4 +1,5 @@
 import { PRESETS, type PresetId } from '../audio/presets';
+import { isDuoMode } from '../tracking/duo';
 import { MELODIES, type MelodyKind } from '../mapping/melodies';
 import { SCALES, type ScaleId } from '../mapping/scales';
 import { KIT, MAX_LEVEL, TUNING_RANGE, type DrumPiece } from '../mapping/kit';
@@ -292,6 +293,20 @@ export class Controls {
       this.deps.onCameraChange(value || null);
     });
     this.checkbox('mirror', s.mirror, (x) => x.mirror, (v) => this.deps.store.set({ mirror: v }));
+    // Aqui y no en el bloque del instrumento: lo que decide es cuanta gente cabe
+    // delante de la camara, que es una pregunta sobre la camara.
+    this.select(
+      'duo',
+      s.duo,
+      [
+        { value: 'off', label: s.duoOptionOff },
+        { value: 'halves', label: s.duoOptionHalves },
+        { value: 'hands', label: s.duoOptionHands },
+      ],
+      (x) => x.duo,
+      (value) => this.deps.store.set({ duo: isDuoMode(value) ? value : 'off' }),
+    );
+    this.hint(s.duoHint);
 
     this.section(s.smoothingSection);
     this.hint(s.smoothingHint);

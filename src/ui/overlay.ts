@@ -1,5 +1,5 @@
 import { HAND_BONES, point, type Finger, type Landmark, type RoleAssignment } from '../tracking/types';
-import { denormalize, palmCenter } from '../mapping/features';
+import { FULL_LENS, denormalize, denormalizeIn, palmCenter, type Lens } from '../mapping/features';
 import { midiToName, zoneCenters, type PitchLayout } from '../mapping/scales';
 import { t } from '../i18n';
 import { TrackGhost } from '../mapping/ghost';
@@ -57,6 +57,31 @@ export interface OverlayFrame {
   showRawTrace: boolean;
   /** Dibujar las manos que grabaron cada capa mientras la capa suena. */
   ghosts: boolean;
+  /**
+   * La franja de quien toca. El encuadre entero salvo en duo a media pantalla.
+   *
+   * La rejilla y las bandas se dibujan dentro de ella, y ahi esta todo el
+   * asunto: sin esto, en duo a media pantalla las dos personas verian las notas
+   * donde no estan, que es peor que no ver rejilla ninguna.
+   */
+  lens: Lens;
+  /** La segunda persona, si hay duo. Se dibuja igual que la primera. */
+  partner: PartnerFrame | null;
+}
+
+/**
+ * Lo poco que hace falta para dibujar a la otra persona.
+ *
+ * No un OverlayFrame entero: casi todo lo que hay ahi -los bucles, la guia, el
+ * rotulo de la nota- es de una sola persona y ya esta puesto. Lo que cambia entre
+ * las dos es donde tienen las manos, en que franja tocan y que nota estan
+ * apuntando.
+ */
+export interface PartnerFrame {
+  assignment: RoleAssignment;
+  lens: Lens;
+  pitchX: number;
+  gateOpen: boolean;
 }
 
 export interface PaintOptions {
@@ -184,8 +209,26 @@ export class Overlay {
     // La rejilla se calibro contra una imagen de camara. Sobre el fondo oscuro
     // del modo de solo manos, con esos mismos valores, casi no se ve: hay que
     // subirla, porque ahi es de lo poco que queda en pantalla.
-    if (frame.drums) this.drawKit(target, rect, frame.kit, options.backdrop ? 1.7 : 1);
-    else this.drawGrid(target, rect, frame, options.backdrop ? 1.7 : 1);
+    const lift = options.backdrop ? 1.7 : 1;
+    const mine = { pitchX: frame.pitchX, gateOpen: frame.gateOpen };
+    const partner = frame.partner;
+    /*
+     * Una rejilla por franja, no una por persona.
+     *
+     * A media pantalla son dos cosas distintas y hay dos rejillas, cada una con
+     * su escala entera: sin la suya, la segunda persona no sabe donde estan sus
+     * notas, porque la de al lado no le sirve. A una mano cada una las dos
+     * franjas son la misma, y ahi dibujarla dos veces no anade nada: suma la
+     * misma linea sobre si misma y la deja del doble de fuerte.
+     */
+    const shared = partner !== null && partner.lens.from === frame.lens.from && partner.lens.to === frame.lens.to;
+    if (frame.drums) this.drawKit(target, rect, frame.kit, lift, frame.lens);
+    else this.drawGrid(target, rect, frame, lift, frame.lens, shared && partner ? [mine, partner] : [mine], frame.targetZone);
+    if (partner && !shared) {
+      if (frame.drums) this.drawKit(target, rect, frame.kit, lift, partner.lens);
+      else this.drawGrid(target, rect, frame, lift, partner.lens, [partner], null);
+      this.drawSplit(target, rect, frame);
+    }
 
     const melody = frame.assignment.melody;
     const expression = frame.assignment.expression;
@@ -201,6 +244,23 @@ export class Overlay {
       if (!frame.drums) this.drawRoleTag(target, rect, expression.hand.landmarks, t().overlay.expressionTag, expression.held);
       if (frame.drone !== null) this.drawDrone(target, rect, expression.hand.landmarks, frame.drone);
     }
+    // La otra persona, antes que la propia: al cruzarse, las manos de uno tienen
+    // que quedar encima de las del otro, que es lo que dice cual es la tuya.
+    if (partner) {
+      for (const role of ['expression', 'melody'] as const) {
+        const tracked = partner.assignment[role];
+        if (!tracked) continue;
+        this.drawHand(target, rect, tracked.hand.landmarks, tracked.held, 1);
+        // Con su rotulo, igual que la propia: saber cual de tus dos manos lleva
+        // la nota es lo primero que hay que saber, y en duo hay cuatro manos
+        // repartidas en dos instrumentos.
+        if (!frame.drums) {
+          const label = role === 'melody' ? t().overlay.melodyTag : t().overlay.expressionTag;
+          this.drawRoleTag(target, rect, tracked.hand.landmarks, label, tracked.held);
+        }
+      }
+    }
+
     if (melody) {
       if (frame.showRawTrace) this.drawRawTrace(target, rect, melody.hand.raw);
       this.drawHand(target, rect, melody.hand.landmarks, melody.held, 1, frame.gateOpen);
@@ -283,7 +343,7 @@ export class Overlay {
    * dejarian lo unico que importa —donde acaba una pieza y empieza la otra— sin
    * dibujar.
    */
-  private drawKit(target: RenderTarget, rect: Rect2, bands: KitLayout, lift: number): void {
+  private drawKit(target: RenderTarget, rect: Rect2, bands: KitLayout, lift: number, lens: Lens = FULL_LENS): void {
     const { ctx } = target;
     const top = target.height * 0.08;
     const bottom = target.height * 0.84;
@@ -301,8 +361,8 @@ export class Overlay {
       // suene otra. El respaldo es para el compilador, que eso no lo sabe.
       const piece = bands[i] ?? KIT[i]!;
       const hue = PIECE_HUE[piece];
-      const left = rect.x + denormalize(i * BAND) * rect.w;
-      const right = rect.x + denormalize((i + 1) * BAND) * rect.w;
+      const left = rect.x + denormalizeIn(i * BAND, lens) * rect.w;
+      const right = rect.x + denormalizeIn((i + 1) * BAND, lens) * rect.w;
       const flash = this.flashes[piece];
 
       // El relleno permanente es casi invisible y aun asi hace todo el trabajo:
@@ -338,7 +398,23 @@ export class Overlay {
     ctx.restore();
   }
 
-  private drawGrid(target: RenderTarget, rect: Rect2, frame: OverlayFrame, lift: number): void {
+  /**
+   * @param lens la franja sobre la que se dibuja.
+   * @param highlights una columna encendida por persona que toque EN esta franja.
+   * Son varias porque a una mano cada una las dos comparten encuadre: ahi la
+   * rejilla es una sola y lo que hay que ver son las dos notas a la vez. A media
+   * pantalla es una por rejilla, que es el caso de siempre con otro nombre.
+   * @param targetZone la guia, que es de quien toca y no de la otra persona.
+   */
+  private drawGrid(
+    target: RenderTarget,
+    rect: Rect2,
+    frame: OverlayFrame,
+    lift: number,
+    lens: Lens,
+    highlights: readonly { pitchX: number; gateOpen: boolean }[],
+    targetZone: number | null,
+  ): void {
     const { ctx } = target;
     const centers = zoneCenters(frame.layout);
     if (centers.length === 0) return;
@@ -349,10 +425,12 @@ export class Overlay {
     const bottom = target.height * 0.84;
     const labelY = target.height * 0.885;
     const labelPad = 24 * target.unit;
-    const activeIndex =
-      frame.pitchX >= 0 && centers.length > 1
-        ? Math.round(Math.min(1, Math.max(0, frame.pitchX)) * (centers.length - 1))
-        : -1;
+    const actives = highlights
+      .filter((each) => each.pitchX >= 0 && centers.length > 1)
+      .map((each) => ({
+        index: Math.round(Math.min(1, Math.max(0, each.pitchX)) * (centers.length - 1)),
+        gateOpen: each.gateOpen,
+      }));
 
     ctx.save();
     ctx.font = `${11 * target.unit}px ui-monospace, monospace`;
@@ -360,23 +438,24 @@ export class Overlay {
 
     for (let i = 0; i < centers.length; i += 1) {
       const zone = centers[i] ?? 0;
-      const x = rect.x + denormalize(zone) * rect.w;
+      const x = rect.x + denormalizeIn(zone, lens) * rect.w;
       const semitone = frame.layout.degrees[i] ?? 0;
       const isTonic = semitone % 12 === 0;
-      const isActive = i === activeIndex;
-      const isTarget = i === frame.targetZone;
+      const active = actives.find((each) => each.index === i);
+      const isActive = active !== undefined;
+      const isTarget = i === targetZone;
 
       if (isActive) {
         // Columna de luz en la zona activa: el interprete ve donde esta antes de
         // que suene, que es lo que permite apuntar a una nota concreta.
         const hue = pitchHue(frame.layout.baseMidi + semitone);
         const column = ctx.createLinearGradient(x, top, x, bottom);
-        const alpha = frame.gateOpen ? 0.3 : 0.12;
+        const alpha = active!.gateOpen ? 0.3 : 0.12;
         column.addColorStop(0, `hsla(${hue}, 95%, 65%, 0)`);
         column.addColorStop(0.5, `hsla(${hue}, 95%, 65%, ${alpha})`);
         column.addColorStop(1, `hsla(${hue}, 95%, 65%, 0)`);
         ctx.fillStyle = column;
-        const halfWidth = (rect.w / Math.max(centers.length - 1, 1)) * 0.42;
+        const halfWidth = ((rect.w * (lens.to - lens.from)) / Math.max(centers.length - 1, 1)) * 0.42;
         ctx.fillRect(x - halfWidth, top, halfWidth * 2, bottom - top);
       }
 
@@ -561,6 +640,33 @@ export class Overlay {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.fillText(label, palm.x, palm.y - 14 * target.unit);
+    ctx.restore();
+  }
+
+  /**
+   * La tierra de nadie de en medio, en duo a media pantalla.
+   *
+   * Es el sitio donde no se toca: los margenes de las dos franjas juntos. Sin
+   * dibujarlo, las dos rejillas parecen una sola rejilla rara con un hueco en el
+   * centro, y quien esta cerca del borde no entiende por que su nota no se mueve.
+   * Con esto se ve que son dos instrumentos, uno al lado del otro.
+   */
+  private drawSplit(target: RenderTarget, rect: Rect2, frame: OverlayFrame): void {
+    const partner = frame.partner;
+    if (!partner || partner.lens.from === frame.lens.from) return;
+    const { ctx } = target;
+    const left = rect.x + denormalizeIn(1, frame.lens) * rect.w;
+    const right = rect.x + denormalizeIn(0, partner.lens) * rect.w;
+    if (right <= left) return;
+    const top = target.height * 0.08;
+    const bottom = target.height * 0.84;
+    ctx.save();
+    const band = ctx.createLinearGradient(left, top, left, bottom);
+    band.addColorStop(0, 'rgba(255,255,255,0)');
+    band.addColorStop(0.5, 'rgba(255,255,255,0.07)');
+    band.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = band;
+    ctx.fillRect(left, top, right - left, bottom - top);
     ctx.restore();
   }
 

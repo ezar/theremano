@@ -25,6 +25,10 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
   claqueta por delante de la primera. Esa marca el compás; las siguientes se
   graban encima sin esperar a que la vuelta termine, y con una claqueta continua
   que reparte la propia vuelta para poder entrar a tiempo. Tecla **M**.
+- **Tocar entre dos** — dos personas delante de la misma cámara, cada una con su
+  instrumento entero: su voz, su filtro y su pedal. A media pantalla cada una
+  tiene sus dos manos y la escala completa en su mitad; a una mano cada una
+  compartís el encuadre y podéis cruzaros. Tecla **D**.
 - **Las manos de cada capa** — una capa no guarda sonido, guarda el gesto, así
   que mientras suena se vuelve a dibujar la mano que la tocó, en el color de su
   carril. Se pone la propia encima y se copia. Tecla **G**.
@@ -258,7 +262,8 @@ timbre ocurre de verdad, no cuando se levantan dedos.
 
 Con teclado: **espacio** graba una capa de bucle, **C** graba un clip, **Z**
 quita la última capa, **V** oculta o muestra la cámara, **G** muestra u oculta
-las manos de las capas, **H** abre la ayuda.
+las manos de las capas, **D** cambia entre tocar solo y las dos formas de tocar
+en dúo, **H** abre la ayuda.
 
 ### Solo manos
 
@@ -465,6 +470,58 @@ un dedo más corto y algo arqueado, no como un dedo que se tuerce de lado.
 Si hay una melodía elegida, se toca esa; si no, «Estrellita», que se reconoce en
 dos notas y cabe en una octava. En cualquier caso queda elegida al salir, así
 que quien entre después se encuentra guiada la que acaba de ver.
+
+---
+
+## Sobre tocar entre dos
+
+El instrumento es monofónico porque una persona tiene una voz. Con dos personas
+deja de serlo, y eso no se consigue añadiéndole voces a un instrumento: se
+consigue añadiendo instrumentos. Cada una tiene el suyo entero —su mapeador, sus
+filtros, su gate, su pedal y su voz— sin compartir un solo campo. Salió más
+barato de lo que parece porque el mapeador ya era una cosa por instancia; lo que
+hubo que separar fue la voz en directo, que vivía dentro del motor de audio y era
+la única que había.
+
+Hay dos maneras de repartirse y no sobra ninguna. **A media pantalla**, cada una
+tiene su mitad y dentro de ella toca con sus dos manos, igual que siempre: hay
+mano de melodía y mano de expresión, con su volumen y su pedal. **A una mano cada
+una**, las dos sobre el encuadre completo: se pierde la mano de expresión y a
+cambio las dos tocan el mismo rango, que es lo que hace falta para perseguirse,
+doblar una melodía o repartirse un acorde.
+
+Dentro de su mitad, cada persona tiene la escala entera. Media escala por cabeza
+no sería un dúo, sería un instrumento partido. Y los márgenes de las dos mitades
+se juntan en el centro y forman una tierra de nadie, que no es un efecto
+secundario sino lo que hace falta: sin ella, acercarse al centro sería tocar la
+nota más aguda de tu mitad mientras la otra persona toca la más grave de la suya
+a un dedo de distancia.
+
+Lo único de verdad nuevo es de quién es cada mano, que es una pregunta que hasta
+ahora no se hacía nadie porque la respuesta era siempre la misma. El reparto de
+papeles de siempre —melodía y expresión por continuidad entre fotogramas— es
+exactamente lo que hace falta *dentro* de una persona y exactamente lo que no
+vale *entre* dos: la mano derecha de quien está a la izquierda y la izquierda de
+quien está a la derecha son vecinas en pantalla, así que con un solo reparto
+acabarían siendo la melodía y la expresión de un mismo instrumento fantasma que
+no toca nadie. Hay uno por persona.
+
+Y una cosa que hubo que arreglar de camino: dos manos que se cruzan se
+intercambiaban el papel para siempre. En el fotograma del cruce están las dos en
+el mismo sitio, la más cercana a donde estaba cada una es la otra, y a partir de
+ahí se quedan cambiadas. Ahora la posición se adelanta con la velocidad que trae
+la mano antes de buscarle pareja, que lo arregla porque una mano que cruza
+*sigue*, y donde va a estar ya no es donde va a estar la otra. No hay que adivinar
+nada: la velocidad es la que trae, medida entre fotogramas. A una mano cada una
+eso era lo peor que podía pasar —la nota de cada una salta a la de la otra— y
+tocando solo tampoco era gracioso, porque la mano que llevaba la nota pasaba a
+llevar el volumen.
+
+Lo que el dúo **no** hace todavía: la segunda persona no graba en la estación de
+bucles, no mueve el rótulo de la nota y no lleva la melodía guiada. Las tres son
+de una sola persona —una capa es monofónica, el rótulo dice una nota y la guía
+apunta a una mano— y repartirlas entre dos pide decidir de quién son. Los golpes
+de batería sí suenan para las dos: el kit es uno y está en el encuadre.
 
 ---
 
