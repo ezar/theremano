@@ -283,6 +283,9 @@ export const en: Strings = {
     kitBand: 'Band',
     kitTuning: 'Tuning (semitones)',
     kitLevel: 'Volume',
+    kitSpace: 'Room',
+    swing: 'Swing',
+    swingHint: 'Pushes the off-beat eighth back, which is what separates a played groove from a square one. It applies on playback, so you can move it while the loop turns and going back to zero returns what you played.',
     showDiagnostics: 'Show fps and latency',
     showRawTrace: 'Overlay unfiltered points',
     ghosts: 'Hands from recorded layers',
@@ -291,6 +294,7 @@ export const en: Strings = {
     duoOptionHalves: 'Half the screen each',
     duoOptionHands: 'One hand each',
     duoHint: 'Half the screen each means you both play with two hands and get the whole scale inside your own half. One hand each means you share the whole frame and can cross over, but there is no expression hand: no volume, no brightness, no drone.',
+    presetTwo: 'The other player’s timbre',
     reset: 'Reset',
   },
 

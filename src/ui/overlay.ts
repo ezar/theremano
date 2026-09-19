@@ -101,6 +101,14 @@ export interface PaintOptions {
   watermark?: boolean;
   /** Nota grande sobreimpresa. En pantalla la pone el HUD en HTML. */
   caption?: boolean;
+  /**
+   * Lo fuerte que se dibujan las manos de las capas. 1 es lo normal.
+   *
+   * Sobre el instrumento van tenues a proposito: son una referencia y lo que
+   * manda es la mano propia. En la pantalla de escuchar no hay mano propia ni
+   * instrumento, asi que ahi son lo unico que hay que ver y suben.
+   */
+  ghostStrength?: number;
 }
 
 export class Overlay {
@@ -234,7 +242,7 @@ export class Overlay {
     const expression = frame.assignment.expression;
 
     // Debajo de las manos de verdad, que es el sitio: la propia va encima.
-    if (frame.ghosts) this.drawGhosts(target, rect, frame);
+    if (frame.ghosts) this.drawGhosts(target, rect, frame, options.ghostStrength ?? 1);
 
     if (expression) {
       // En bateria las dos manos hacen lo mismo, asi que la de expresion se
@@ -683,7 +691,7 @@ export class Overlay {
    * hay que poner la mano para que suene eso, y eso cambia si se cambia la
    * escala o se mueve una pieza de banda.
    */
-  private drawGhosts(target: RenderTarget, rect: Rect2, frame: OverlayFrame): void {
+  private drawGhosts(target: RenderTarget, rect: Rect2, frame: OverlayFrame, strength: number): void {
     const { loops } = frame;
     if (loops.playhead < 0 || loops.cycleSeconds <= 0) return;
     const cycleTime = loops.playhead * loops.cycleSeconds;
@@ -703,7 +711,7 @@ export class Overlay {
     for (const track of loops.tracks) {
       if (track.muted) continue;
       for (const pose of this.ghostFor(track, loops).posesAt(cycleTime, frame.layout, frame.kit)) {
-        this.drawGhostHand(target, rect, phantomHand({ ...pose, aspect, scale }), track.hue);
+        this.drawGhostHand(target, rect, phantomHand({ ...pose, aspect, scale }), track.hue, strength);
       }
     }
   }
@@ -735,14 +743,23 @@ export class Overlay {
    * que decir de un vistazo es de que capa es, no que dedo es cual. El color es
    * el mismo con el que esa capa sale en el anillo y en su carril.
    */
-  private drawGhostHand(target: RenderTarget, rect: Rect2, landmarks: readonly Landmark[], hue: number): void {
+  private drawGhostHand(
+    target: RenderTarget,
+    rect: Rect2,
+    landmarks: readonly Landmark[],
+    hue: number,
+    strength: number,
+  ): void {
     if (landmarks.length < 21) return;
     const { ctx } = target;
+    // Nunca opaca del todo: una mano fantasma que tapa lo que hay detras deja de
+    // leerse como una referencia y empieza a leerse como la mano de verdad.
+    const alpha = Math.min(0.85, 0.4 * strength);
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = `hsla(${hue}, 90%, 70%, 0.4)`;
-    ctx.lineWidth = 2 * target.unit;
+    ctx.strokeStyle = `hsla(${hue}, 90%, 70%, ${alpha})`;
+    ctx.lineWidth = (strength > 1 ? 2.6 : 2) * target.unit;
     ctx.beginPath();
     for (const bone of HAND_BONES) {
       for (const [a, b] of bone.pairs) {
@@ -758,7 +775,7 @@ export class Overlay {
     // banda en bateria. Lo demas es la forma de la mano, no lo que hay que ir a
     // buscar.
     const palm = this.toCanvas(rect, palmCenter(landmarks));
-    ctx.fillStyle = `hsla(${hue}, 95%, 72%, 0.55)`;
+    ctx.fillStyle = `hsla(${hue}, 95%, 72%, ${Math.min(0.95, 0.55 * strength)})`;
     ctx.beginPath();
     ctx.arc(palm.x, palm.y, 4 * target.unit, 0, Math.PI * 2);
     ctx.fill();

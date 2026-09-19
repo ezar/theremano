@@ -123,6 +123,30 @@ describe('el reparto entre dos personas', () => {
   });
 });
 
+describe('el timbre de cada persona', () => {
+  it('cada mapeador lee el suyo, no el de la otra', () => {
+    /*
+     * El timbre se elige con los dedos de la mano de melodia, y en duo hay dos
+     * manos de melodia. Si los dos mapeadores leyeran el mismo ajuste, abrir la
+     * mano de una le cambiaria el timbre a la otra a mitad de nota: el gesto mas
+     * facil de hacer sin querer, con el efecto mas raro de explicar.
+     */
+    const settings = { ...DEFAULT_SETTINGS, preset: 'theremin' as const, presetTwo: 'bass' as const };
+    const first = new Mapper(settings);
+    const second = new Mapper(settings);
+    second.asSecond(settings);
+    expect(first.currentPreset.id).toBe('theremin');
+    expect(second.currentPreset.id).toBe('bass');
+  });
+
+  it('y de fabrica no son el mismo', () => {
+    // Dos instrumentos con el mismo timbre tocando a la vez suenan a uno
+    // desafinado. Encender el duo y que suenen iguales es la primera impresion
+    // equivocada, asi que vienen distintos de serie.
+    expect(DEFAULT_SETTINGS.presetTwo).not.toBe(DEFAULT_SETTINGS.preset);
+  });
+});
+
 describe('la franja de cada persona', () => {
   it('cada mitad da la escala entera, no media escala', () => {
     /*

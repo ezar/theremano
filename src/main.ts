@@ -10,6 +10,7 @@ import { PointerPlayer } from './mapping/pointer';
 import { GuideSession, getMelody } from './mapping/melodies';
 import { decodeSettings, hasShareableKeys, readPerformanceParam, shareUrl } from './state/share';
 import { decodePerformance, encodePerformance, type Performance } from './state/performance';
+import type { LiveSnapshot } from './audio/loopTake';
 import { i18n, t } from './i18n';
 import { applyStaticStrings } from './ui/static';
 import { Camera, HIGH_RES, LOW_RES, attachStream, type CameraInfo } from './camera/stream';
@@ -117,6 +118,8 @@ class Theremano {
   private second: Mapper | null = null;
   /** Lo ultimo que repartio el duo. Lo mira el overlay para dibujar a las dos. */
   private players: Player[] = [];
+  /** Lo que toca la segunda persona en este fotograma, para su capa. */
+  private secondLive: LiveSnapshot | null = null;
   private readonly hud = new Hud();
   private readonly overlay: Overlay;
   private readonly controls: Controls;
@@ -158,6 +161,8 @@ class Theremano {
   private brokenPerformance = false;
   /** Sonando el enlace sin haber arrancado la camara. */
   private listening = false;
+  private ghostScreenHandle: number | null = null;
+  private lastGhostAt = 0;
   private mode: PlayMode = 'camera';
   private readonly pointer = new PointerPlayer();
   /** El dedo o el boton que toca la melodia. */
@@ -197,6 +202,7 @@ class Theremano {
     if (encoded) {
       this.pendingPerformance = decodePerformance(encoded);
       this.brokenPerformance = this.pendingPerformance === null;
+      this.adoptKit(this.pendingPerformance);
     }
 
     const settings = this.store.get();
@@ -402,7 +408,16 @@ class Theremano {
     // El modo se fija al empezar la toma y no cambia a mitad: se puede grabar un
     // ritmo, pasar a la melodia en caliente y tocar encima de lo grabado, que es
     // justo para lo que existe el cambio en caliente.
-    switch (this.looper.toggle(settings.preset, settings.drums)) {
+    /*
+     * Un timbre por persona que este tocando, y de ahi salen las tomas.
+     *
+     * En duo son dos instrumentos a la vez y una capa es monofonica, asi que
+     * grabar "lo que suena" no cabe en una capa: se abren dos. Quien no toque
+     * nada en esa vuelta no deja capa, porque una toma vacia se descarta sola.
+     */
+    const presets =
+      settings.duo === 'off' ? [settings.preset] : [settings.preset, settings.presetTwo];
+    switch (this.looper.toggle(presets, settings.drums)) {
       case 'rejected':
         this.hud.toast(t().toast.layersFull);
         return;
@@ -417,6 +432,12 @@ class Theremano {
         return;
       case 'saved':
         this.hud.toast(t().toast.layerSaved(this.looper.state.tracks.length));
+        return;
+      case 'partial':
+        // Se ha guardado lo que cabia y se ha quedado algo fuera. Se dice, que
+        // es lo unico que se puede hacer: alguien acaba de tocar una capa que no
+        // esta, y anunciar "capa guardada" seria mentir sobre la mitad.
+        this.hud.toast(t().toast.layersFull);
         return;
       case 'discarded':
         this.hud.toast(t().toast.layerDiscarded);
@@ -563,10 +584,30 @@ class Theremano {
     if (this.brokenPerformance) this.showSplashError(t().toast.performanceBroken);
   }
 
+  /**
+   * El kit que traiga el enlace pasa a ser el de quien lo abre.
+   *
+   * Se adopta y no se guarda aparte porque no hay un segundo sitio donde vivan
+   * dos kits a la vez: el motor tiene uno, el overlay dibuja uno y el fantasma
+   * senala sobre uno. Con dos, lo que se oiria y lo que se veria serian dos
+   * kits distintos.
+   *
+   * Es el mismo trato que ya tienen la escala, la tonica y el timbre, que
+   * tambien viajan en el enlace y tambien se quedan puestos al abrirlo. Y se
+   * guarda entre sesiones, igual que ellos: quien abre un enlace con el plato a
+   * la izquierda y se queda tocando, sigue con el plato a la izquierda.
+   */
+  private adoptKit(performance: Performance | null): void {
+    const kit = performance?.kit;
+    if (!kit) return;
+    this.store.set({ kitBands: [...kit.bands], kitTuning: { ...kit.tuning }, kitLevel: { ...kit.level } });
+  }
+
   private async toggleListening(): Promise<void> {
     const performance = this.pendingPerformance;
     if (!performance) return;
     if (this.listening) {
+      this.stopGhostScreen();
       this.looper.clear();
       this.engine.setMuted(false);
       this.listening = false;
@@ -591,11 +632,91 @@ class Theremano {
       }
       this.listening = true;
       this.listenButton.textContent = t().splash.stopListening;
+      this.startGhostScreen();
     } catch (error) {
       this.showStartError(error);
     } finally {
       this.listenButton.disabled = false;
     }
+  }
+
+  /**
+   * Las manos de lo que se esta escuchando, sobre la pantalla inicial.
+   *
+   * Un enlace compartido lleva gestos, no sonido, y hasta ahora de eso solo se
+   * aprovechaba la mitad: se oia. Aqui se ve tambien. Las manos que tocaron cada
+   * capa se dibujan girando con el bucle, sobre la propia pantalla inicial y sin
+   * pedir la camara -ni camara, ni modelo, ni deteccion: solo dibujar-, que es
+   * justo la puerta donde se queda media la gente. Es un video de lo que alguien
+   * toco, con cero bytes de video.
+   *
+   * Y no es un adorno: es lo que convierte "esto suena bien" en "esto se toca
+   * asi", que es la diferencia entre recibir una grabacion y recibir una
+   * leccion. Quien entra despues al instrumento ya ha visto donde van las manos.
+   */
+  private startGhostScreen(): void {
+    this.splash.classList.add('listening');
+    const draw = (now: number) => {
+      if (!this.listening) return;
+      this.ghostScreenHandle = requestAnimationFrame(draw);
+      this.overlay.resize();
+      const dt = this.lastGhostAt > 0 ? (now - this.lastGhostAt) / 1000 : 1 / 60;
+      this.lastGhostAt = now;
+      const frame = this.ghostScreenFrame();
+      this.overlay.update(frame, dt);
+      // Sin video detras: el tamano lo pone el propio lienzo, que es lo que hace
+      // coverRect cuando le dan un cero, y aqui es ademas lo correcto.
+      this.overlay.paint(this.overlay.screenTarget, frame, 0, 0, { backdrop: true, ghostStrength: 1.8 });
+    };
+    this.ghostScreenHandle = requestAnimationFrame(draw);
+  }
+
+  private stopGhostScreen(): void {
+    this.splash.classList.remove('listening');
+    if (this.ghostScreenHandle !== null) cancelAnimationFrame(this.ghostScreenHandle);
+    this.ghostScreenHandle = null;
+    this.lastGhostAt = 0;
+    this.overlay.clear();
+  }
+
+  /** Si lo que se esta escuchando es un ritmo y nada mas. */
+  private listeningToDrums(): boolean {
+    const tracks = this.pendingPerformance?.tracks ?? [];
+    return tracks.length > 0 && tracks.every((track) => track.drums === true);
+  }
+
+  /** Un fotograma sin nadie tocando: solo la rejilla y lo que gira. */
+  private ghostScreenFrame(): OverlayFrame {
+    return {
+      assignment: { melody: null, expression: null },
+      layout: this.mapper.currentLayout,
+      pitchX: -1,
+      midi: this.mapper.currentLayout.baseMidi,
+      gateOpen: false,
+      volume: 0,
+      loops: this.looper.state,
+      targetZone: null,
+      drone: null,
+      /*
+       * La rejilla la decide lo que trae el enlace, no lo que tenga elegido
+       * quien lo abre: aqui no esta tocando nadie, se esta mirando lo que toco
+       * otro. Con todo el enlace en bateria se dibuja el kit, que es donde estan
+       * golpeando esas manos; con una sola capa de melodia dentro, la escala,
+       * porque ahi la rejilla de notas dice mas y los golpes se siguen viendo.
+       *
+       * Sin esto, un ritmo compartido ensenaba manos golpeando bandas sobre una
+       * rejilla de notas: cada mano senalando un sitio que no existe en lo que
+       * hay dibujado debajo.
+       */
+      drums: this.listeningToDrums(),
+      kit: this.mapper.currentBands,
+      showRawTrace: false,
+      // El unico ajuste que se ignora a proposito: aqui las manos de las capas
+      // no son un extra sobre lo que se toca, son lo unico que hay que ver.
+      ghosts: true,
+      lens: FULL_LENS,
+      partner: null,
+    };
   }
 
   // ------------------------------------------------------------ demostracion
@@ -1026,6 +1147,7 @@ class Theremano {
       this.hud.toast(t().toast.performanceEmpty);
       return;
     }
+    const settings = this.store.get();
     const encoded = encodePerformance({
       cycleSeconds,
       tracks: tracks.map((track) => ({
@@ -1034,12 +1156,17 @@ class Theremano {
         hits: track.hits,
         drums: track.drums,
       })),
+      // El kit con el que se toco. Sin el, un ritmo compartido suena con las
+      // piezas de fabrica y las manos del fantasma senalan otras bandas: el
+      // enlace ensenaria un ritmo distinto del que se grabo. Solo lo escribe el
+      // codificador si de verdad hay bateria.
+      kit: { bands: settings.kitBands, tuning: settings.kitTuning, level: settings.kitLevel },
     });
     if (!encoded) {
       this.hud.toast(t().toast.performanceTooBig);
       return;
     }
-    const url = shareUrl(this.store.get(), encoded.encoded);
+    const url = shareUrl(settings, encoded.encoded);
     try {
       await navigator.clipboard.writeText(url);
       this.hud.toast(t().toast.performanceCopied(encoded.tracks), 4200);
@@ -1310,7 +1437,8 @@ class Theremano {
     runtime.latencyMs = this.estimateLatency(now, metadata);
     runtime.midi = output.midi;
 
-    // La capa que se este grabando guarda el gesto, no el sonido.
+    // La capa que se este grabando guarda el gesto, no el sonido. Una por
+    // persona: en duo son dos instrumentos y una capa es monofonica.
     this.looper.capture({
       gateEvent: output.gateEvent,
       gateOpen: output.gateOpen,
@@ -1318,7 +1446,8 @@ class Theremano {
       cutoffNorm: output.cutoffNorm,
       gain: output.gain,
       strikes: output.strikes,
-    });
+    }, ...(this.secondLive ? [this.secondLive] : []));
+    this.secondLive = null;
 
     const loops = this.looper.state;
     const frame: OverlayFrame = {
@@ -1458,6 +1587,20 @@ class Theremano {
     this.engine.setSpace(output.space, 1);
     this.engine.setVibrato(output.vibrato, output.vibratoRate, 1);
     this.engine.setDrone(output.drone, 1);
+    // Lo que toca, para su propia capa. Se deja aqui y lo recoge el bucle de
+    // fotogramas unas lineas mas abajo, que es donde se graba: la alternativa
+    // -grabar desde aqui- pondria dos llamadas a la estacion en el mismo
+    // fotograma y una de las dos veria una toma que la otra acaba de cerrar.
+    this.secondLive = {
+      gateEvent: output.gateEvent,
+      gateOpen: output.gateOpen,
+      freq: output.freq,
+      cutoffNorm: output.cutoffNorm,
+      gain: output.gain,
+      strikes: output.strikes,
+    };
+    // El gesto de los dedos, que aqui cambia SU timbre y no el de la otra.
+    if (output.preset) this.store.set({ presetTwo: output.preset.id });
     return { assignment: player.roles, lens: player.lens, pitchX: output.pitchX, gateOpen: output.gateOpen };
   }
 
@@ -1475,8 +1618,14 @@ class Theremano {
     this.engine.setPlayers(players);
     this.roles.reset();
     if (players > 1) {
-      if (!this.second) this.second = new Mapper(this.store.get());
+      if (!this.second) {
+        this.second = new Mapper(this.store.get());
+        this.second.asSecond(this.store.get());
+      }
       this.second.setLens(lensFor(mode, 1));
+      // La voz nueva sale con el timbre de la primera: hay que darle el suyo o
+      // el duo empieza sonando a una sola persona con dos manos de mas.
+      this.engine.setPreset(getPreset(this.store.get().presetTwo), 1);
     } else {
       // Sin soltar la nota que tuviera abierta se quedaria sonando en una voz
       // que ya no existe. La voz se tira con su propio corte, pero el mapeador
@@ -1657,6 +1806,13 @@ class Theremano {
     const trim = kitTrim(settings.kitTuning, settings.kitLevel);
     this.engine.setKitTrim(trim);
     this.looper.setKitTrim(trim);
+    // La sala va a los dos sitios por el mismo motivo que la afinacion: el kit
+    // del motor es el que suena bajo las manos y cada capa tiene el suyo. Con
+    // uno solo mojado, mover el mando con una vuelta girando cambiaria la mano y
+    // dejaria lo grabado como estaba, que es justo lo que uno esta comparando.
+    this.engine.setKitSpace(settings.kitSpace);
+    this.looper.setKitSpace(settings.kitSpace);
+    this.looper.setSwing(settings.swing);
   }
 
   private onSettingsChanged(settings: Readonly<Settings>, changed: ReadonlySet<keyof Settings>): void {
@@ -1682,6 +1838,10 @@ class Theremano {
       this.applyDuo(settings.duo);
       this.second?.syncSettings(settings);
     }
+    if (changed.has('presetTwo')) {
+      this.second?.syncSettings(settings);
+      this.engine.setPreset(getPreset(settings.presetTwo), 1);
+    }
     if (changed.has('locale')) i18n.set(settings.locale);
     if (changed.has('melodyId')) this.syncGuide(settings.melodyId, { applySuggestedScale: true });
 
@@ -1703,6 +1863,7 @@ class Theremano {
     if (changed.has('metronome')) this.looper.setMetronome(settings.metronome);
     // El reparto de las bandas solo lo lee el mapeador, que es quien decide que
     // pieza hay debajo de la palma; el overlay lo recibe en cada fotograma.
+    if (changed.has('kitSpace') || changed.has('swing')) this.applyKitTrim(settings);
     if (changed.has('kitBands')) {
       this.mapper.syncSettings(settings);
       this.second?.syncSettings(settings);

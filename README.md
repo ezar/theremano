@@ -48,9 +48,14 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
   tiempo: se sigue el orden, no el compás.
 - **Enlace con la configuración** — escala, tónica y timbre viajan en el
   fragmento de la dirección, y el enlace trae vista previa al compartirlo.
+- **Sala y swing en la batería** — el kit deja de sonar a muestras pegadas: cada
+  pieza se moja lo suyo, el bombo casi nada y el plato mucho. Y el swing retrasa
+  la corchea de en medio, que es lo que separa un ritmo tocado de uno
+  cuadriculado; se aplica al reproducir, así que se mueve con la vuelta girando.
 - **Enlace con lo que tocaste** — lo grabado en la estación de bucles cabe en la
   propia dirección. Quien la abre lo oye sintetizado en su navegador, **sin dar
-  permiso de cámara**, y puede tocar encima con un botón.
+  permiso de cámara**, y puede tocar encima con un botón. Y lo **ve**: las manos que
+  grabaron cada capa se dibujan girando con el bucle sobre la pantalla inicial.
 
 ---
 
@@ -517,11 +522,27 @@ eso era lo peor que podía pasar —la nota de cada una salta a la de la otra—
 tocando solo tampoco era gracioso, porque la mano que llevaba la nota pasaba a
 llevar el volumen.
 
-Lo que el dúo **no** hace todavía: la segunda persona no graba en la estación de
-bucles, no mueve el rótulo de la nota y no lleva la melodía guiada. Las tres son
-de una sola persona —una capa es monofónica, el rótulo dice una nota y la guía
-apunta a una mano— y repartirlas entre dos pide decidir de quién son. Los golpes
-de batería sí suenan para las dos: el kit es uno y está en el encuadre.
+Cada persona tiene además **su propio timbre**, y de fábrica vienen distintos:
+dos instrumentos con el mismo timbre tocando a la vez suenan a uno desafinado, y
+lo que hace que se oigan como dos es que suenen distinto. Se elige igual que el
+otro —con los dedos de la mano de melodía o en Ajustes—, solo que con la mano de
+la otra persona: si los dos leyeran el mismo ajuste, abrir la mano de una le
+cambiaría el timbre a la otra a mitad de nota.
+
+**Una vuelta, dos capas.** Grabar en dúo abre dos tomas, no una: son dos
+instrumentos sonando a la vez y una capa es monofónica, así que «lo que suena» no
+cabe en una. Se abren en el mismo instante y se cierran en el mismo instante, de
+modo que las dos capas comparten ciclo por construcción y no porque cuadren los
+números. Quien no toque nada en esa vuelta no deja capa: una toma vacía se
+descarta sola. Y si con tres capas ya grabadas solo cabe una de las dos, se dice
+—perder una capa que alguien acaba de tocar sin avisar es lo peor que podría
+hacer ahí.
+
+Lo que el dúo **no** hace todavía: la segunda persona no mueve el rótulo de la
+nota y no lleva la melodía guiada. Las dos son de una sola persona —el rótulo
+dice una nota y la guía apunta a una mano— y repartirlas entre dos pide decidir
+de quién son. Los golpes de batería sí suenan para las dos: el kit es uno y está
+en el encuadre.
 
 ---
 
@@ -585,6 +606,29 @@ Quien abre ese enlace se encuentra la pantalla inicial cambiada, con un botón d
 cámara, ni modelo, ni bucle de fotogramas. Eso importa más de lo que parece,
 porque el permiso de cámara es la puerta donde se queda la mitad de la gente, y
 aquí se puede oír lo que te han mandado antes de decidir si entras.
+
+Y mientras suena se **ven** las manos que lo tocaron. La capa lleva el gesto, así
+que reconstruirlas no cuesta un byte más: se dibujan sobre la propia pantalla
+inicial, girando con el bucle, con la rejilla de la escala debajo y sin pedir la
+cámara. La lista de «cómo funciona» se quita mientras tanto, porque lo que está
+pasando en pantalla lo explica mejor que ella. Es un vídeo de lo que alguien tocó
+con cero bytes de vídeo, y es lo que convierte «esto suena bien» en «esto se toca
+así» antes de que nadie decida si entra.
+
+Si hay batería, el enlace lleva también **el kit**: el reparto de bandas, la
+afinación y el volumen de cada pieza, en diez bytes al final. Sin eso, un ritmo
+compartido sonaba con las piezas de fábrica y no con las que se tocaron — y el
+reparto no es un detalle de timbre, decide *dónde* hay que golpear: con el plato
+movido a la izquierda, el enlace enseñaba un ritmo y las manos del fantasma
+señalaban otro sitio. Quien abre el enlace se queda con ese kit, igual que ya se
+quedaba con la escala, la tónica y el timbre.
+
+Va al final y solo cuando hay batería, y eso es lo que lo hace gratis: un enlace
+con batería ya era ilegible para una copia vieja de la página —no hay timbre
+número 255—, así que añadirle bytes no rompe nada que funcionara. Un enlace de
+melodía sale byte por byte igual que antes. Y uno de batería compartido antes de
+que esto existiera se distingue sin ambigüedad, porque ahí se acaban los bytes:
+suena con el kit de quien lo abre, que es lo que hacían todos hasta ahora.
 
 El formato es binario y va en base64 de direcciones. Seis bytes por evento: el
 tipo y el instante empaquetados en dieciséis bits, la altura en centésimas de

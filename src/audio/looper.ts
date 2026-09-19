@@ -4,6 +4,7 @@ import { LoopTake, MAX_TRACKS, type DrumHitEvent, type LiveSnapshot, type LoopEv
 import { DrumKit } from './drums';
 import type { KitTrim } from '../mapping/kit';
 import { beatsInCycle, beatsLeft, isAccent, isDue, isMissed, planCountIn, type CountInPlan } from './countIn';
+import { swingTime } from './swing';
 
 export type { DrumHitEvent, LoopEvent } from './loopTake';
 export { MAX_CYCLE_SECONDS, MAX_TRACKS, MIN_CYCLE_SECONDS } from './loopTake';
@@ -143,9 +144,13 @@ class DrumLoopVoice {
   private readonly kit: DrumKit;
   private readonly gain: Tone.Gain;
 
-  constructor(output: Tone.InputNode, trim: KitTrim | null) {
+  constructor(output: Tone.InputNode, trim: KitTrim | null, space = 0) {
     this.gain = new Tone.Gain(1).connect(output);
-    this.kit = new DrumKit(this.gain, trim ?? undefined);
+    this.kit = new DrumKit(this.gain, trim ?? undefined, space);
+  }
+
+  setSpace(space: number): void {
+    this.kit.setSpace(space);
   }
 
   trim(trim: KitTrim): void {
@@ -214,6 +219,21 @@ interface Recording {
   startedAt: number;
 }
 
+/**
+ * Una toma por persona: una vuelta, dos capas.
+ *
+ * En duo hay dos instrumentos tocando a la vez y una capa es monofonica, asi que
+ * grabar "lo que suena" no cabe en una capa. La alternativa -grabar solo a la
+ * primera- deja a la segunda tocando para nadie, que es exactamente lo que se
+ * nota al probarlo entre dos. Se abren dos tomas en el mismo instante y se
+ * cierran en el mismo instante, de modo que las dos capas comparten ciclo por
+ * construccion y no por que cuadren los numeros.
+ *
+ * Una toma sin una sola nota se descarta sola al cerrarse, asi que si solo toca
+ * una persona sale una capa y no una capa y un silencio.
+ */
+type Takes = Recording[];
+
 export interface LoopState {
   recording: boolean;
   /** Pulsos que quedan de claqueta, o 0 si no hay ninguna en marcha. */
@@ -231,22 +251,24 @@ export class Looper {
   private output: Tone.InputNode | null = null;
   private readonly tracks: LoopTrack[] = [];
   private readonly voices = new Map<number, LoopVoice | DrumLoopVoice>();
-  private recordingTake: Recording | null = null;
+  private recordingTakes: Takes = [];
   private cycleSeconds = 0;
   private repeatId: number | null = null;
   private nextId = 1;
-  private countIn: { plan: CountInPlan; presetId: PresetId; drums: boolean } | null = null;
+  private countIn: { plan: CountInPlan; presets: readonly PresetId[]; drums: boolean } | null = null;
   private click: ClickVoice | null = null;
   private metronome = false;
   private beatId: number | null = null;
   private kitTrim: KitTrim | null = null;
+  private kitSpace = 0;
+  private swing = 0;
 
   attach(output: Tone.InputNode): void {
     this.output = output;
   }
 
   get isRecording(): boolean {
-    return this.recordingTake !== null;
+    return this.recordingTakes.length > 0;
   }
 
   get isEmpty(): boolean {
@@ -257,9 +279,9 @@ export class Looper {
     const transport = this.cycleSeconds > 0 ? Tone.getTransport() : null;
     const position = transport ? (transport.seconds % this.cycleSeconds) / this.cycleSeconds : -1;
     return {
-      recording: this.recordingTake !== null,
+      recording: this.recordingTakes.length > 0,
       countInBeats: this.countIn ? beatsLeft(this.countIn.plan, Tone.now()) : 0,
-      recordedSeconds: this.recordingTake ? Math.max(0, Tone.now() - this.recordingTake.startedAt) : 0,
+      recordedSeconds: this.recordingTakes[0] ? Math.max(0, Tone.now() - this.recordingTakes[0].startedAt) : 0,
       cycleSeconds: this.cycleSeconds,
       playhead: position,
       tracks: this.tracks,
@@ -275,9 +297,21 @@ export class Looper {
    * cuando no hay nada es peor que no decir nada.
    */
   /** @param drums graba golpes en lugar de notas. */
-  toggle(presetId: PresetId, drums = false): 'started' | 'counting' | 'cancelled' | 'saved' | 'discarded' | 'rejected' {
-    if (this.recordingTake) {
-      return this.finish() ? 'saved' : 'discarded';
+  /**
+   * @param presets un timbre por persona que este tocando. Uno normalmente; dos
+   * en duo, y entonces se abren dos tomas a la vez.
+   */
+  toggle(
+    presets: readonly PresetId[],
+    drums = false,
+  ): 'started' | 'counting' | 'cancelled' | 'saved' | 'partial' | 'discarded' | 'rejected' {
+    if (this.recordingTakes.length > 0) {
+      const { saved, dropped } = this.finish();
+      // Con una capa fuera hay que decirlo aunque se haya guardado la otra:
+      // alguien acaba de tocar algo que no esta. Callarlo y anunciar "capa
+      // guardada" seria mentir sobre la mitad.
+      if (dropped > 0) return 'partial';
+      return saved > 0 ? 'saved' : 'discarded';
     }
     // Volver a pulsar durante la cuenta la cancela. Sin esto, quien se arrepiente
     // o pulsa sin querer se queda esperando a que termine para poder deshacerlo.
@@ -291,11 +325,11 @@ export class Looper {
     // de la nada. En una sobregrabacion el ciclo ya existe y la toma entra donde
     // este el cabezal, asi que contar por delante solo desplazaria la capa.
     if (this.cycleSeconds <= 0) {
-      this.startCountIn(presetId, drums);
+      this.startCountIn(presets, drums);
       return 'counting';
     }
 
-    this.startTake(presetId, drums, Tone.now());
+    this.startTake(presets, drums, Tone.now());
     return 'started';
   }
 
@@ -318,10 +352,10 @@ export class Looper {
     }
   }
 
-  private startCountIn(presetId: PresetId, drums: boolean): void {
+  private startCountIn(presets: readonly PresetId[], drums: boolean): void {
     if (!this.output) return;
     const plan = planCountIn(Tone.now());
-    this.countIn = { plan, presetId, drums };
+    this.countIn = { plan, presets, drums };
     const click = this.ensureClick();
     for (let i = 0; i < plan.clicks.length; i += 1) click?.at(plan.clicks[i]!, isAccent(i));
   }
@@ -357,13 +391,18 @@ export class Looper {
     this.click = null;
   }
 
-  private startTake(presetId: PresetId, drums: boolean, startedAt: number): void {
+  private startTake(presets: readonly PresetId[], drums: boolean, startedAt: number): void {
     const transport = Tone.getTransport();
     // La primera capa arranca en cero y define el ciclo. Las siguientes se
     // colocan donde este el cabezal, para poder grabar encima sin esperar a que
     // la vuelta termine.
     const offset = this.cycleSeconds > 0 ? transport.seconds % this.cycleSeconds : 0;
-    this.recordingTake = { take: new LoopTake(presetId, offset, this.cycleSeconds, drums), startedAt };
+    // El mismo offset y el mismo instante de arranque para las dos: es lo que
+    // hace que las capas de un duo caigan una encima de otra y no una detras.
+    this.recordingTakes = presets.map((presetId) => ({
+      take: new LoopTake(presetId, offset, this.cycleSeconds, drums),
+      startedAt,
+    }));
   }
 
   private stopCountIn(): void {
@@ -375,7 +414,10 @@ export class Looper {
    * Se llama en cada fotograma con el estado en directo. Solo guarda algo si hay
    * una toma abierta.
    */
-  capture(live: LiveSnapshot): void {
+  /**
+   * @param others lo que toca cada persona a partir de la segunda. Vacio sin duo.
+   */
+  capture(live: LiveSnapshot, ...others: LiveSnapshot[]): void {
     /*
      * La claqueta termina aqui, en el bucle de fotogramas, y no en un
      * temporizador. Un temporizador seria una pieza mas que cancelar, que
@@ -384,7 +426,7 @@ export class Looper {
      * codigo sino el que se guarda en startedAt, que es el del pulso.
      */
     if (this.countIn && isDue(this.countIn.plan, Tone.now())) {
-      const { plan, presetId, drums } = this.countIn;
+      const { plan, presets, drums } = this.countIn;
       this.stopCountIn();
       /*
        * Si el pulso de entrada quedo muy atras, la entrada se perdio y no hay
@@ -393,23 +435,31 @@ export class Looper {
        * la toma con un inicio que ya paso la llenaria de silencio por delante, y
        * con veinte segundos de ausencia se descartaria sola nada mas nacer.
        */
-      if (!isMissed(plan, Tone.now())) this.startTake(presetId, drums, plan.downbeat);
+      if (!isMissed(plan, Tone.now())) this.startTake(presets, drums, plan.downbeat);
     }
 
-    const recording = this.recordingTake;
-    if (!recording) return;
+    const takes = this.recordingTakes;
+    if (takes.length === 0) return;
 
-    const elapsed = Tone.now() - recording.startedAt;
+    const elapsed = Tone.now() - takes[0]!.startedAt;
     // Con claqueta, la toma se crea en el pulso, y el fotograma que la ve nacer
     // puede llegar unos milisegundos antes de ese instante. Un tiempo negativo
     // colocaria el evento al final de la vuelta en lugar de al principio.
     if (elapsed < 0) return;
-    // La primera capa define el ciclo, asi que no puede crecer sin limite.
-    if (recording.take.overflowed(elapsed)) {
+    // La primera capa define el ciclo, asi que no puede crecer sin limite. Se
+    // mira la primera toma y se cierran las dos: comparten instante de arranque,
+    // asi que desbordan a la vez, y cerrar una sola dejaria dos capas de
+    // duraciones distintas que ya no encajan.
+    if (takes[0]!.take.overflowed(elapsed)) {
       this.finish();
       return;
     }
-    recording.take.capture(elapsed, live);
+    // A cada persona lo suyo. La segunda instantanea solo llega en duo, y sin
+    // ella la segunda toma no existe.
+    for (let player = 0; player < takes.length; player += 1) {
+      const snapshot = player === 0 ? live : others[player - 1];
+      if (snapshot) takes[player]!.take.capture(elapsed, snapshot);
+    }
   }
 
   /** Silencia o reactiva una capa. */
@@ -480,7 +530,7 @@ export class Looper {
 
   clear(): void {
     this.stopCountIn();
-    this.recordingTake = null;
+    this.recordingTakes = [];
     for (const voice of this.voices.values()) {
       voice.silence();
       voice.dispose();
@@ -495,35 +545,94 @@ export class Looper {
     this.output = null;
   }
 
-  /** @returns true si la toma ha llegado a convertirse en capa. */
-  private finish(): boolean {
-    const recording = this.recordingTake;
-    this.recordingTake = null;
-    if (!recording || !this.output) return false;
+  /**
+   * Cierra las tomas abiertas y las convierte en capas.
+   *
+   * @returns cuantas se han guardado y cuantas se han quedado fuera por falta de
+   * sitio. Lo segundo solo puede pasar en duo -dos capas de golpe con tres ya
+   * grabadas- y se devuelve en vez de tragarselo: perder una capa que alguien
+   * acaba de tocar sin decirlo es lo peor que puede hacer aqui.
+   */
+  private finish(): { saved: number; dropped: number } {
+    const takes = this.recordingTakes;
+    this.recordingTakes = [];
+    if (takes.length === 0 || !this.output) return { saved: 0, dropped: 0 };
 
-    const finished = recording.take.finish(Tone.now() - recording.startedAt);
-    // Una toma sin una sola nota es un doble pulsado sin querer.
-    if (!finished) return false;
-    this.cycleSeconds = finished.cycleSeconds;
+    const closedAt = Tone.now();
+    let saved = 0;
+    let dropped = 0;
+    for (const recording of takes) {
+      const finished = recording.take.finish(closedAt - recording.startedAt);
+      // Una toma sin una sola nota es un doble pulsado sin querer, o la persona
+      // que no toco nada en esta vuelta. Ni una cosa ni la otra es una capa.
+      if (!finished) continue;
+      if (this.tracks.length >= MAX_TRACKS) {
+        dropped += 1;
+        continue;
+      }
+      // El ciclo lo fija la primera capa que se cierre, y las de un duo se
+      // cierran en el mismo instante: la segunda encuentra el ciclo ya puesto y
+      // se coloca dentro, que es justo lo que hace falta.
+      this.cycleSeconds = finished.cycleSeconds;
+      const track: LoopTrack = {
+        id: this.nextId++,
+        presetId: finished.presetId,
+        events: finished.events,
+        hits: finished.hits,
+        drums: finished.drums,
+        muted: false,
+        hue: TRACK_HUES[this.tracks.length % TRACK_HUES.length]!,
+      };
+      this.tracks.push(track);
+      this.voices.set(track.id, this.makeVoice(track));
+      saved += 1;
+    }
+    if (saved > 0) this.startTransport();
+    return { saved, dropped };
+  }
 
-    const track: LoopTrack = {
-      id: this.nextId++,
-      presetId: finished.presetId,
-      events: finished.events,
-      hits: finished.hits,
-      drums: finished.drums,
-      muted: false,
-      hue: TRACK_HUES[this.tracks.length % TRACK_HUES.length]!,
-    };
-    this.tracks.push(track);
-    this.voices.set(track.id, this.makeVoice(track));
+  /**
+   * Los golpes de una capa, corridos por el swing.
+   *
+   * Sobre el mismo pulso que la claqueta, que es el que se oye: si el swing
+   * contara los pulsos de otra manera, lo que suena como el uno y lo que el
+   * swing cree que es el uno serian dos cosas distintas.
+   *
+   * Y se corren al programar, no al guardar: la capa sigue teniendo el instante
+   * en que alguien golpeo de verdad, asi que esto se sube y se baja con la
+   * vuelta girando y volver a cero devuelve lo que se toco.
+   */
+  private swung(hits: readonly DrumHitEvent[]): readonly DrumHitEvent[] {
+    if (this.swing <= 0 || this.cycleSeconds <= 0) return hits;
+    const beatSeconds = this.cycleSeconds / beatsInCycle(this.cycleSeconds);
+    return hits.map((hit) => ({ ...hit, t: swingTime(hit.t, beatSeconds, this.swing) }));
+  }
+
+  /** @param swing de 0 (recto) a 1. Solo toca las capas de ritmo. */
+  setSwing(swing: number): void {
+    const wanted = Math.min(1, Math.max(0, swing));
+    if (wanted === this.swing) return;
+    this.swing = wanted;
+    // La vuelta que ya esta programada lleva los instantes de antes: se vuelve
+    // a programar desde el principio de la siguiente, que es cuando se nota.
     this.startTransport();
-    return true;
+  }
+
+  /** @param space sala de los kits de las capas, de 0 (seco) a 1. */
+  setKitSpace(space: number): void {
+    this.kitSpace = space;
+    for (const voice of this.voices.values()) {
+      if (voice instanceof DrumLoopVoice) voice.setSpace(space);
+    }
   }
 
   private makeVoice(track: LoopTrack): LoopVoice | DrumLoopVoice {
     const output = this.output!;
-    return track.drums ? new DrumLoopVoice(output, this.kitTrim) : new LoopVoice(getPreset(track.presetId), output);
+    // Con la sala ya puesta: una capa que se monta a mitad de vuelta no puede
+    // sonar seca hasta que alguien toque el mando, igual que con la afinacion.
+    return track.drums
+      ? new DrumLoopVoice(output, this.kitTrim, this.kitSpace)
+      : new LoopVoice(getPreset(track.presetId), output);
   }
 
   /**
@@ -553,7 +662,7 @@ export class Looper {
       for (const track of this.tracks) {
         if (track.muted) continue;
         const voice = this.voices.get(track.id);
-        if (voice instanceof DrumLoopVoice) voice.schedule(track.hits, time);
+        if (voice instanceof DrumLoopVoice) voice.schedule(this.swung(track.hits), time);
         else voice?.schedule(track.events, time);
       }
     }, this.cycleSeconds, 0);

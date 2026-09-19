@@ -283,6 +283,9 @@ export const es: Strings = {
     kitBand: 'Banda',
     kitTuning: 'Afinación (semitonos)',
     kitLevel: 'Volumen',
+    kitSpace: 'Sala',
+    swing: 'Swing',
+    swingHint: 'Retrasa la corchea de en medio, que es lo que separa un ritmo tocado de uno cuadriculado. Se aplica al reproducir, así que puedes moverlo con la vuelta girando y volver a cero devuelve lo que tocaste.',
     showDiagnostics: 'Mostrar fps y latencia',
     showRawTrace: 'Superponer puntos sin filtrar',
     ghosts: 'Manos de las capas grabadas',
@@ -291,6 +294,7 @@ export const es: Strings = {
     duoOptionHalves: 'Media pantalla cada una',
     duoOptionHands: 'Una mano cada una',
     duoHint: 'A media pantalla cada una toca con sus dos manos y tiene la escala entera en su mitad. A una mano cada una tenéis el encuadre completo y podéis cruzaros, pero no hay mano de expresión: ni volumen, ni brillo, ni pedal.',
+    presetTwo: 'Timbre de la otra persona',
     reset: 'Restablecer',
   },
 

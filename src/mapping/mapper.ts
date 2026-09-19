@@ -137,7 +137,7 @@ export class Mapper {
   private readonly pinchFilter: OneEuroFilter;
 
   private volume: number;
-  private currentPreset: Preset;
+  private timbre: Preset;
   private candidateFingers = 0;
   private candidateStreak = 0;
   private readonly loopHold = new HoldGesture();
@@ -175,6 +175,8 @@ export class Mapper {
    * dos con dos respuestas distintas a la misma pregunta.
    */
   private lens: Lens = FULL_LENS;
+  /** Si este mapeador es el de la segunda persona del duo. */
+  private second = false;
 
   constructor(settings: Readonly<Settings>) {
     this.layout = createLayout(settings.scale, settings.tonicPc, settings.baseOctave, settings.octaves);
@@ -191,12 +193,22 @@ export class Mapper {
     // que el resto sin que se note un retraso.
     this.spaceFilter = new OneEuroFilter({ ...control, minCutoff: control.minCutoff * SPACE_SMOOTHING });
     this.volume = settings.masterVolume;
-    this.currentPreset = getPreset(settings.preset);
+    this.timbre = getPreset(this.presetOf(settings));
     this.setBands(settings.kitBands);
     this.setDrums(settings.drums, settings.masterVolume);
   }
 
   /** Se llama solo cuando cambian los ajustes, no por fotograma. */
+  /**
+   * De que ajuste sale el timbre de este mapeador.
+   *
+   * Cada persona tiene el suyo, y el mapeador es por persona: si los dos leyeran
+   * el mismo, el gesto de los dedos de una le cambiaria el timbre a la otra.
+   */
+  private presetOf(settings: Readonly<Settings>): PresetId {
+    return this.second ? settings.presetTwo : settings.preset;
+  }
+
   syncSettings(settings: Readonly<Settings>): void {
     this.layout = createLayout(settings.scale, settings.tonicPc, settings.baseOctave, settings.octaves);
     this.setBands(settings.kitBands);
@@ -205,7 +217,7 @@ export class Mapper {
     this.cutoffFilter.setParams(control);
     this.volumeFilter.setParams(control);
     this.spaceFilter.setParams({ ...control, minCutoff: control.minCutoff * SPACE_SMOOTHING });
-    this.currentPreset = getPreset(settings.preset);
+    this.timbre = getPreset(this.presetOf(settings));
     this.setDrums(settings.drums, settings.masterVolume);
   }
 
@@ -265,6 +277,17 @@ export class Mapper {
     return this.layout;
   }
 
+  /**
+   * El timbre de esta persona, que en duo no es el de la otra.
+   *
+   * Se asoma por el mismo motivo que la escala y el reparto del kit: hay mas de
+   * un sitio que necesita saber con que esta sonando este mapeador, y que cada
+   * uno lo deduzca de los ajustes por su cuenta es como acaban discrepando.
+   */
+  get currentPreset(): Preset {
+    return this.timbre;
+  }
+
   get currentLens(): Lens {
     return this.lens;
   }
@@ -277,6 +300,12 @@ export class Mapper {
    * movimiento rapidisimo de la mano: un glissando de un extremo al otro que
    * nadie ha tocado.
    */
+  /** Marca este mapeador como el de la segunda persona. Solo cambia de que ajuste lee el timbre. */
+  asSecond(settings: Readonly<Settings>): void {
+    this.second = true;
+    this.syncSettings(settings);
+  }
+
   setLens(lens: Lens): void {
     if (lens.from === this.lens.from && lens.to === this.lens.to) return;
     this.lens = lens;
@@ -532,7 +561,7 @@ export class Mapper {
       return null;
     }
     const candidate = presetForFingerCount(fingers);
-    if (!candidate || candidate.id === this.currentPreset.id) {
+    if (!candidate || candidate.id === this.timbre.id) {
       this.candidateStreak = 0;
       return null;
     }
@@ -544,7 +573,7 @@ export class Mapper {
     }
     if (this.candidateStreak < PRESET_CONFIRM_FRAMES) return null;
     this.candidateStreak = 0;
-    this.currentPreset = candidate;
+    this.timbre = candidate;
     return candidate;
   }
 }

@@ -153,6 +153,55 @@ describe('toma de una capa de bucle', () => {
     expect(finished!.events.filter((e) => e.kind === 'release')).toHaveLength(1);
   });
 
+  describe('una vuelta, dos capas', () => {
+    /*
+     * En duo hay dos instrumentos tocando a la vez y una capa es monofonica, asi
+     * que grabar "lo que suena" no cabe en una capa: se abren dos tomas en el
+     * mismo instante y se cierran en el mismo instante.
+     *
+     * Aqui se comprueba justo eso -el invariante, no el cableado-: que las dos
+     * capas salen con el mismo ciclo y que cada una lleva lo que toco SU
+     * persona. Si el ciclo saliera distinto, las dos capas no encajarian nunca y
+     * el bucle sonaria a dos vueltas peleandose; si los eventos se mezclaran,
+     * una capa monofonica acabaria con dos notas abiertas a la vez.
+     */
+    const of = (midi: number): LiveSnapshot => ({ ...silent, gateOpen: true, freq: 440 * 2 ** ((midi - 69) / 12) });
+
+    /** Las dos tomas de un duo: mismo instante de arranque, mismo ciclo. */
+    function duo(seconds: number, first: LiveSnapshot | null, second: LiveSnapshot | null) {
+      const takes = [new LoopTake('theremin', 0, 0), new LoopTake('strings', 0, 0)];
+      const live = [first, second];
+      for (let frame = 0; frame <= seconds * FPS; frame += 1) {
+        for (let player = 0; player < takes.length; player += 1) {
+          const snapshot = live[player];
+          if (snapshot) takes[player]!.capture(frame / FPS, snapshot);
+        }
+      }
+      return takes.map((take) => take.finish(seconds));
+    }
+
+    it('las dos comparten ciclo y cada una lleva lo suyo', () => {
+      const [a, b] = duo(3, of(69), of(76));
+      expect(a).not.toBe(null);
+      expect(b).not.toBe(null);
+      expect(a!.cycleSeconds).toBe(b!.cycleSeconds);
+      expect(a!.presetId).toBe('theremin');
+      expect(b!.presetId).toBe('strings');
+      // Cada nota en su capa y ni una en la otra: 440 Hz contra 659.
+      expect(a!.events[0]!.freq).toBeCloseTo(440, 1);
+      expect(b!.events[0]!.freq).toBeCloseTo(659.25, 1);
+    });
+
+    it('quien no toca no deja capa, y quien toca si', () => {
+      // Lo normal en cuanto una de las dos se para a mirar: la toma vacia se
+      // descarta sola, asi que sale una capa y no una capa y un silencio que
+      // ocupa sitio, se ve en el anillo y hay que deshacer a mano.
+      const [a, b] = duo(3, of(69), null);
+      expect(a).not.toBe(null);
+      expect(b).toBe(null);
+    });
+  });
+
   it('wrapTime devuelve siempre algo dentro del ciclo', () => {
     for (const t of [-9.5, -0.1, 0, 3.9, 4, 12.3]) {
       const w = wrapTime(t, 4);

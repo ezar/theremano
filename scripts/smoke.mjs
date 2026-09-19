@@ -866,12 +866,43 @@ await invited.waitForTimeout(1500);
 // Cuatro notas en un ciclo de 2,8 s: con tres segundos de escucha ha sonado la
 // vuelta entera.
 await invited.waitForTimeout(3000);
+/*
+ * Y las manos de lo que suena, sobre la propia pantalla inicial.
+ *
+ * Aqui no hay camara -no se ha dado permiso a proposito- ni modelo ni deteccion:
+ * lo unico que puede haber pintado en el lienzo son las manos reconstruidas de
+ * las capas del enlace. Se toma el maximo de varios fotogramas porque se mueven,
+ * y se compara con lo que hay al parar, que tiene que ser nada.
+ */
+const painted = async () => {
+  let most = 0;
+  for (let sample = 0; sample < 8; sample += 1) {
+    most = Math.max(most, await invited.evaluate(() => {
+      const canvas = document.getElementById('overlay');
+      const ctx = canvas?.getContext('2d');
+      if (!ctx) return 0;
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let lit = 0;
+      for (let i = 0; i < data.length; i += 4) if (data[i] + data[i + 1] + data[i + 2] > 90) lit += 1;
+      return lit;
+    }));
+    await invited.waitForTimeout(120);
+  }
+  return most;
+};
 const listening = await invited.evaluate(() => ({
   etiqueta: document.getElementById('listen-button')?.textContent,
   error: document.getElementById('splash-error')?.hidden === false,
   picoDeAudio: Number((window.__peak ?? 0).toFixed(4)),
+  // La lista de como funciona se quita mientras suena: lo que esta pasando en
+  // pantalla lo explica mejor que ella.
+  comoFunciona: document.querySelector('#splash .howto')?.checkVisibility?.() ?? true,
 }));
-console.log(JSON.stringify({ beforeListening, listening, erroresInvitado: inviteLogs }, null, 2));
+const ghostScreen = await painted();
+await invited.click('#listen-button');
+await invited.waitForTimeout(700);
+const afterListening = await painted();
+console.log(JSON.stringify({ beforeListening, listening, ghostScreen, afterListening, erroresInvitado: inviteLogs }, null, 2));
 
 // Un enlace manipulado no puede acabar sonando ni dejando la pantalla a medias.
 const broken = await ctx.newPage();
@@ -959,6 +990,18 @@ if (withGhosts - withoutGhosts < 1500) {
 }
 if (ghostsOffToast === ghostsOnToast) {
   console.error('\nFALLO: la tecla G no dice si las manos de las capas se ven o no');
+  process.exit(1);
+}
+if (ghostScreen < 2000) {
+  console.error(`\nFALLO: escuchar un enlace no dibuja las manos que lo tocaron (${ghostScreen} pixeles)`);
+  process.exit(1);
+}
+if (afterListening > 0) {
+  console.error(`\nFALLO: al parar de escuchar se quedan las manos pintadas (${afterListening} pixeles)`);
+  process.exit(1);
+}
+if (listening.comoFunciona) {
+  console.error('\nFALLO: la lista de como funciona sigue tapando las manos mientras suena');
   process.exit(1);
 }
 if (duo.some((each, i) => each.ajuste !== ['halves', 'hands', 'off'][i] || each.guardado !== each.ajuste)) {
