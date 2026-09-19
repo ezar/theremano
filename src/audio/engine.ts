@@ -170,16 +170,18 @@ export class AudioEngine {
   }
 
   /**
-   * El timbre es de los dos.
+   * El timbre de una persona.
    *
-   * Un solo ajuste, asi que un solo timbre: dejar que cada persona eligiera el
-   * suyo pide un sitio donde elegirlo, y ese sitio no existe todavia. Se lo come
-   * cada voz por su cuenta, que es donde esta el salto de fase que hay que tapar.
+   * Uno por voz, porque dos instrumentos con el mismo timbre tocando a la vez
+   * suenan a uno desafinado. El salto de fase que hay que tapar al cambiarlo lo
+   * resuelve cada voz por su cuenta, que es donde esta.
    */
-  setPreset(preset: Preset): void {
-    if (!this.started || preset.id === this.preset.id) return;
-    this.preset = preset;
-    for (const voice of this.voices) voice.setPreset(preset);
+  setPreset(preset: Preset, player = 0): void {
+    if (!this.started) return;
+    // El timbre de la primera es ademas el que se le pone a una voz nueva: la
+    // segunda se monta al encender el duo y tiene que salir sonando a algo.
+    if (player === 0) this.preset = preset;
+    this.voices[player]?.setPreset(preset);
   }
 
   /** @param glide portamento en segundos. */

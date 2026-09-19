@@ -66,6 +66,18 @@ export interface Settings {
    */
   duo: DuoMode;
   /**
+   * El timbre de la segunda persona. Solo significa algo con el duo puesto.
+   *
+   * Propio y no compartido porque dos instrumentos con el mismo timbre tocando a
+   * la vez suenan a uno desafinado: lo que hace que se oigan como dos es que
+   * suenen distinto. Se elige como el otro -con los dedos de la mano de melodia
+   * o en los ajustes-, solo que con la mano de la otra persona.
+   *
+   * De fabrica viene distinto del primero a proposito: encender el duo y que
+   * suenen los dos igual es la primera impresion equivocada.
+   */
+  presetTwo: PresetId;
+  /**
    * Las manos que grabaron cada capa, dibujadas mientras la capa suena.
    *
    * Se puede apagar porque con cuatro capas hay hasta cinco manos en pantalla y
@@ -119,6 +131,7 @@ export const DEFAULT_SETTINGS: Settings = {
   stageMode: 'camera',
   metronome: false,
   duo: 'off',
+  presetTwo: 'strings',
   ghosts: true,
   drums: false,
   kitBands: [...KIT],

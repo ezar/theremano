@@ -221,6 +221,8 @@ export interface Strings {
     duoOptionHalves: string;
     duoOptionHands: string;
     duoHint: string;
+    /** El timbre de la segunda persona, en duo. */
+    presetTwo: string;
     reset: string;
   };
 

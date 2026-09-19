@@ -1567,6 +1567,8 @@ class Theremano {
     this.engine.setSpace(output.space, 1);
     this.engine.setVibrato(output.vibrato, output.vibratoRate, 1);
     this.engine.setDrone(output.drone, 1);
+    // El gesto de los dedos, que aqui cambia SU timbre y no el de la otra.
+    if (output.preset) this.store.set({ presetTwo: output.preset.id });
     return { assignment: player.roles, lens: player.lens, pitchX: output.pitchX, gateOpen: output.gateOpen };
   }
 
@@ -1584,8 +1586,14 @@ class Theremano {
     this.engine.setPlayers(players);
     this.roles.reset();
     if (players > 1) {
-      if (!this.second) this.second = new Mapper(this.store.get());
+      if (!this.second) {
+        this.second = new Mapper(this.store.get());
+        this.second.asSecond(this.store.get());
+      }
       this.second.setLens(lensFor(mode, 1));
+      // La voz nueva sale con el timbre de la primera: hay que darle el suyo o
+      // el duo empieza sonando a una sola persona con dos manos de mas.
+      this.engine.setPreset(getPreset(this.store.get().presetTwo), 1);
     } else {
       // Sin soltar la nota que tuviera abierta se quedaria sonando en una voz
       // que ya no existe. La voz se tira con su propio corte, pero el mapeador
@@ -1790,6 +1798,10 @@ class Theremano {
     if (changed.has('duo')) {
       this.applyDuo(settings.duo);
       this.second?.syncSettings(settings);
+    }
+    if (changed.has('presetTwo')) {
+      this.second?.syncSettings(settings);
+      this.engine.setPreset(getPreset(settings.presetTwo), 1);
     }
     if (changed.has('locale')) i18n.set(settings.locale);
     if (changed.has('melodyId')) this.syncGuide(settings.melodyId, { applySuggestedScale: true });

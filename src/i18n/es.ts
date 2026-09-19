@@ -291,6 +291,7 @@ export const es: Strings = {
     duoOptionHalves: 'Media pantalla cada una',
     duoOptionHands: 'Una mano cada una',
     duoHint: 'A media pantalla cada una toca con sus dos manos y tiene la escala entera en su mitad. A una mano cada una tenéis el encuadre completo y podéis cruzaros, pero no hay mano de expresión: ni volumen, ni brillo, ni pedal.',
+    presetTwo: 'Timbre de la otra persona',
     reset: 'Restablecer',
   },
 

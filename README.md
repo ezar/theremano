@@ -518,6 +518,13 @@ eso era lo peor que podía pasar —la nota de cada una salta a la de la otra—
 tocando solo tampoco era gracioso, porque la mano que llevaba la nota pasaba a
 llevar el volumen.
 
+Cada persona tiene además **su propio timbre**, y de fábrica vienen distintos:
+dos instrumentos con el mismo timbre tocando a la vez suenan a uno desafinado, y
+lo que hace que se oigan como dos es que suenen distinto. Se elige igual que el
+otro —con los dedos de la mano de melodía o en Ajustes—, solo que con la mano de
+la otra persona: si los dos leyeran el mismo ajuste, abrir la mano de una le
+cambiaría el timbre a la otra a mitad de nota.
+
 Lo que el dúo **no** hace todavía: la segunda persona no graba en la estación de
 bucles, no mueve el rótulo de la nota y no lleva la melodía guiada. Las tres son
 de una sola persona —una capa es monofónica, el rótulo dice una nota y la guía

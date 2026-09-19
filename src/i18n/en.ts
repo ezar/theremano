@@ -291,6 +291,7 @@ export const en: Strings = {
     duoOptionHalves: 'Half the screen each',
     duoOptionHands: 'One hand each',
     duoHint: 'Half the screen each means you both play with two hands and get the whole scale inside your own half. One hand each means you share the whole frame and can cross over, but there is no expression hand: no volume, no brightness, no drone.',
+    presetTwo: 'The other player’s timbre',
     reset: 'Reset',
   },
 

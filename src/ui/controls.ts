@@ -117,6 +117,7 @@ export class Controls {
 
   private melodyOnly: HTMLElement[] = [];
   private drumOnly: HTMLElement[] = [];
+  private duoOnly: HTMLElement[] = [];
 
   private refresh(): void {
     const settings = this.deps.store.get();
@@ -128,6 +129,9 @@ export class Controls {
     // Y al reves con los del kit, que son doce: con la bateria apagada no hay
     // ninguna pieza que afinar y lo unico que aportan es tapar lo que si vale.
     for (const node of this.drumOnly) node.hidden = !settings.drums;
+    // Y el timbre de la segunda persona, que sin duo no es de nadie. Tambien se
+    // esconde en bateria, como el primero: ahi no hay timbre que elegir.
+    for (const node of this.duoOnly) node.hidden = settings.duo === 'off' || settings.drums;
   }
 
   /**
@@ -144,6 +148,11 @@ export class Controls {
   /** Lo mismo para lo que solo vale en bateria: el kit entero. */
   private percussive(build: () => void): void {
     this.collect(this.drumOnly, build);
+  }
+
+  /** Y lo que solo vale con dos personas delante. */
+  private paired(build: () => void): void {
+    this.collect(this.duoOnly, build);
   }
 
   private collect(into: HTMLElement[], build: () => void): void {
@@ -239,13 +248,28 @@ export class Controls {
       this.range('base-octave', s.baseOctave, 1, 5, 1, (x) => x.baseOctave, (v) => this.deps.store.set({ baseOctave: v }), (v) => `${v}`);
       this.range('range', s.range, 1, 4, 1, (x) => x.octaves, (v) => this.deps.store.set({ octaves: v }), (v) => s.rangeUnit(v));
 
+      const timbres = PRESETS.map((preset) => ({
+        value: preset.id,
+        label: `${preset.fingers} · ${t().presets[preset.id]}`,
+      }));
       this.select(
         'preset',
         s.preset,
-        PRESETS.map((preset) => ({ value: preset.id, label: `${preset.fingers} · ${t().presets[preset.id]}` })),
+        timbres,
         (settings) => settings.preset,
         (value) => this.deps.store.set({ preset: value as PresetId }),
       );
+      // El de la otra persona, justo debajo y solo con el duo puesto: son el
+      // mismo ajuste dos veces y leerlos juntos es lo que dice que son dos.
+      this.paired(() => {
+        this.select(
+          'preset-two',
+          s.presetTwo,
+          timbres,
+          (settings) => settings.presetTwo,
+          (value) => this.deps.store.set({ presetTwo: value as PresetId }),
+        );
+      });
     });
 
     this.range(
