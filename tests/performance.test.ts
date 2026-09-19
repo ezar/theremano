@@ -197,6 +197,72 @@ describe('interpretacion en el enlace', () => {
     expect(encodePerformance({ cycleSeconds: 0, tracks: [{ presetId: 'flute', events: note(0, 69, 1) }] })).toBe(null);
   });
 
+  describe('el kit viaja con el ritmo', () => {
+    /*
+     * Sin esto, un ritmo compartido suena con las piezas de fabrica y no con las
+     * que se tocaron. Y no es un detalle de timbre: el reparto de bandas decide
+     * DONDE hay que golpear, asi que con el plato movido el enlace ensena un
+     * ritmo y las manos del fantasma senalan otro sitio.
+     */
+    const beat: Performance = {
+      cycleSeconds: 4,
+      tracks: [{ presetId: 'theremin', drums: true, events: [], hits: [{ t: 0.5, piece: 'kick', force: 0.8, open: false }] }],
+      kit: {
+        bands: ['crash', 'hat', 'snare', 'kick'],
+        tuning: { kick: -5, snare: 0, hat: 3, crash: 12 },
+        level: { kick: 1.5, snare: 1, hat: 0.4, crash: 2 },
+      },
+    };
+
+    it('sale y vuelve a entrar igual', () => {
+      const back = decodePerformance(encodePerformance(beat)!.encoded)!;
+      expect(back.kit?.bands).toEqual(beat.kit!.bands);
+      expect(back.kit?.tuning).toEqual(beat.kit!.tuning);
+      // El volumen va en un byte, asi que vuelve con el redondeo de un byte.
+      for (const piece of ['kick', 'snare', 'hat', 'crash'] as const) {
+        expect(back.kit!.level[piece]).toBeCloseTo(beat.kit!.level[piece], 2);
+      }
+    });
+
+    it('en melodia no ocupa un solo byte', () => {
+      // Un enlace de melodia tiene que salir igual que antes de que esto
+      // existiera, byte por byte: es lo que hace que lo siga leyendo cualquier
+      // copia de la pagina, incluidas las que estan en cache sin actualizar.
+      const conKit = encodePerformance({ ...simple, kit: beat.kit })!.encoded;
+      expect(conKit).toBe(encodePerformance(simple)!.encoded);
+      expect(decodePerformance(conKit)!.kit).toBeUndefined();
+    });
+
+    it('un enlace de bateria sin kit sigue valiendo', () => {
+      // Los que se compartieron antes de que esto existiera. Ahi se acaban los
+      // bytes, y eso basta para distinguirlos: suenan con el kit de quien abre.
+      const sinKit = encodePerformance({ ...beat, kit: undefined })!.encoded;
+      const back = decodePerformance(sinKit)!;
+      expect(back.tracks[0]!.drums).toBe(true);
+      expect(back.kit).toBeUndefined();
+    });
+
+    it('un reparto con una pieza repetida se rechaza entero', () => {
+      // Deja otra pieza sin banda, y esa banda golpeando un undefined. Antes
+      // que arreglarlo por dentro, se rechaza: lo que suena tiene que ser lo
+      // que alguien toco.
+      const bytes = bytesOf(encodePerformance(beat)!.encoded);
+      // El bloque del kit son los diez ultimos bytes: dos de reparto, cuatro de
+      // afinacion y cuatro de volumen. Se pisa el primero para dejar la misma
+      // pieza en las dos primeras bandas.
+      bytes[bytes.length - 10] = 0x00;
+      expect(decodePerformance(toUrl(bytes))).toBe(null);
+    });
+
+    it('una afinacion fuera de rango se rechaza entera', () => {
+      const bytes = bytesOf(encodePerformance(beat)!.encoded);
+      // Detras de los dos bytes del reparto van las cuatro afinaciones, con el
+      // tope sumado para que quepan sin signo.
+      bytes[bytes.length - 8] = 255;
+      expect(decodePerformance(toUrl(bytes))).toBe(null);
+    });
+  });
+
   describe('un enlace manipulado no llega a sonar', () => {
     const good = encodePerformance(simple)!.encoded;
 

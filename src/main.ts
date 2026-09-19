@@ -199,6 +199,7 @@ class Theremano {
     if (encoded) {
       this.pendingPerformance = decodePerformance(encoded);
       this.brokenPerformance = this.pendingPerformance === null;
+      this.adoptKit(this.pendingPerformance);
     }
 
     const settings = this.store.get();
@@ -565,6 +566,25 @@ class Theremano {
     if (this.brokenPerformance) this.showSplashError(t().toast.performanceBroken);
   }
 
+  /**
+   * El kit que traiga el enlace pasa a ser el de quien lo abre.
+   *
+   * Se adopta y no se guarda aparte porque no hay un segundo sitio donde vivan
+   * dos kits a la vez: el motor tiene uno, el overlay dibuja uno y el fantasma
+   * senala sobre uno. Con dos, lo que se oiria y lo que se veria serian dos
+   * kits distintos.
+   *
+   * Es el mismo trato que ya tienen la escala, la tonica y el timbre, que
+   * tambien viajan en el enlace y tambien se quedan puestos al abrirlo. Y se
+   * guarda entre sesiones, igual que ellos: quien abre un enlace con el plato a
+   * la izquierda y se queda tocando, sigue con el plato a la izquierda.
+   */
+  private adoptKit(performance: Performance | null): void {
+    const kit = performance?.kit;
+    if (!kit) return;
+    this.store.set({ kitBands: [...kit.bands], kitTuning: { ...kit.tuning }, kitLevel: { ...kit.level } });
+  }
+
   private async toggleListening(): Promise<void> {
     const performance = this.pendingPerformance;
     if (!performance) return;
@@ -641,9 +661,14 @@ class Theremano {
     this.overlay.clear();
   }
 
+  /** Si lo que se esta escuchando es un ritmo y nada mas. */
+  private listeningToDrums(): boolean {
+    const tracks = this.pendingPerformance?.tracks ?? [];
+    return tracks.length > 0 && tracks.every((track) => track.drums === true);
+  }
+
   /** Un fotograma sin nadie tocando: solo la rejilla y lo que gira. */
   private ghostScreenFrame(): OverlayFrame {
-    const settings = this.store.get();
     return {
       assignment: { melody: null, expression: null },
       layout: this.mapper.currentLayout,
@@ -654,7 +679,18 @@ class Theremano {
       loops: this.looper.state,
       targetZone: null,
       drone: null,
-      drums: settings.drums,
+      /*
+       * La rejilla la decide lo que trae el enlace, no lo que tenga elegido
+       * quien lo abre: aqui no esta tocando nadie, se esta mirando lo que toco
+       * otro. Con todo el enlace en bateria se dibuja el kit, que es donde estan
+       * golpeando esas manos; con una sola capa de melodia dentro, la escala,
+       * porque ahi la rejilla de notas dice mas y los golpes se siguen viendo.
+       *
+       * Sin esto, un ritmo compartido ensenaba manos golpeando bandas sobre una
+       * rejilla de notas: cada mano senalando un sitio que no existe en lo que
+       * hay dibujado debajo.
+       */
+      drums: this.listeningToDrums(),
       kit: this.mapper.currentBands,
       showRawTrace: false,
       // El unico ajuste que se ignora a proposito: aqui las manos de las capas
@@ -1093,6 +1129,7 @@ class Theremano {
       this.hud.toast(t().toast.performanceEmpty);
       return;
     }
+    const settings = this.store.get();
     const encoded = encodePerformance({
       cycleSeconds,
       tracks: tracks.map((track) => ({
@@ -1101,12 +1138,17 @@ class Theremano {
         hits: track.hits,
         drums: track.drums,
       })),
+      // El kit con el que se toco. Sin el, un ritmo compartido suena con las
+      // piezas de fabrica y las manos del fantasma senalan otras bandas: el
+      // enlace ensenaria un ritmo distinto del que se grabo. Solo lo escribe el
+      // codificador si de verdad hay bateria.
+      kit: { bands: settings.kitBands, tuning: settings.kitTuning, level: settings.kitLevel },
     });
     if (!encoded) {
       this.hud.toast(t().toast.performanceTooBig);
       return;
     }
-    const url = shareUrl(this.store.get(), encoded.encoded);
+    const url = shareUrl(settings, encoded.encoded);
     try {
       await navigator.clipboard.writeText(url);
       this.hud.toast(t().toast.performanceCopied(encoded.tracks), 4200);

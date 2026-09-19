@@ -595,6 +595,21 @@ pasando en pantalla lo explica mejor que ella. Es un vídeo de lo que alguien to
 con cero bytes de vídeo, y es lo que convierte «esto suena bien» en «esto se toca
 así» antes de que nadie decida si entra.
 
+Si hay batería, el enlace lleva también **el kit**: el reparto de bandas, la
+afinación y el volumen de cada pieza, en diez bytes al final. Sin eso, un ritmo
+compartido sonaba con las piezas de fábrica y no con las que se tocaron — y el
+reparto no es un detalle de timbre, decide *dónde* hay que golpear: con el plato
+movido a la izquierda, el enlace enseñaba un ritmo y las manos del fantasma
+señalaban otro sitio. Quien abre el enlace se queda con ese kit, igual que ya se
+quedaba con la escala, la tónica y el timbre.
+
+Va al final y solo cuando hay batería, y eso es lo que lo hace gratis: un enlace
+con batería ya era ilegible para una copia vieja de la página —no hay timbre
+número 255—, así que añadirle bytes no rompe nada que funcionara. Un enlace de
+melodía sale byte por byte igual que antes. Y uno de batería compartido antes de
+que esto existiera se distingue sin ambigüedad, porque ahí se acaban los bytes:
+suena con el kit de quien lo abre, que es lo que hacían todos hasta ahora.
+
 El formato es binario y va en base64 de direcciones. Seis bytes por evento: el
 tipo y el instante empaquetados en dieciséis bits, la altura en centésimas de
 semitono, y un byte para el brillo y otro para el volumen. Al reproducir, cada

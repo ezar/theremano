@@ -1,7 +1,7 @@
 import { PRESETS, type PresetId } from '../audio/presets';
 import type { DrumHitEvent, LoopEvent } from '../audio/loopTake';
 import { MAX_CYCLE_SECONDS, MAX_TRACKS, MIN_CYCLE_SECONDS } from '../audio/loopTake';
-import { KIT } from '../mapping/kit';
+import { KIT, MAX_LEVEL, TUNING_RANGE, type DrumPiece } from '../mapping/kit';
 
 /**
  * Una interpretacion dentro de un enlace.
@@ -25,9 +25,27 @@ export interface PerformanceTrack {
   drums?: boolean;
 }
 
+/**
+ * El kit con el que se toco un ritmo.
+ *
+ * Viaja porque sin el, un ritmo compartido suena con las piezas de fabrica y no
+ * con las que se tocaron: quien afino el bombo dos semitonos abajo y bajo el
+ * charles a la mitad manda un enlace que no es lo que hizo. Y es peor que un
+ * detalle de timbre, porque el reparto de bandas cambia DONDE hay que golpear:
+ * con el plato movido a la izquierda, el enlace ensena un ritmo y las manos del
+ * fantasma senalan otro sitio.
+ */
+export interface PerformanceKit {
+  bands: DrumPiece[];
+  tuning: Record<DrumPiece, number>;
+  level: Record<DrumPiece, number>;
+}
+
 export interface Performance {
   cycleSeconds: number;
   tracks: PerformanceTrack[];
+  /** Solo si hay alguna capa de bateria. En melodia no significa nada. */
+  kit?: PerformanceKit;
 }
 
 const VERSION = 1;
@@ -105,6 +123,23 @@ const MAX_TIME_UNITS = 0x3fff;
 /** Centesimas de semitono. Un midi de 127 son 12700, dentro de un uint16. */
 const PITCH_SCALE = 100;
 
+/**
+ * El kit, detras de las capas: dos bytes de reparto y cuatro de cada ajuste.
+ *
+ * Va al final y solo cuando hay bateria, y ahi esta lo que lo hace gratis: un
+ * enlace con bateria ya es ilegible para una copia vieja de la pagina -no hay
+ * timbre numero 255-, asi que anadirle bytes no rompe nada que hoy funcione. Un
+ * enlace de melodia, en cambio, sale byte por byte igual que antes y se sigue
+ * leyendo en cualquier copia.
+ *
+ * No lleva marca ni bandera: si alguna capa es de bateria, el bloque esta; si no,
+ * no. Una bandera seria un estado mas que validar por nada.
+ */
+const KIT_BLOCK_BYTES = 2 + KIT.length * 2;
+
+/** El volumen por pieza va de 0 a MAX_LEVEL repartido en un byte. */
+const LEVEL_SCALE = 255 / MAX_LEVEL;
+
 export interface EncodeResult {
   /** Cadena lista para el fragmento de la direccion. */
   encoded: string;
@@ -129,7 +164,10 @@ export function encodePerformance(performance: Performance): EncodeResult | null
 
   for (let count = usable.length; count >= 1; count -= 1) {
     for (const paramHz of PARAM_RATES) {
-      const bytes = write({ cycleSeconds: performance.cycleSeconds, tracks: usable.slice(0, count) }, paramHz);
+      const bytes = write(
+        { cycleSeconds: performance.cycleSeconds, tracks: usable.slice(0, count), kit: performance.kit },
+        paramHz,
+      );
       if (bytes && bytes.length <= MAX_BYTES) {
         return { encoded: toBase64Url(bytes), tracks: count, paramHz };
       }
@@ -238,10 +276,63 @@ export function decodePerformance(encoded: string): Performance | null {
     tracks.push({ presetId: preset.id, events });
   }
 
+  /*
+   * El kit, si alguna capa es de bateria. Sin bandera: esta o no esta segun lo
+   * que haya en las capas, que es algo que ya se sabe aqui.
+   *
+   * Un enlace de bateria escrito antes de que esto existiera no lo trae, y se
+   * distingue sin ambiguedad porque ahi se acaban los bytes. Ese suena con el
+   * kit de quien lo abre, que es exactamente lo que hacian todos hasta ahora.
+   */
+  let kit: PerformanceKit | undefined;
+  if (tracks.some((track) => track.drums) && at < bytes.length) {
+    const read = readKit(bytes, at);
+    if (!read) return null;
+    kit = read;
+    at += KIT_BLOCK_BYTES;
+  }
+
   // Bytes de sobra significan que esto no lo escribio esta version. Antes que
   // adivinar, se rechaza.
   if (at !== bytes.length) return null;
-  return { cycleSeconds, tracks };
+  return kit ? { cycleSeconds, tracks, kit } : { cycleSeconds, tracks };
+}
+
+/**
+ * El kit de un enlace, o null si no es exactamente un kit.
+ *
+ * Se valida entero y se rechaza en bloque, como todo lo demas de aqui: un
+ * reparto con una pieza repetida deja una banda golpeando un undefined, y un
+ * volumen fuera de rango puede apagar una pieza para siempre o reventar el
+ * limitador. Recortar en silencio seria reproducir un kit que nadie toco.
+ */
+function readKit(bytes: Uint8Array, at: number): PerformanceKit | null {
+  if (at + KIT_BLOCK_BYTES > bytes.length) return null;
+
+  const bands: DrumPiece[] = [];
+  for (let byte = 0; byte < KIT.length / 2; byte += 1) {
+    const packed = bytes[at + byte] ?? 0;
+    for (const index of [packed >> 4, packed & 0x0f]) {
+      const piece = KIT[index];
+      // Cada pieza una vez y todas: es lo que hace que sea un reparto y no una
+      // lista de piezas. Con una repetida, otra se queda sin banda.
+      if (!piece || bands.includes(piece)) return null;
+      bands.push(piece);
+    }
+  }
+
+  const tuning = {} as Record<DrumPiece, number>;
+  const level = {} as Record<DrumPiece, number>;
+  let cursor = at + KIT.length / 2;
+  for (const piece of KIT) {
+    const raw = (bytes[cursor++] ?? 0) - TUNING_RANGE;
+    if (raw < -TUNING_RANGE || raw > TUNING_RANGE) return null;
+    tuning[piece] = raw;
+  }
+  for (const piece of KIT) {
+    level[piece] = (bytes[cursor++] ?? 0) / LEVEL_SCALE;
+  }
+  return { bands, tuning, level };
 }
 
 /**
@@ -304,10 +395,11 @@ function write(performance: Performance, paramHz: number): Uint8Array | null {
   const thinned = performance.tracks.map((track) =>
     track.drums ? track : { ...track, events: thin(track.events, paramHz) },
   );
+  const kit = thinned.some((track) => track.drums) ? performance.kit : undefined;
   const total = thinned.reduce(
     (sum, track) =>
       sum + 3 + (track.drums ? (track.hits?.length ?? 0) * BYTES_PER_HIT : track.events.length * BYTES_PER_EVENT),
-    4,
+    4 + (kit ? KIT_BLOCK_BYTES : 0),
   );
   const bytes = new Uint8Array(total);
 
@@ -349,6 +441,28 @@ function write(performance: Performance, paramHz: number): Uint8Array | null {
       bytes[at + 4] = clampInt(Math.round(event.cutoffNorm * 255), 0, 255);
       bytes[at + 5] = clampInt(Math.round(event.gain * 255), 0, 255);
       at += BYTES_PER_EVENT;
+    }
+  }
+
+  if (kit) {
+    // El reparto, dos piezas por byte: cuatro bits sobran para un indice de
+    // cuatro. Y se escribe el indice y no el nombre, que en una direccion cada
+    // byte se paga.
+    for (let band = 0; band < KIT.length; band += 2) {
+      const high = KIT.indexOf(kit.bands[band] as DrumPiece);
+      const low = KIT.indexOf(kit.bands[band + 1] as DrumPiece);
+      // Igual que con una pieza que no existe al escribir un golpe: antes no
+      // compartir nada que compartir un kit con una banda vacia.
+      if (high < 0 || low < 0) return null;
+      bytes[at++] = (high << 4) | low;
+    }
+    for (const piece of KIT) {
+      // La afinacion va con signo, y un byte no lo tiene: se le suma el tope
+      // para dejarla en positivo y se le resta al leerla.
+      bytes[at++] = clampInt(Math.round(kit.tuning[piece]) + TUNING_RANGE, 0, 2 * TUNING_RANGE);
+    }
+    for (const piece of KIT) {
+      bytes[at++] = clampInt(Math.round(kit.level[piece] * LEVEL_SCALE), 0, 255);
     }
   }
   return bytes;
