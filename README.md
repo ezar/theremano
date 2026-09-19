@@ -50,7 +50,8 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
   fragmento de la dirección, y el enlace trae vista previa al compartirlo.
 - **Enlace con lo que tocaste** — lo grabado en la estación de bucles cabe en la
   propia dirección. Quien la abre lo oye sintetizado en su navegador, **sin dar
-  permiso de cámara**, y puede tocar encima con un botón.
+  permiso de cámara**, y puede tocar encima con un botón. Y lo **ve**: las manos que
+  grabaron cada capa se dibujan girando con el bucle sobre la pantalla inicial.
 
 ---
 
@@ -585,6 +586,14 @@ Quien abre ese enlace se encuentra la pantalla inicial cambiada, con un botón d
 cámara, ni modelo, ni bucle de fotogramas. Eso importa más de lo que parece,
 porque el permiso de cámara es la puerta donde se queda la mitad de la gente, y
 aquí se puede oír lo que te han mandado antes de decidir si entras.
+
+Y mientras suena se **ven** las manos que lo tocaron. La capa lleva el gesto, así
+que reconstruirlas no cuesta un byte más: se dibujan sobre la propia pantalla
+inicial, girando con el bucle, con la rejilla de la escala debajo y sin pedir la
+cámara. La lista de «cómo funciona» se quita mientras tanto, porque lo que está
+pasando en pantalla lo explica mejor que ella. Es un vídeo de lo que alguien tocó
+con cero bytes de vídeo, y es lo que convierte «esto suena bien» en «esto se toca
+así» antes de que nadie decida si entra.
 
 El formato es binario y va en base64 de direcciones. Seis bytes por evento: el
 tipo y el instante empaquetados en dieciséis bits, la altura en centésimas de

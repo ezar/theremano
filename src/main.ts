@@ -158,6 +158,8 @@ class Theremano {
   private brokenPerformance = false;
   /** Sonando el enlace sin haber arrancado la camara. */
   private listening = false;
+  private ghostScreenHandle: number | null = null;
+  private lastGhostAt = 0;
   private mode: PlayMode = 'camera';
   private readonly pointer = new PointerPlayer();
   /** El dedo o el boton que toca la melodia. */
@@ -567,6 +569,7 @@ class Theremano {
     const performance = this.pendingPerformance;
     if (!performance) return;
     if (this.listening) {
+      this.stopGhostScreen();
       this.looper.clear();
       this.engine.setMuted(false);
       this.listening = false;
@@ -591,11 +594,75 @@ class Theremano {
       }
       this.listening = true;
       this.listenButton.textContent = t().splash.stopListening;
+      this.startGhostScreen();
     } catch (error) {
       this.showStartError(error);
     } finally {
       this.listenButton.disabled = false;
     }
+  }
+
+  /**
+   * Las manos de lo que se esta escuchando, sobre la pantalla inicial.
+   *
+   * Un enlace compartido lleva gestos, no sonido, y hasta ahora de eso solo se
+   * aprovechaba la mitad: se oia. Aqui se ve tambien. Las manos que tocaron cada
+   * capa se dibujan girando con el bucle, sobre la propia pantalla inicial y sin
+   * pedir la camara -ni camara, ni modelo, ni deteccion: solo dibujar-, que es
+   * justo la puerta donde se queda media la gente. Es un video de lo que alguien
+   * toco, con cero bytes de video.
+   *
+   * Y no es un adorno: es lo que convierte "esto suena bien" en "esto se toca
+   * asi", que es la diferencia entre recibir una grabacion y recibir una
+   * leccion. Quien entra despues al instrumento ya ha visto donde van las manos.
+   */
+  private startGhostScreen(): void {
+    this.splash.classList.add('listening');
+    const draw = (now: number) => {
+      if (!this.listening) return;
+      this.ghostScreenHandle = requestAnimationFrame(draw);
+      this.overlay.resize();
+      const dt = this.lastGhostAt > 0 ? (now - this.lastGhostAt) / 1000 : 1 / 60;
+      this.lastGhostAt = now;
+      const frame = this.ghostScreenFrame();
+      this.overlay.update(frame, dt);
+      // Sin video detras: el tamano lo pone el propio lienzo, que es lo que hace
+      // coverRect cuando le dan un cero, y aqui es ademas lo correcto.
+      this.overlay.paint(this.overlay.screenTarget, frame, 0, 0, { backdrop: true, ghostStrength: 1.8 });
+    };
+    this.ghostScreenHandle = requestAnimationFrame(draw);
+  }
+
+  private stopGhostScreen(): void {
+    this.splash.classList.remove('listening');
+    if (this.ghostScreenHandle !== null) cancelAnimationFrame(this.ghostScreenHandle);
+    this.ghostScreenHandle = null;
+    this.lastGhostAt = 0;
+    this.overlay.clear();
+  }
+
+  /** Un fotograma sin nadie tocando: solo la rejilla y lo que gira. */
+  private ghostScreenFrame(): OverlayFrame {
+    const settings = this.store.get();
+    return {
+      assignment: { melody: null, expression: null },
+      layout: this.mapper.currentLayout,
+      pitchX: -1,
+      midi: this.mapper.currentLayout.baseMidi,
+      gateOpen: false,
+      volume: 0,
+      loops: this.looper.state,
+      targetZone: null,
+      drone: null,
+      drums: settings.drums,
+      kit: this.mapper.currentBands,
+      showRawTrace: false,
+      // El unico ajuste que se ignora a proposito: aqui las manos de las capas
+      // no son un extra sobre lo que se toca, son lo unico que hay que ver.
+      ghosts: true,
+      lens: FULL_LENS,
+      partner: null,
+    };
   }
 
   // ------------------------------------------------------------ demostracion

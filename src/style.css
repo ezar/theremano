@@ -373,6 +373,36 @@ html, body {
   z-index: 10;
   transition: opacity 320ms ease;
 }
+/*
+ * Escuchando un enlace: el fondo se quita para que se vean las manos.
+ *
+ * Detras de esta pantalla esta el lienzo, y mientras suena un enlace lo que
+ * pinta son las manos que grabaron esas capas. El degradado de aqui las taparia
+ * enteras. Se quita, y lo que queda debajo es el fondo que pinta el propio
+ * lienzo, que es casi el mismo color.
+ */
+#splash.listening { background: transparent; }
+/*
+ * Y la lista de como funciona se quita mientras suena.
+ *
+ * No por sitio: porque sobra. Esa lista existe para contarle a quien llega que
+ * esto se toca moviendo las manos en el aire, y mientras suena el enlace eso
+ * mismo esta pasando en pantalla, tocado por alguien. Dejarla puesta seria tapar
+ * la explicacion buena con la mala. Vuelve al parar.
+ */
+#splash.listening .howto { display: none; }
+
+/*
+ * Lo que queda se lleva su propio fondo, porque ahora tiene cosas moviendose
+ * detras. Sin esto, una mano cruzando por encima del titulo lo deja ilegible
+ * medio segundo, que es justo cuando alguien esta decidiendo si entra.
+ */
+#splash.listening #splash-inner {
+  padding: 24px 30px;
+  border-radius: 18px;
+  background: radial-gradient(110% 90% at 50% 45%, rgba(7, 10, 20, 0.9) 0%, rgba(7, 10, 20, 0.55) 62%, rgba(7, 10, 20, 0) 100%);
+}
+
 #splash.leaving { opacity: 0; pointer-events: none; }
 #splash[hidden] { display: none; }
 
