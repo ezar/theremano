@@ -4,6 +4,7 @@ import { LoopTake, MAX_TRACKS, type DrumHitEvent, type LiveSnapshot, type LoopEv
 import { DrumKit } from './drums';
 import type { KitTrim } from '../mapping/kit';
 import { beatsInCycle, beatsLeft, isAccent, isDue, isMissed, planCountIn, type CountInPlan } from './countIn';
+import { swingTime } from './swing';
 
 export type { DrumHitEvent, LoopEvent } from './loopTake';
 export { MAX_CYCLE_SECONDS, MAX_TRACKS, MIN_CYCLE_SECONDS } from './loopTake';
@@ -143,9 +144,13 @@ class DrumLoopVoice {
   private readonly kit: DrumKit;
   private readonly gain: Tone.Gain;
 
-  constructor(output: Tone.InputNode, trim: KitTrim | null) {
+  constructor(output: Tone.InputNode, trim: KitTrim | null, space = 0) {
     this.gain = new Tone.Gain(1).connect(output);
-    this.kit = new DrumKit(this.gain, trim ?? undefined);
+    this.kit = new DrumKit(this.gain, trim ?? undefined, space);
+  }
+
+  setSpace(space: number): void {
+    this.kit.setSpace(space);
   }
 
   trim(trim: KitTrim): void {
@@ -255,6 +260,8 @@ export class Looper {
   private metronome = false;
   private beatId: number | null = null;
   private kitTrim: KitTrim | null = null;
+  private kitSpace = 0;
+  private swing = 0;
 
   attach(output: Tone.InputNode): void {
     this.output = output;
@@ -584,9 +591,48 @@ export class Looper {
     return { saved, dropped };
   }
 
+  /**
+   * Los golpes de una capa, corridos por el swing.
+   *
+   * Sobre el mismo pulso que la claqueta, que es el que se oye: si el swing
+   * contara los pulsos de otra manera, lo que suena como el uno y lo que el
+   * swing cree que es el uno serian dos cosas distintas.
+   *
+   * Y se corren al programar, no al guardar: la capa sigue teniendo el instante
+   * en que alguien golpeo de verdad, asi que esto se sube y se baja con la
+   * vuelta girando y volver a cero devuelve lo que se toco.
+   */
+  private swung(hits: readonly DrumHitEvent[]): readonly DrumHitEvent[] {
+    if (this.swing <= 0 || this.cycleSeconds <= 0) return hits;
+    const beatSeconds = this.cycleSeconds / beatsInCycle(this.cycleSeconds);
+    return hits.map((hit) => ({ ...hit, t: swingTime(hit.t, beatSeconds, this.swing) }));
+  }
+
+  /** @param swing de 0 (recto) a 1. Solo toca las capas de ritmo. */
+  setSwing(swing: number): void {
+    const wanted = Math.min(1, Math.max(0, swing));
+    if (wanted === this.swing) return;
+    this.swing = wanted;
+    // La vuelta que ya esta programada lleva los instantes de antes: se vuelve
+    // a programar desde el principio de la siguiente, que es cuando se nota.
+    this.startTransport();
+  }
+
+  /** @param space sala de los kits de las capas, de 0 (seco) a 1. */
+  setKitSpace(space: number): void {
+    this.kitSpace = space;
+    for (const voice of this.voices.values()) {
+      if (voice instanceof DrumLoopVoice) voice.setSpace(space);
+    }
+  }
+
   private makeVoice(track: LoopTrack): LoopVoice | DrumLoopVoice {
     const output = this.output!;
-    return track.drums ? new DrumLoopVoice(output, this.kitTrim) : new LoopVoice(getPreset(track.presetId), output);
+    // Con la sala ya puesta: una capa que se monta a mitad de vuelta no puede
+    // sonar seca hasta que alguien toque el mando, igual que con la afinacion.
+    return track.drums
+      ? new DrumLoopVoice(output, this.kitTrim, this.kitSpace)
+      : new LoopVoice(getPreset(track.presetId), output);
   }
 
   /**
@@ -616,7 +662,7 @@ export class Looper {
       for (const track of this.tracks) {
         if (track.muted) continue;
         const voice = this.voices.get(track.id);
-        if (voice instanceof DrumLoopVoice) voice.schedule(track.hits, time);
+        if (voice instanceof DrumLoopVoice) voice.schedule(this.swung(track.hits), time);
         else voice?.schedule(track.events, time);
       }
     }, this.cycleSeconds, 0);

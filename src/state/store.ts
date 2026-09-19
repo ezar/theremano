@@ -102,6 +102,22 @@ export interface Settings {
   kitTuning: Record<DrumPiece, number>;
   /** Volumen de cada pieza, multiplicando el de fabrica. */
   kitLevel: Record<DrumPiece, number>;
+  /**
+   * Sala del kit, de 0 (seco) a 1.
+   *
+   * Cada pieza se moja lo suyo: el bombo casi nada, el plato mucho. Un kit del
+   * todo seco suena a muestras pegadas una detras de otra, que es lo que sonaba
+   * hasta ahora.
+   */
+  kitSpace: number;
+  /**
+   * Swing de las capas de ritmo, de 0 (recto, tal y como se toco) a 1.
+   *
+   * Se aplica al reproducir y no al grabar: lo que la capa guarda sigue siendo
+   * el instante en que alguien golpeo, asi que esto se sube y se baja con la
+   * vuelta girando y volver a cero devuelve lo que se toco.
+   */
+  swing: number;
   /** Melodia guiada activa. Cadena vacia si no hay ninguna. */
   melodyId: string;
   /** true en cuanto se ha visto la introduccion, se complete o se salte. */
@@ -137,6 +153,8 @@ export const DEFAULT_SETTINGS: Settings = {
   kitBands: [...KIT],
   kitTuning: { kick: 0, snare: 0, hat: 0, crash: 0 },
   kitLevel: { kick: 1, snare: 1, hat: 1, crash: 1 },
+  kitSpace: 0.3,
+  swing: 0,
   melodyId: '',
   onboarded: false,
   locale: 'auto',
@@ -165,6 +183,12 @@ function freshDefaults(): Settings {
 }
 
 type Listener = (settings: Settings, changed: ReadonlySet<keyof Settings>) => void;
+
+/** Un cero a uno que de verdad lo es: ni NaN, ni infinito, ni fuera de rango. */
+function normalizeUnit(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(1, Math.max(0, value));
+}
 
 function loadPersisted(): Settings {
   try {
@@ -195,6 +219,10 @@ function loadPersisted(): Settings {
     merged.kitBands = normalizeLayout(merged.kitBands);
     merged.kitTuning = normalizePieceNumbers(merged.kitTuning, 0, -TUNING_RANGE, TUNING_RANGE);
     merged.kitLevel = normalizePieceNumbers(merged.kitLevel, 1, 0, MAX_LEVEL);
+    // Un NaN aqui no da un error: deja el kit mudo o el ritmo programado en un
+    // instante imposible. La puerta del tipo lo deja pasar, porque es un numero.
+    merged.kitSpace = normalizeUnit(merged.kitSpace, DEFAULT_SETTINGS.kitSpace);
+    merged.swing = normalizeUnit(merged.swing, DEFAULT_SETTINGS.swing);
     return merged;
   } catch {
     return freshDefaults();

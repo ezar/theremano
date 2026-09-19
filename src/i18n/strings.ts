@@ -211,6 +211,11 @@ export interface Strings {
     kitTuning: string;
     /** Volumen de una pieza, sobre el suyo de fabrica. */
     kitLevel: string;
+    /** Sala del kit entero. */
+    kitSpace: string;
+    /** Swing de las capas de ritmo. */
+    swing: string;
+    swingHint: string;
     showDiagnostics: string;
     showRawTrace: string;
     /** Las manos que grabaron cada capa, dibujadas mientras suena. */

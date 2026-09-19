@@ -48,6 +48,10 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
   tiempo: se sigue el orden, no el compás.
 - **Enlace con la configuración** — escala, tónica y timbre viajan en el
   fragmento de la dirección, y el enlace trae vista previa al compartirlo.
+- **Sala y swing en la batería** — el kit deja de sonar a muestras pegadas: cada
+  pieza se moja lo suyo, el bombo casi nada y el plato mucho. Y el swing retrasa
+  la corchea de en medio, que es lo que separa un ritmo tocado de uno
+  cuadriculado; se aplica al reproducir, así que se mueve con la vuelta girando.
 - **Enlace con lo que tocaste** — lo grabado en la estación de bucles cabe en la
   propia dirección. Quien la abre lo oye sintetizado en su navegador, **sin dar
   permiso de cámara**, y puede tocar encima con un botón. Y lo **ve**: las manos que

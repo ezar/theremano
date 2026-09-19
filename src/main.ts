@@ -1806,6 +1806,13 @@ class Theremano {
     const trim = kitTrim(settings.kitTuning, settings.kitLevel);
     this.engine.setKitTrim(trim);
     this.looper.setKitTrim(trim);
+    // La sala va a los dos sitios por el mismo motivo que la afinacion: el kit
+    // del motor es el que suena bajo las manos y cada capa tiene el suyo. Con
+    // uno solo mojado, mover el mando con una vuelta girando cambiaria la mano y
+    // dejaria lo grabado como estaba, que es justo lo que uno esta comparando.
+    this.engine.setKitSpace(settings.kitSpace);
+    this.looper.setKitSpace(settings.kitSpace);
+    this.looper.setSwing(settings.swing);
   }
 
   private onSettingsChanged(settings: Readonly<Settings>, changed: ReadonlySet<keyof Settings>): void {
@@ -1856,6 +1863,7 @@ class Theremano {
     if (changed.has('metronome')) this.looper.setMetronome(settings.metronome);
     // El reparto de las bandas solo lo lee el mapeador, que es quien decide que
     // pieza hay debajo de la palma; el overlay lo recibe en cada fotograma.
+    if (changed.has('kitSpace') || changed.has('swing')) this.applyKitTrim(settings);
     if (changed.has('kitBands')) {
       this.mapper.syncSettings(settings);
       this.second?.syncSettings(settings);

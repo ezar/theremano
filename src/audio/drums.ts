@@ -270,25 +270,82 @@ function velocity(force: number): number {
   return Math.min(1, Math.max(MIN_VELOCITY, force));
 }
 
+/**
+ * Cuanto de cada pieza se va a la sala.
+ *
+ * No es el mismo para todas y no puede serlo: el bombo mojado emborrona el
+ * grave y se lleva por delante lo que sujeta el ritmo, y el plato seco suena a
+ * muestra pegada. Es lo que hace cualquiera al montar un kit -el bombo casi
+ * seco, el plato largo- y sin esto un solo mando para las cuatro obliga a
+ * elegir entre un bombo turbio y un kit sin sala.
+ */
+const SEND: Record<DrumPiece, number> = { kick: 0.05, snare: 0.3, hat: 0.12, crash: 0.45 };
+
+/**
+ * Lo que devuelve la sala, por debajo de lo que se le manda.
+ *
+ * La sala va en paralelo, asi que lo que sale se SUMA al golpe seco: al maximo,
+ * un golpe de plato llegaba casi al uno y hacia trabajar al limitador en cada
+ * compas. Bajando la vuelta, el mando se puede subir del todo sin que el kit
+ * empiece a pelearse consigo mismo.
+ */
+const ROOM_LEVEL = 0.62;
+
 export class DrumKit {
   private readonly voices: Record<DrumPiece, Voice>;
+  private readonly room: Tone.Freeverb;
+  private readonly roomLevel: Tone.Gain;
+  private readonly sends: Record<DrumPiece, Tone.Gain>;
+  private readonly taps: Record<DrumPiece, Tone.Gain>;
 
-  /** @param trim afinacion y volumen de cada pieza, o nada para el de fabrica. */
-  constructor(output: Tone.InputNode, trim?: KitTrim) {
+  /**
+   * @param trim afinacion y volumen de cada pieza, o nada para el de fabrica.
+   * @param space cuanta sala, de 0 (seco) a 1.
+   */
+  constructor(output: Tone.InputNode, trim?: KitTrim, space = 0) {
+    // La sala va por envio y no en el camino de cada pieza: asi el golpe seco
+    // llega entero y a tiempo, y lo que se moja es una copia. Metida en serie,
+    // subir la sala bajaria el golpe, que es lo contrario de lo que se busca.
+    // Una sala de local de ensayo y no una catedral: lo bastante viva para que se
+    // oiga la cola de un plato, lo bastante corta para no tapar el golpe
+    // siguiente. El grave se amortigua, que es lo que hace una habitacion.
+    this.roomLevel = new Tone.Gain(ROOM_LEVEL).connect(output);
+    this.room = new Tone.Freeverb({ roomSize: 0.68, dampening: 3200, wet: 1 }).connect(this.roomLevel);
+    const tap = (piece: DrumPiece): Tone.Gain => {
+      const dry = new Tone.Gain(1).connect(output);
+      const send = new Tone.Gain(0).connect(this.room);
+      dry.connect(send);
+      this.sends[piece] = send;
+      return dry;
+    };
+    this.sends = {} as Record<DrumPiece, Tone.Gain>;
+    this.taps = {
+      kick: tap('kick'),
+      snare: tap('snare'),
+      hat: tap('hat'),
+      crash: tap('crash'),
+    };
     this.voices = {
-      kick: new KickVoice(output),
+      kick: new KickVoice(this.taps.kick),
       // La campana estrecha alrededor de dos kilohercios es donde vive el
       // chasquido de un parche.
-      snare: new NoiseVoice(output, DECAY.snare, LEVEL.snare, { type: 'bandpass', frequency: SNARE_HZ, Q: 0.9 }),
+      snare: new NoiseVoice(this.taps.snare, DECAY.snare, LEVEL.snare, { type: 'bandpass', frequency: SNARE_HZ, Q: 0.9 }),
       // Del charles solo interesa lo que hay muy arriba: por debajo de ocho
       // kilohercios lo que queda es un siseo sin filo.
-      hat: new HatVoice(output),
-      crash: new NoiseVoice(output, DECAY.crash, LEVEL.crash, { type: 'highpass', frequency: CRASH_HZ, Q: 1 }),
+      hat: new HatVoice(this.taps.hat),
+      crash: new NoiseVoice(this.taps.crash, DECAY.crash, LEVEL.crash, { type: 'highpass', frequency: CRASH_HZ, Q: 1 }),
     };
+    this.setSpace(space);
     // Las voces nacen con lo de fabrica, asi que solo hay que tocarlas si lo que
     // llega no lo es. Una capa de bucle se monta a mitad de una vuelta: no puede
     // sonar la primera con el kit sin afinar.
     if (trim) this.trim(trim);
+  }
+
+  /** @param space de 0 (seco) a 1. Cada pieza se moja lo suyo. */
+  setSpace(space: number): void {
+    const amount = Math.min(1, Math.max(0, space));
+    for (const piece of KIT) this.sends[piece].gain.rampTo(amount * SEND[piece], 0.08);
   }
 
   trim(trim: KitTrim): void {
@@ -308,6 +365,12 @@ export class DrumKit {
   }
 
   dispose(): void {
-    for (const piece of KIT) this.voices[piece].dispose();
+    for (const piece of KIT) {
+      this.voices[piece].dispose();
+      this.sends[piece].dispose();
+      this.taps[piece].dispose();
+    }
+    this.room.dispose();
+    this.roomLevel.dispose();
   }
 }

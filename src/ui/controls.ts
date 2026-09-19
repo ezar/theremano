@@ -377,6 +377,9 @@ export class Controls {
   private kit(): void {
     const s = t().settings;
     this.section(s.kitSection);
+    this.range('kit-space', s.kitSpace, 0, 1, 0.05, (x) => x.kitSpace, (v) => this.deps.store.set({ kitSpace: v }), (v) => `${Math.round(v * 100)}%`);
+    this.range('swing', s.swing, 0, 1, 0.05, (x) => x.swing, (v) => this.deps.store.set({ swing: v }), (v) => `${Math.round(v * 100)}%`);
+    this.hint(s.swingHint);
     this.hint(s.kitHint);
 
     for (const piece of KIT) {

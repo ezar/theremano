@@ -53,6 +53,12 @@ export class AudioEngine {
    */
   private kitTrim: KitTrim | null = null;
   /**
+   * La sala del kit, guardada aqui por lo mismo que la afinacion: el kit se
+   * monta y se desmonta al encender y apagar el modo, y sin esto salir a la
+   * melodia y volver dejaria el kit seco otra vez.
+   */
+  private kitSpace = 0;
+  /**
    * Bus propio de la bateria, hermano del de los bucles y por el mismo motivo.
    *
    * No pasa por el maestro porque el maestro lo mueve la mano de expresion, y
@@ -223,7 +229,7 @@ export class AudioEngine {
     if (!this.started || !this.drumBus) return;
     if (on === (this.drum !== null)) return;
     if (on) {
-      this.drum = new DrumKit(this.drumBus, this.kitTrim ?? undefined);
+      this.drum = new DrumKit(this.drumBus, this.kitTrim ?? undefined, this.kitSpace);
       return;
     }
     this.drum?.dispose();
@@ -234,6 +240,12 @@ export class AudioEngine {
   setKitTrim(trim: KitTrim): void {
     this.kitTrim = trim;
     this.drum?.trim(trim);
+  }
+
+  /** @param space sala del kit, de 0 (seco) a 1. */
+  setKitSpace(space: number): void {
+    this.kitSpace = space;
+    this.drum?.setSpace(space);
   }
 
   /**
