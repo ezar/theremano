@@ -525,11 +525,20 @@ otro —con los dedos de la mano de melodía o en Ajustes—, solo que con la ma
 la otra persona: si los dos leyeran el mismo ajuste, abrir la mano de una le
 cambiaría el timbre a la otra a mitad de nota.
 
-Lo que el dúo **no** hace todavía: la segunda persona no graba en la estación de
-bucles, no mueve el rótulo de la nota y no lleva la melodía guiada. Las tres son
-de una sola persona —una capa es monofónica, el rótulo dice una nota y la guía
-apunta a una mano— y repartirlas entre dos pide decidir de quién son. Los golpes
-de batería sí suenan para las dos: el kit es uno y está en el encuadre.
+**Una vuelta, dos capas.** Grabar en dúo abre dos tomas, no una: son dos
+instrumentos sonando a la vez y una capa es monofónica, así que «lo que suena» no
+cabe en una. Se abren en el mismo instante y se cierran en el mismo instante, de
+modo que las dos capas comparten ciclo por construcción y no porque cuadren los
+números. Quien no toque nada en esa vuelta no deja capa: una toma vacía se
+descarta sola. Y si con tres capas ya grabadas solo cabe una de las dos, se dice
+—perder una capa que alguien acaba de tocar sin avisar es lo peor que podría
+hacer ahí.
+
+Lo que el dúo **no** hace todavía: la segunda persona no mueve el rótulo de la
+nota y no lleva la melodía guiada. Las dos son de una sola persona —el rótulo
+dice una nota y la guía apunta a una mano— y repartirlas entre dos pide decidir
+de quién son. Los golpes de batería sí suenan para las dos: el kit es uno y está
+en el encuadre.
 
 ---
 

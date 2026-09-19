@@ -10,6 +10,7 @@ import { PointerPlayer } from './mapping/pointer';
 import { GuideSession, getMelody } from './mapping/melodies';
 import { decodeSettings, hasShareableKeys, readPerformanceParam, shareUrl } from './state/share';
 import { decodePerformance, encodePerformance, type Performance } from './state/performance';
+import type { LiveSnapshot } from './audio/loopTake';
 import { i18n, t } from './i18n';
 import { applyStaticStrings } from './ui/static';
 import { Camera, HIGH_RES, LOW_RES, attachStream, type CameraInfo } from './camera/stream';
@@ -117,6 +118,8 @@ class Theremano {
   private second: Mapper | null = null;
   /** Lo ultimo que repartio el duo. Lo mira el overlay para dibujar a las dos. */
   private players: Player[] = [];
+  /** Lo que toca la segunda persona en este fotograma, para su capa. */
+  private secondLive: LiveSnapshot | null = null;
   private readonly hud = new Hud();
   private readonly overlay: Overlay;
   private readonly controls: Controls;
@@ -405,7 +408,16 @@ class Theremano {
     // El modo se fija al empezar la toma y no cambia a mitad: se puede grabar un
     // ritmo, pasar a la melodia en caliente y tocar encima de lo grabado, que es
     // justo para lo que existe el cambio en caliente.
-    switch (this.looper.toggle(settings.preset, settings.drums)) {
+    /*
+     * Un timbre por persona que este tocando, y de ahi salen las tomas.
+     *
+     * En duo son dos instrumentos a la vez y una capa es monofonica, asi que
+     * grabar "lo que suena" no cabe en una capa: se abren dos. Quien no toque
+     * nada en esa vuelta no deja capa, porque una toma vacia se descarta sola.
+     */
+    const presets =
+      settings.duo === 'off' ? [settings.preset] : [settings.preset, settings.presetTwo];
+    switch (this.looper.toggle(presets, settings.drums)) {
       case 'rejected':
         this.hud.toast(t().toast.layersFull);
         return;
@@ -420,6 +432,12 @@ class Theremano {
         return;
       case 'saved':
         this.hud.toast(t().toast.layerSaved(this.looper.state.tracks.length));
+        return;
+      case 'partial':
+        // Se ha guardado lo que cabia y se ha quedado algo fuera. Se dice, que
+        // es lo unico que se puede hacer: alguien acaba de tocar una capa que no
+        // esta, y anunciar "capa guardada" seria mentir sobre la mitad.
+        this.hud.toast(t().toast.layersFull);
         return;
       case 'discarded':
         this.hud.toast(t().toast.layerDiscarded);
@@ -1419,7 +1437,8 @@ class Theremano {
     runtime.latencyMs = this.estimateLatency(now, metadata);
     runtime.midi = output.midi;
 
-    // La capa que se este grabando guarda el gesto, no el sonido.
+    // La capa que se este grabando guarda el gesto, no el sonido. Una por
+    // persona: en duo son dos instrumentos y una capa es monofonica.
     this.looper.capture({
       gateEvent: output.gateEvent,
       gateOpen: output.gateOpen,
@@ -1427,7 +1446,8 @@ class Theremano {
       cutoffNorm: output.cutoffNorm,
       gain: output.gain,
       strikes: output.strikes,
-    });
+    }, ...(this.secondLive ? [this.secondLive] : []));
+    this.secondLive = null;
 
     const loops = this.looper.state;
     const frame: OverlayFrame = {
@@ -1567,6 +1587,18 @@ class Theremano {
     this.engine.setSpace(output.space, 1);
     this.engine.setVibrato(output.vibrato, output.vibratoRate, 1);
     this.engine.setDrone(output.drone, 1);
+    // Lo que toca, para su propia capa. Se deja aqui y lo recoge el bucle de
+    // fotogramas unas lineas mas abajo, que es donde se graba: la alternativa
+    // -grabar desde aqui- pondria dos llamadas a la estacion en el mismo
+    // fotograma y una de las dos veria una toma que la otra acaba de cerrar.
+    this.secondLive = {
+      gateEvent: output.gateEvent,
+      gateOpen: output.gateOpen,
+      freq: output.freq,
+      cutoffNorm: output.cutoffNorm,
+      gain: output.gain,
+      strikes: output.strikes,
+    };
     // El gesto de los dedos, que aqui cambia SU timbre y no el de la otra.
     if (output.preset) this.store.set({ presetTwo: output.preset.id });
     return { assignment: player.roles, lens: player.lens, pitchX: output.pitchX, gateOpen: output.gateOpen };
