@@ -32,6 +32,9 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
 - **Las manos de cada capa** — una capa no guarda sonido, guarda el gesto, así
   que mientras suena se vuelve a dibujar la mano que la tocó, en el color de su
   carril. Se pone la propia encima y se copia. Tecla **G**.
+- **El eco que contesta** — una capa que *responde* a la última en vez de
+  repetirla: invertida, en espejo o una quinta arriba. La llamada se queda donde
+  estaba, así que lo que se oye es una pregunta y una respuesta. Tecla **E**.
 - **Clip para compartir** — graba imagen y sonido en 9:16, hasta un minuto, con
   la nota y la marca sobreimpresas, y lo entrega por la hoja de compartir del
   móvil o como descarga.
@@ -266,9 +269,9 @@ la introducción, opcional, remata la faena: se cierra solo cuando el cambio de
 timbre ocurre de verdad, no cuando se levantan dedos.
 
 Con teclado: **espacio** graba una capa de bucle, **C** graba un clip, **Z**
-quita la última capa, **V** oculta o muestra la cámara, **G** muestra u oculta
-las manos de las capas, **D** cambia entre tocar solo y las dos formas de tocar
-en dúo, **H** abre la ayuda.
+quita la última capa, **E** añade una capa que contesta a la última, **V** oculta
+o muestra la cámara, **G** muestra u oculta las manos de las capas, **D** cambia
+entre tocar solo y las dos formas de tocar en dúo, **H** abre la ayuda.
 
 ### Solo manos
 
@@ -475,6 +478,47 @@ un dedo más corto y algo arqueado, no como un dedo que se tuerce de lado.
 Si hay una melodía elegida, se toca esa; si no, «Estrellita», que se reconoce en
 dos notas y cabe en una octava. En cualquier caso queda elegida al salir, así
 que quien entre después se encuentra guiada la que acaba de ver.
+
+---
+
+## Sobre el eco que contesta
+
+La estación de bucles repite. El eco no repite: da la vuelta a la última capa y
+pone el resultado a sonar **al lado** del original, de modo que lo que se oye es
+una llamada y una respuesta y no una nota doblada. Es la diferencia entre un
+bucle y un dúo consigo mismo.
+
+Es aditivo a propósito, y ahí está todo. Transformar la capa en su sitio sería
+más barato y no serviría: sin la llamada no hay respuesta, hay otra melodía. La
+original se queda como estaba y la respuesta es una capa nueva, con su carril, su
+color y su botón de silencio, que se puede deshacer sola. Y es una capa normal y
+corriente: viaja en el enlace, se le dibuja su mano fantasma, y nadie más en la
+aplicación tiene que saber que salió de otra.
+
+Contesta de tres maneras. **Invertida** gira alrededor de la primera nota que
+sonó: lo que subía baja lo mismo. Se toma la primera y no el centro del rango
+porque es la que el oído usa de referencia — con otro pivote, la respuesta
+empieza en otra nota y suena a una melodía distinta que además va al revés. **En
+espejo** la toca del revés en el tiempo. **Una quinta arriba** es la respuesta
+más consonante que hay.
+
+Dos cosas que no se ven y sin las cuales no funcionaría. La primera: invertir o
+transponer saca notas que no son grados de la escala —una tercera menor invertida
+sobre una pentatónica cae en un hueco—, así que cada nota de la respuesta se
+ajusta a la escala por el mismo camino que usa el fantasma para saber dónde poner
+la mano. Sin eso, la respuesta suena desafinada contra su llamada, que es
+exactamente lo contrario de lo que se busca; con eso, además, cae en notas que se
+pueden tocar.
+
+La segunda: al dar la vuelta al tiempo, **el final de una nota pasa a ser su
+principio**. Sin cambiar los ataques por sueltas, la capa sale con una nota que
+no se cierra en toda la vuelta y, como cada vuelta la vuelve a atacar, se
+convierte en un bordón que ya no para — es el mismo fallo que el validador del
+enlace rechaza, y aquí se produciría desde dentro.
+
+Un ritmo siempre contesta del revés, sea cual sea la clase elegida: a un bombo no
+se le puede invertir el intervalo ni subirlo una quinta, porque un golpe no tiene
+altura que dar la vuelta. Lo que sí tiene un ritmo es un derecho y un revés.
 
 ---
 

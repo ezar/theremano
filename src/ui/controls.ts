@@ -1,5 +1,6 @@
 import { PRESETS, type PresetId } from '../audio/presets';
 import { isDuoMode } from '../tracking/duo';
+import { isEchoKind } from '../audio/echo';
 import { MELODIES, type MelodyKind } from '../mapping/melodies';
 import { SCALES, type ScaleId } from '../mapping/scales';
 import { KIT, MAX_LEVEL, TUNING_RANGE, type DrumPiece } from '../mapping/kit';
@@ -311,6 +312,21 @@ export class Controls {
       );
       this.hint(s.melodyHint);
     });
+
+    // El eco va con lo que se graba y no con el instrumento: lo que decide es
+    // que capa aparece al pedir una respuesta, no como suena lo que tocas.
+    this.select(
+      'echo-kind',
+      s.echoKind,
+      [
+        { value: 'invert', label: s.echoInvert },
+        { value: 'mirror', label: s.echoMirror },
+        { value: 'fifth', label: s.echoFifth },
+      ],
+      (x) => x.echoKind,
+      (value) => this.deps.store.set({ echoKind: isEchoKind(value) ? value : 'invert' }),
+    );
+    this.hint(s.echoHint);
 
     this.section(s.cameraSection);
     this.cameraSelect = this.select('camera', s.device, [], (x) => x.cameraId ?? '', (value) => {

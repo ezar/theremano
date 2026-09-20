@@ -226,6 +226,12 @@ export interface Strings {
     duoOptionHalves: string;
     duoOptionHands: string;
     duoHint: string;
+    /** De que clase es la respuesta del eco. */
+    echoKind: string;
+    echoInvert: string;
+    echoMirror: string;
+    echoFifth: string;
+    echoHint: string;
     /** El timbre de la segunda persona, en duo. */
     presetTwo: string;
     reset: string;
@@ -250,6 +256,9 @@ export interface Strings {
     layerSaved: (count: number) => string;
     layerDiscarded: string;
     layerRemoved: string;
+    /** El eco: una capa que contesta a la ultima. */
+    echoAdded: (count: number) => string;
+    echoEmpty: string;
     layersFull: string;
     clipRecording: string;
     clipUnsupported: string;

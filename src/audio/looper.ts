@@ -5,6 +5,8 @@ import { DrumKit } from './drums';
 import type { KitTrim } from '../mapping/kit';
 import { beatsInCycle, beatsLeft, isAccent, isDue, isMissed, planCountIn, type CountInPlan } from './countIn';
 import { swingTime } from './swing';
+import { answer, answerHits, type EchoKind } from './echo';
+import type { PitchLayout } from '../mapping/scales';
 
 export type { DrumHitEvent, LoopEvent } from './loopTake';
 export { MAX_CYCLE_SECONDS, MAX_TRACKS, MIN_CYCLE_SECONDS } from './loopTake';
@@ -471,6 +473,47 @@ export class Looper {
   }
 
   /** Quita la ultima capa grabada. */
+  /**
+   * Anade una capa que CONTESTA a la ultima, en vez de repetirla.
+   *
+   * Aditiva: la llamada se queda donde estaba y la respuesta es una capa mas,
+   * con su carril, su color y su silencio. Sin la llamada no hay respuesta, hay
+   * otra melodia.
+   *
+   * Y lo que sale es una capa normal y corriente: viaja en el enlace, se puede
+   * deshacer sola y se le dibuja su mano fantasma. Nadie mas tiene que saber que
+   * esa capa salio de otra.
+   *
+   * @param layout la escala de ahora, que es donde tienen que caer las notas de
+   * la respuesta para que se puedan tocar con la mano.
+   * @returns 'answered', o por que no se ha podido.
+   */
+  echo(kind: EchoKind, layout: PitchLayout): 'answered' | 'empty' | 'full' {
+    if (!this.output || this.tracks.length === 0) return 'empty';
+    if (this.tracks.length >= MAX_TRACKS) return 'full';
+    const source = this.tracks[this.tracks.length - 1]!;
+
+    const track: LoopTrack = {
+      id: this.nextId++,
+      presetId: source.presetId,
+      events: source.drums ? [] : answer(source.events, kind, layout, this.cycleSeconds),
+      hits: source.drums ? answerHits(source.hits, this.cycleSeconds) : [],
+      drums: source.drums,
+      muted: false,
+      hue: TRACK_HUES[this.tracks.length % TRACK_HUES.length]!,
+    };
+    // Una capa sin nada dentro no es una respuesta: es un carril vacio que
+    // ocupa sitio, se ve en el anillo y hay que deshacer a mano.
+    if (track.events.length === 0 && track.hits.length === 0) return 'empty';
+
+    this.tracks.push(track);
+    this.voices.set(track.id, this.makeVoice(track));
+    // Desde el principio de la vuelta siguiente, que es cuando entra: la que ya
+    // esta programada no la lleva.
+    this.startTransport();
+    return 'answered';
+  }
+
   undo(): void {
     const track = this.tracks.pop();
     if (!track) return;

@@ -312,6 +312,8 @@ class Theremano {
         this.toggleMetronome();
       } else if (event.key.toLowerCase() === 'b') {
         this.toggleDrums();
+      } else if (event.key.toLowerCase() === 'e') {
+        this.echoLastLayer();
       } else if (event.key.toLowerCase() === 'd') {
         this.cycleDuo();
       } else if (event.key.toLowerCase() === 'g') {
@@ -359,6 +361,31 @@ class Theremano {
     const message = handsOnly ? t().toast.stageHands : t().toast.stageCamera;
     this.store.set({ stageMode: handsOnly ? 'hands' : 'camera' });
     this.hud.toast(message);
+  }
+
+  /**
+   * La respuesta a la ultima capa.
+   *
+   * Tecla y no boton por lo mismo que las otras tres: la idea de contestarse a
+   * uno mismo aparece justo despues de cerrar una capa, con las manos todavia
+   * en el aire, y abrir los ajustes ahi es perder el momento. Que clase de
+   * respuesta se elige en los ajustes; pedirla, aqui.
+   */
+  private echoLastLayer(): void {
+    switch (this.looper.echo(this.store.get().echoKind, this.mapper.currentLayout)) {
+      case 'answered':
+        this.hud.toast(t().toast.echoAdded(this.looper.state.tracks.length));
+        return;
+      case 'full':
+        this.hud.toast(t().toast.layersFull);
+        return;
+      case 'empty':
+        // Sin capas que contestar, o una capa que al darle la vuelta no deja
+        // nada. Se dice en vez de no hacer nada: una tecla que no responde se
+        // lee como una tecla rota.
+        this.hud.toast(t().toast.echoEmpty);
+        return;
+    }
   }
 
   /**

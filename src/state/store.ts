@@ -7,6 +7,7 @@ import {
   type DrumPiece,
 } from '../mapping/kit';
 import { isDuoMode, type DuoMode } from '../tracking/duo';
+import { isEchoKind, type EchoKind } from '../audio/echo';
 import type { ScaleId } from '../mapping/scales';
 import type { PresetId } from '../audio/presets';
 import type { ClipAspect } from '../capture/recorder';
@@ -118,6 +119,14 @@ export interface Settings {
    * vuelta girando y volver a cero devuelve lo que se toco.
    */
   swing: number;
+  /**
+   * Como contesta el eco: invertida, en espejo o una quinta arriba.
+   *
+   * No es cuanto eco hay, es de que clase: el eco anade una capa cuando se pide
+   * y esto decide que capa. Se guarda entre sesiones porque quien encuentra la
+   * que le gusta la quiere para la siguiente.
+   */
+  echoKind: EchoKind;
   /** Melodia guiada activa. Cadena vacia si no hay ninguna. */
   melodyId: string;
   /** true en cuanto se ha visto la introduccion, se complete o se salte. */
@@ -155,6 +164,7 @@ export const DEFAULT_SETTINGS: Settings = {
   kitLevel: { kick: 1, snare: 1, hat: 1, crash: 1 },
   kitSpace: 0.3,
   swing: 0,
+  echoKind: 'invert',
   melodyId: '',
   onboarded: false,
   locale: 'auto',
@@ -223,6 +233,9 @@ function loadPersisted(): Settings {
     // instante imposible. La puerta del tipo lo deja pasar, porque es un numero.
     merged.kitSpace = normalizeUnit(merged.kitSpace, DEFAULT_SETTINGS.kitSpace);
     merged.swing = normalizeUnit(merged.swing, DEFAULT_SETTINGS.swing);
+    // Una cadena cualquiera pasa la puerta del tipo, y aqui dejaria un eco que
+    // no contesta de ninguna de las tres maneras: no anadiria capa ninguna.
+    if (!isEchoKind(merged.echoKind)) merged.echoKind = DEFAULT_SETTINGS.echoKind;
     return merged;
   } catch {
     return freshDefaults();
