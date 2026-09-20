@@ -5,7 +5,7 @@ export const en: Strings = {
   htmlLang: 'en',
   notes: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'],
 
-  pieces: { kick: 'kick', snare: 'snare', hat: 'hat', crash: 'crash' },
+  pieces: { kick: 'kick', snare: 'snare', tomLow: 'low tom', tomHigh: 'high tom', hat: 'hat', crash: 'crash' },
 
   splash: {
     tagline: 'An instrument you play with your hands in the air.',
@@ -73,7 +73,7 @@ export const en: Strings = {
     drumLayer: (index) => `Layer ${index} · beat`,
     layerMuted: 'Layer muted. Tap to bring it back.',
     layerActive: 'Tap to mute this layer.',
-    kit: 'drums · 4 pieces',
+    kit: (pieces: number) => `drums · ${pieces} pieces`,
   },
 
   actions: {
@@ -285,6 +285,8 @@ export const en: Strings = {
     kitBand: 'Band',
     kitTuning: 'Tuning (semitones)',
     kitLevel: 'Volume',
+    kitSize: 'Pieces',
+    kitSizeHint: 'Every piece you add narrows the others: with four, each band is a little over a hand span at arm\u2019s length. Below a certain width, hits start landing on the neighbouring piece, and where that limit is depends on you, on how far you are from the camera and on how wide the frame is. Try it before you keep it.',
     kitSpace: 'Room',
     swing: 'Swing',
     swingHint: 'Pushes the off-beat eighth back, which is what separates a played groove from a square one. It applies on playback, so you can move it while the loop turns and going back to zero returns what you played.',

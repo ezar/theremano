@@ -107,7 +107,8 @@ export interface Strings {
     layerMuted: string;
     layerActive: string;
     /** Subtitulo del panel en modo bateria: ocupa el sitio de la escala. */
-    kit: string;
+    /** Lo que hay bajo las manos en bateria: cuantas piezas. */
+    kit: (pieces: number) => string;
   };
 
   actions: {
@@ -212,6 +213,9 @@ export interface Strings {
     /** Volumen de una pieza, sobre el suyo de fabrica. */
     kitLevel: string;
     /** Sala del kit entero. */
+    /** Cuantas piezas hay en el escenario. */
+    kitSize: string;
+    kitSizeHint: string;
     kitSpace: string;
     /** Swing de las capas de ritmo. */
     swing: string;

@@ -63,7 +63,7 @@ describe('el reparto de las bandas', () => {
       ['crash', 'hat', 'snare', 'kick', 'kick'],
     ];
     for (const value of cases) {
-      const layout = normalizeLayout(value);
+      const layout = normalizeLayout(value, 4);
       expect(layout, JSON.stringify(value)).toHaveLength(KIT.length);
       expect(new Set(layout), JSON.stringify(value)).toEqual(new Set(KIT));
     }
@@ -72,20 +72,20 @@ describe('el reparto de las bandas', () => {
   it('respeta el sitio de lo que si se reconoce', () => {
     // Lo guardado no se descarta porque venga incompleto: quien movio el plato a
     // la izquierda lo encuentra donde lo dejo, y las que falten se ponen detras.
-    expect(normalizeLayout(['crash'])).toEqual(['crash', 'kick', 'snare', 'hat']);
-    expect(normalizeLayout(['hat', 'kick'])).toEqual(['hat', 'kick', 'snare', 'crash']);
+    expect(normalizeLayout(['crash'], 4)).toEqual(['crash', 'kick', 'snare', 'hat']);
+    expect(normalizeLayout(['hat', 'kick'], 4)).toEqual(['hat', 'kick', 'snare', 'crash']);
   });
 
   it('una permutacion entera pasa tal cual', () => {
     const moved = ['crash', 'hat', 'snare', 'kick'];
-    expect(normalizeLayout(moved)).toEqual(moved);
+    expect(normalizeLayout(moved, 4)).toEqual(moved);
   });
 });
 
 describe('la afinacion y el volumen por pieza', () => {
   it('rellenan lo que falte y descartan lo que no sea un numero', () => {
     const tuning = normalizePieceNumbers({ kick: 3, snare: 'alto', hat: null }, 0, -TUNING_RANGE, TUNING_RANGE);
-    expect(tuning).toEqual({ kick: 3, snare: 0, hat: 0, crash: 0 });
+    expect(tuning).toEqual({ kick: 3, snare: 0, tomLow: 0, tomHigh: 0, hat: 0, crash: 0 });
   });
 
   it('un NaN no se cuela, que es lo que apagaria la pieza sin decir nada', () => {
@@ -102,7 +102,10 @@ describe('la afinacion y el volumen por pieza', () => {
   });
 
   it('se juntan por pieza para el kit', () => {
-    const trim = kitTrim({ kick: 2, snare: 0, hat: -1, crash: 0 }, { kick: 1, snare: 0.5, hat: 1, crash: 2 });
+    const trim = kitTrim(
+      { kick: 2, snare: 0, tomLow: 0, tomHigh: 0, hat: -1, crash: 0 },
+      { kick: 1, snare: 0.5, tomLow: 1, tomHigh: 1, hat: 1, crash: 2 },
+    );
     expect(trim.kick).toEqual({ tuning: 2, level: 1 });
     expect(trim.snare).toEqual({ tuning: 0, level: 0.5 });
   });
@@ -123,8 +126,8 @@ describe('los ajustes guardados', () => {
     const settings = store.get();
     expect(settings.drums).toBe(true);
     expect(new Set(settings.kitBands)).toEqual(new Set(KIT));
-    expect(settings.kitTuning).toEqual({ kick: 0, snare: 0, hat: 0, crash: 0 });
-    expect(settings.kitLevel).toEqual({ kick: 1, snare: 1, hat: 1, crash: 1 });
+    expect(settings.kitTuning).toEqual({ kick: 0, snare: 0, tomLow: 0, tomHigh: 0, hat: 0, crash: 0 });
+    expect(settings.kitLevel).toEqual({ kick: 1, snare: 1, tomLow: 1, tomHigh: 1, hat: 1, crash: 1 });
   });
 
   it('un kit bien guardado se recupera tal cual', () => {

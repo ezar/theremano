@@ -58,6 +58,10 @@ export function pitchHue(midi: number): number {
 export const PIECE_HUE: Record<DrumPiece, number> = {
   kick: 8,
   snare: 42,
+  // Los toms entre la caja y el charles, tambien en color: se leen como lo que
+  // son, dos parches que van entre una cosa y la otra.
+  tomLow: 20,
+  tomHigh: 76,
   hat: 152,
   crash: 205,
 };

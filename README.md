@@ -32,6 +32,9 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
 - **Las manos de cada capa** — una capa no guarda sonido, guarda el gesto, así
   que mientras suena se vuelve a dibujar la mano que la tocó, en el color de su
   carril. Se pone la propia encima y se copia. Tecla **G**.
+- **Toms** — el kit puede tener de cuatro a seis piezas. Cuatro es lo que viene
+  puesto, y cada una que añades estrecha las demás: dónde está el límite lo
+  decide quien toca, no el código.
 - **El eco que contesta** — una capa que *responde* a la última en vez de
   repetirla: invertida, en espejo o una quinta arriba. La llamada se queda donde
   estaba, así que lo que se oye es una pregunta y una respuesta. Tecla **E**.
@@ -478,6 +481,40 @@ un dedo más corto y algo arqueado, no como un dedo que se tuerce de lado.
 Si hay una melodía elegida, se toca esa; si no, «Estrellita», que se reconoce en
 dos notas y cabe en una octava. En cualquier caso queda elegida al salir, así
 que quien entre después se encuentra guiada la que acaba de ver.
+
+---
+
+## Sobre cuántas piezas caben
+
+El ancho útil son ochenta y cuatro centésimas de encuadre. Repartido entre
+cuatro, cada banda es poco más de un palmo a distancia de brazo; entre seis, dos
+tercios de eso. Por debajo de cierto ancho empiezan los golpes en la pieza de al
+lado — y no por ruido del detector, que es unas cien veces más pequeño que la
+banda más estrecha de aquí, sino por la puntería de una mano en el aire, sin
+nada que tocar y sin nada donde apoyarse.
+
+Dónde está ese límite depende de quien toca, de lo lejos que esté de la cámara y
+de lo ancho que sea el encuadre, así que no lo decide este código: **cuatro es lo
+que viene puesto y quien toca puede subirlo hasta seis**. Lo que no se puede es
+subirlo a ciegas y llamarlo mejor.
+
+Los toms van entre la caja y el charles, que es donde están en una batería de
+verdad y, sobre todo, donde la mano que alterna bombo y caja los alcanza sin
+cruzar el encuadre. Subir el número mete la pieza nueva ahí y no al final:
+añadirla al final es lo fácil y deja los toms pasado el plato, que es el peor
+sitio que hay — el extremo solo puede permitírselo una pieza que se usa una vez
+por compás. Y bajar el número se lleva los toms, no lo que estuviera más a la
+derecha: quedarse con las cuatro primeras bandas puede dejar un kit sin bombo y
+sin caja, y eso no es un kit más simple, es un kit con el que no se puede tocar.
+
+En el enlace, un ritmo con toms no cabe en el formato de antes: la pieza son dos
+bits y los toms no están entre las cuatro de siempre. Sube a la **versión 2**,
+que le roba un bit al tiempo —que tenía de sobra: doce bits siguen siendo cuarenta
+segundos para un ciclo que no pasa de veinte— y que una copia vieja de la página
+rechaza entera, porque esas piezas allí no existen. Un ritmo con las cuatro de
+siempre sigue saliendo en versión 1, byte por byte igual que antes, y hay una
+prueba que lo fija: los enlaces que ya existen se siguen leyendo en cualquier
+copia, incluidas las que están en caché sin actualizar.
 
 ---
 

@@ -209,8 +209,8 @@ describe('interpretacion en el enlace', () => {
       tracks: [{ presetId: 'theremin', drums: true, events: [], hits: [{ t: 0.5, piece: 'kick', force: 0.8, open: false }] }],
       kit: {
         bands: ['crash', 'hat', 'snare', 'kick'],
-        tuning: { kick: -5, snare: 0, hat: 3, crash: 12 },
-        level: { kick: 1.5, snare: 1, hat: 0.4, crash: 2 },
+        tuning: { kick: -5, snare: 0, tomLow: 0, tomHigh: 0, hat: 3, crash: 12 },
+        level: { kick: 1.5, snare: 1, tomLow: 1, tomHigh: 1, hat: 0.4, crash: 2 },
       },
     };
 
@@ -252,6 +252,85 @@ describe('interpretacion en el enlace', () => {
       // pieza en las dos primeras bandas.
       bytes[bytes.length - 10] = 0x00;
       expect(decodePerformance(toUrl(bytes))).toBe(null);
+    });
+
+    describe('un kit de mas de cuatro piezas', () => {
+      /*
+       * Un ritmo con toms no cabe en la version 1: la pieza son dos bits y los
+       * toms no estan en las cuatro de siempre. Se sube a la version 2, que le
+       * roba un bit al tiempo -que le sobraba- y que una copia vieja de la
+       * pagina rechaza entera, porque esas piezas ahi no existen.
+       */
+      const wide: Performance = {
+        cycleSeconds: 4,
+        tracks: [{
+          presetId: 'theremin',
+          drums: true,
+          events: [],
+          hits: [
+            { t: 0.5, piece: 'kick', force: 0.8, open: false },
+            { t: 1.5, piece: 'tomLow', force: 0.7, open: false },
+            { t: 2.5, piece: 'tomHigh', force: 0.6, open: false },
+          ],
+        }],
+        kit: {
+          bands: ['kick', 'snare', 'tomLow', 'tomHigh', 'hat', 'crash'],
+          tuning: { kick: -2, snare: 0, tomLow: 3, tomHigh: -4, hat: 0, crash: 5 },
+          level: { kick: 1, snare: 1, tomLow: 1.2, tomHigh: 0.8, hat: 1, crash: 1 },
+        },
+      };
+
+      it('sale y vuelve a entrar con sus seis piezas', () => {
+        const back = decodePerformance(encodePerformance(wide)!.encoded)!;
+        expect(back.kit?.bands).toEqual(wide.kit!.bands);
+        expect(back.tracks[0]!.hits!.map((h) => h.piece)).toEqual(['kick', 'tomLow', 'tomHigh']);
+        // Y los golpes siguen cayendo donde caian: el bit se le quito al tiempo,
+        // que tenia de sobra, no a la fuerza ni al charles abierto.
+        expect(back.tracks[0]!.hits!.map((h) => h.t)).toEqual([0.5, 1.5, 2.5]);
+        expect(back.kit!.tuning.tomLow).toBe(3);
+        expect(back.kit!.tuning.tomHigh).toBe(-4);
+      });
+
+      it('y lo anuncia subiendo de version, para que una copia vieja lo rechace', () => {
+        // Es lo correcto: media bateria reconstruida con las piezas cambiadas
+        // sonaria a otro ritmo, y eso es peor que decir que no se puede.
+        expect(bytesOf(encodePerformance(wide)!.encoded)[0]).toBe(2);
+      });
+
+      it('un ritmo de las cuatro de siempre no sube de version', () => {
+        // Lo que hace que los enlaces que ya existen se sigan leyendo en
+        // cualquier copia de la pagina, incluidas las que estan en cache.
+        expect(bytesOf(encodePerformance(beat)!.encoded)[0]).toBe(1);
+      });
+
+      it('un numero de piezas imposible se rechaza entero', () => {
+        /*
+         * El bloque del kit empieza por cuantas piezas trae: tres bytes de
+         * reparto, seis de afinacion y seis de volumen van detras.
+         *
+         * Lo que se comprueba es el resultado -el enlace no se reproduce- y no
+         * cual de las guardas lo para. De hecho lo paran dos: el rango del
+         * numero y, detras, que los bytes no cuadren. Medido: quitando la
+         * primera, esto sigue pasando. Se deja escrito para que nadie lea esta
+         * prueba como una red bajo el rango.
+         */
+        for (const imposible of [9, 3, 0, 255]) {
+          const bytes = bytesOf(encodePerformance(wide)!.encoded);
+          bytes[bytes.length - 16] = imposible;
+          expect(decodePerformance(toUrl(bytes)), `${imposible} piezas`).toBe(null);
+        }
+      });
+
+      it('con un numero impar de piezas la media banda que sobra no inventa una', () => {
+        const five: Performance = {
+          ...wide,
+          kit: { ...wide.kit!, bands: ['kick', 'snare', 'tomLow', 'hat', 'crash'] },
+          tracks: [{ ...wide.tracks[0]!, hits: [{ t: 0.5, piece: 'tomLow', force: 0.8, open: false }] }],
+        };
+        const back = decodePerformance(encodePerformance(five)!.encoded)!;
+        expect(back.kit?.bands).toHaveLength(5);
+        expect(back.kit?.bands).toEqual(five.kit!.bands);
+      });
     });
 
     it('una afinacion fuera de rango se rechaza entera', () => {

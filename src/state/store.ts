@@ -1,6 +1,8 @@
 import {
   KIT,
   MAX_LEVEL,
+  MIN_PIECES,
+  normalizeSize,
   TUNING_RANGE,
   normalizeLayout,
   normalizePieceNumbers,
@@ -99,6 +101,19 @@ export interface Settings {
    * la cambia por la que hubiera, no la duplica.
    */
   kitBands: DrumPiece[];
+  /**
+   * Cuantas piezas hay en el escenario, de cuatro a seis.
+   *
+   * Cuatro es lo que viene puesto y lo que le sirve a casi todo el mundo: el
+   * ancho util repartido entre cuatro da poco mas de un palmo por pieza a
+   * distancia de brazo. Cada pieza que se anade estrecha las otras, y por debajo
+   * de cierto ancho empiezan los golpes en la pieza de al lado -no por ruido del
+   * detector, que es cien veces mas pequeno, sino por la punteria de una mano en
+   * el aire-. Donde esta ese limite depende de quien toca, de lo lejos que este
+   * de la camara y de lo ancho que sea el encuadre, asi que lo decide quien toca
+   * y no este fichero.
+   */
+  kitSize: number;
   /** Afinacion de cada pieza, en semitonos sobre la de fabrica. */
   kitTuning: Record<DrumPiece, number>;
   /** Volumen de cada pieza, multiplicando el de fabrica. */
@@ -160,8 +175,9 @@ export const DEFAULT_SETTINGS: Settings = {
   ghosts: true,
   drums: false,
   kitBands: [...KIT],
-  kitTuning: { kick: 0, snare: 0, hat: 0, crash: 0 },
-  kitLevel: { kick: 1, snare: 1, hat: 1, crash: 1 },
+  kitSize: MIN_PIECES,
+  kitTuning: { kick: 0, snare: 0, tomLow: 0, tomHigh: 0, hat: 0, crash: 0 },
+  kitLevel: { kick: 1, snare: 1, tomLow: 1, tomHigh: 1, hat: 1, crash: 1 },
   kitSpace: 0.3,
   swing: 0,
   echoKind: 'invert',
@@ -226,7 +242,10 @@ function loadPersisted(): Settings {
     // Una cadena cualquiera pasa la puerta del tipo y aqui dejaria un duo que no
     // existe: dos manos repartidas en dos instrumentos sin la segunda voz.
     if (!isDuoMode(merged.duo)) merged.duo = DEFAULT_SETTINGS.duo;
-    merged.kitBands = normalizeLayout(merged.kitBands);
+    // El tamano primero: el reparto se sanea contra el, asi que uno imposible
+    // dejaria un reparto imposible.
+    merged.kitSize = normalizeSize(merged.kitSize);
+    merged.kitBands = normalizeLayout(merged.kitBands, merged.kitSize);
     merged.kitTuning = normalizePieceNumbers(merged.kitTuning, 0, -TUNING_RANGE, TUNING_RANGE);
     merged.kitLevel = normalizePieceNumbers(merged.kitLevel, 1, 0, MAX_LEVEL);
     // Un NaN aqui no da un error: deja el kit mudo o el ritmo programado en un

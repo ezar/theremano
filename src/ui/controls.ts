@@ -3,7 +3,7 @@ import { isDuoMode } from '../tracking/duo';
 import { isEchoKind } from '../audio/echo';
 import { MELODIES, type MelodyKind } from '../mapping/melodies';
 import { SCALES, type ScaleId } from '../mapping/scales';
-import { KIT, MAX_LEVEL, TUNING_RANGE, type DrumPiece } from '../mapping/kit';
+import { MAX_LEVEL, MAX_PIECES, MIN_PIECES, TUNING_RANGE, growLayout, type DrumPiece } from '../mapping/kit';
 import { i18n, t } from '../i18n';
 import type { Settings, SettingsStore, StageMode } from '../state/store';
 import type { CameraInfo } from '../camera/stream';
@@ -396,15 +396,30 @@ export class Controls {
     this.range('kit-space', s.kitSpace, 0, 1, 0.05, (x) => x.kitSpace, (v) => this.deps.store.set({ kitSpace: v }), (v) => `${Math.round(v * 100)}%`);
     this.range('swing', s.swing, 0, 1, 0.05, (x) => x.swing, (v) => this.deps.store.set({ swing: v }), (v) => `${Math.round(v * 100)}%`);
     this.hint(s.swingHint);
+    // Cuantas piezas caben. Va arriba del todo del kit porque cambia lo que
+    // sale debajo: las secciones por pieza son las que esten en el escenario.
+    this.range(
+      'kit-size',
+      s.kitSize,
+      MIN_PIECES,
+      MAX_PIECES,
+      1,
+      (x) => x.kitSize,
+      (v) => this.resize(v),
+      (v) => String(v),
+    );
+    this.hint(s.kitSizeHint);
     this.hint(s.kitHint);
 
-    for (const piece of KIT) {
+    // Las que esten puestas, en el orden en que estan: asi la lista de secciones
+    // se lee como se ve el encuadre, de izquierda a derecha.
+    for (const piece of this.deps.store.get().kitBands) {
       this.section(t().pieces[piece]);
 
       this.select(
         `kit-band-${piece}`,
         s.kitBand,
-        KIT.map((_, index) => ({ value: String(index), label: String(index + 1) })),
+        this.deps.store.get().kitBands.map((_, index) => ({ value: String(index), label: String(index + 1) })),
         (settings) => String(settings.kitBands.indexOf(piece)),
         (value) => this.moveToBand(piece, Number(value)),
       );
@@ -441,6 +456,21 @@ export class Controls {
    * Cambiarlas de sitio es ademas lo que uno espera al mover algo a un hueco
    * ocupado.
    */
+  /**
+   * Cambia cuantas piezas hay, y el reparto con ellas.
+   *
+   * Las dos a la vez y en una sola escritura: el reparto se sanea contra el
+   * tamano, asi que dejarlos discrepar aunque sea un instante deja un kit con
+   * mas bandas de las que dice tener. Y el panel se reconstruye entero, porque
+   * lo que cambia no es un valor sino cuantas secciones hay.
+   */
+  private resize(size: number): void {
+    const bands = growLayout(this.deps.store.get().kitBands, size);
+    this.deps.store.set({ kitSize: size, kitBands: bands });
+    this.build();
+    this.refresh();
+  }
+
   private moveToBand(piece: DrumPiece, band: number): void {
     const bands = [...this.deps.store.get().kitBands];
     const from = bands.indexOf(piece);

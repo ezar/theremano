@@ -194,7 +194,7 @@ export class Mapper {
     this.spaceFilter = new OneEuroFilter({ ...control, minCutoff: control.minCutoff * SPACE_SMOOTHING });
     this.volume = settings.masterVolume;
     this.timbre = getPreset(this.presetOf(settings));
-    this.setBands(settings.kitBands);
+    this.setBands(settings.kitBands, settings.kitSize);
     this.setDrums(settings.drums, settings.masterVolume);
   }
 
@@ -211,7 +211,7 @@ export class Mapper {
 
   syncSettings(settings: Readonly<Settings>): void {
     this.layout = createLayout(settings.scale, settings.tonicPc, settings.baseOctave, settings.octaves);
-    this.setBands(settings.kitBands);
+    this.setBands(settings.kitBands, settings.kitSize);
     this.pitchFilter.setParams({ minCutoff: settings.pitchMinCutoff, beta: settings.pitchBeta });
     const control = { minCutoff: settings.controlMinCutoff, beta: settings.controlBeta };
     this.cutoffFilter.setParams(control);
@@ -228,8 +228,8 @@ export class Mapper {
    * enlace- no tiene por que acordarse de que esta lista tiene una forma, y una
    * banda sin pieza detras no da un error: da un golpe que no suena.
    */
-  private setBands(bands: readonly DrumPiece[]): void {
-    this.bands = normalizeLayout(bands);
+  private setBands(bands: readonly DrumPiece[], size: number): void {
+    this.bands = normalizeLayout(bands, size);
   }
 
   /**

@@ -627,7 +627,14 @@ class Theremano {
   private adoptKit(performance: Performance | null): void {
     const kit = performance?.kit;
     if (!kit) return;
-    this.store.set({ kitBands: [...kit.bands], kitTuning: { ...kit.tuning }, kitLevel: { ...kit.level } });
+    // El tamano sale del propio reparto: el enlace no lo dice aparte porque no
+    // hace falta, un reparto de seis bandas es un kit de seis piezas.
+    this.store.set({
+      kitSize: kit.bands.length,
+      kitBands: [...kit.bands],
+      kitTuning: { ...kit.tuning },
+      kitLevel: { ...kit.level },
+    });
   }
 
   private async toggleListening(): Promise<void> {
@@ -1891,9 +1898,12 @@ class Theremano {
     // El reparto de las bandas solo lo lee el mapeador, que es quien decide que
     // pieza hay debajo de la palma; el overlay lo recibe en cada fotograma.
     if (changed.has('kitSpace') || changed.has('swing')) this.applyKitTrim(settings);
-    if (changed.has('kitBands')) {
+    if (changed.has('kitBands') || changed.has('kitSize')) {
       this.mapper.syncSettings(settings);
       this.second?.syncSettings(settings);
+      // Y el subtitulo, que dice cuantas piezas hay debajo de las manos: sin
+      // esto anunciaba cuatro sobre seis bandas dibujadas.
+      this.hud.setSubtitle(settings);
     }
     if (changed.has('kitTuning') || changed.has('kitLevel')) this.applyKitTrim(settings);
     if (changed.has('drums')) {

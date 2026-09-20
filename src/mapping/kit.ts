@@ -17,19 +17,60 @@
  * Poner ahi cualquiera de los otros tres seria condenar a la mano a cruzar el
  * encuadre en cada negra.
  *
- * Cuatro bandas y no mas: el ancho util son ochenta y cuatro centesimas de
- * encuadre, que a cuatro tocan a poco mas de un palmo por pieza a distancia de
- * brazo. Con seis piezas la banda se estrecha por debajo del temblor de la
- * propia mano y empiezan los golpes en la pieza de al lado.
+ * Cuantas bandas caben, y por que cuatro de fabrica: el ancho util son ochenta y
+ * cuatro centesimas de encuadre, que a cuatro tocan a poco mas de un palmo por
+ * pieza a distancia de brazo. A seis, cada banda se queda en dos tercios de eso,
+ * y por debajo de cierto ancho empiezan los golpes en la pieza de al lado: no
+ * por ruido del detector -que es cien veces mas pequeno que la banda mas
+ * estrecha de aqui- sino por la punteria de una mano en el aire, sin nada que
+ * tocar y sin nada donde apoyarse.
+ *
+ * Donde esta ese limite depende de quien toca, de lo lejos que este de la camara
+ * y de lo ancho que sea el encuadre, asi que no lo decide este fichero: cuatro es
+ * lo que viene puesto y quien toca puede subirlo. Lo que no se puede es subirlo a
+ * ciegas y llamarlo mejor, porque cada pieza que se anade estrecha las otras.
  */
 
-export type DrumPiece = 'kick' | 'snare' | 'hat' | 'crash';
+export type DrumPiece = 'kick' | 'snare' | 'tomLow' | 'tomHigh' | 'hat' | 'crash';
 
-/** De izquierda a derecha tal y como se ve uno en el espejo. */
+/**
+ * Todas las piezas que existen, en orden de escenario.
+ *
+ * El orden importa y no es una lista cualquiera: los toms van entre la caja y el
+ * charles porque es donde estan en una bateria de verdad y, sobre todo, porque
+ * es donde la mano que alterna bombo y caja los alcanza sin cruzar el encuadre.
+ */
+export const ROSTER: readonly DrumPiece[] = ['kick', 'snare', 'tomLow', 'tomHigh', 'hat', 'crash'];
+
+/** Las cuatro de siempre, de izquierda a derecha tal y como se ve uno en el espejo. */
 export const KIT: readonly DrumPiece[] = ['kick', 'snare', 'hat', 'crash'];
 
+export const MIN_PIECES = KIT.length;
+export const MAX_PIECES = ROSTER.length;
+
+/** Cuantas piezas caben de verdad en lo que llegue. */
+export function normalizeSize(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return MIN_PIECES;
+  return Math.min(MAX_PIECES, Math.max(MIN_PIECES, Math.round(value)));
+}
+
+/**
+ * El reparto de fabrica para un numero de piezas.
+ *
+ * Las cuatro de siempre estan en todos, y lo que se anade son toms en su sitio
+ * de escenario. Asi, subir el numero no reordena lo que ya habia: mete una pieza
+ * en medio y las demas siguen donde se las espera.
+ */
+export function defaultLayout(size: number): DrumPiece[] {
+  const wanted = normalizeSize(size);
+  const extras = ROSTER.filter((piece) => !KIT.includes(piece)).slice(0, wanted - KIT.length);
+  return ROSTER.filter((piece) => KIT.includes(piece) || extras.includes(piece));
+}
+
 /** Lo que mide cada banda en el espacio normalizado del encuadre util. */
-export const BAND = 1 / KIT.length;
+export function bandWidth(count: number): number {
+  return 1 / Math.max(1, count);
+}
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 
@@ -37,10 +78,10 @@ const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
  * @param x posicion de la palma ya normalizada (0 = borde izquierdo del
  * encuadre util, 1 = derecho), la misma que usa la rejilla de la escala.
  */
-export function pieceIndexAt(x: number): number {
+export function pieceIndexAt(x: number, count: number): number {
   // El uno exacto cae fuera de la ultima banda al dividir, y la mano pegada al
   // borde derecho es una postura perfectamente normal.
-  return Math.min(KIT.length - 1, Math.floor(clamp01(x) / BAND));
+  return Math.min(count - 1, Math.floor(clamp01(x) / bandWidth(count)));
 }
 
 /**
@@ -56,10 +97,13 @@ export function pieceIndexAt(x: number): number {
 export type KitLayout = readonly DrumPiece[];
 
 export function pieceAt(layout: KitLayout, x: number): DrumPiece {
-  const index = pieceIndexAt(x);
+  // El reparto manda sobre cuantas bandas hay: es la lista de lo que esta en el
+  // escenario, y el encuadre se parte en tantas partes como piezas haya.
+  const count = layout.length > 0 ? layout.length : KIT.length;
+  const index = pieceIndexAt(x, count);
   // El reparto de fabrica como respaldo: un reparto corto no puede dejar una
   // banda golpeando un undefined.
-  return layout[index] ?? KIT[index]!;
+  return layout[index] ?? KIT[index] ?? ROSTER[index]!;
 }
 
 /**
@@ -80,21 +124,84 @@ export function bandOf(layout: KitLayout, piece: DrumPiece): number {
  * numero ni una cadena: es una lista, y de una version anterior o de un
  * almacenamiento a medio escribir puede llegar cualquier cosa. Lo que se
  * reconoce se conserva en su sitio y lo que falta se anade en el orden de
- * fabrica, asi que la salida siempre tiene las cuatro piezas una sola vez.
+ * fabrica, asi que la salida siempre tiene tantas piezas como se le pidan, una
+ * sola vez cada una.
+ *
+ * El tamano es obligatorio a proposito, sin valor por defecto: un defecto de
+ * cuatro recortaria en silencio un kit de seis, y lo que sale de eso no es un
+ * error sino seis bandas dibujadas de las que solo suenan cuatro.
  */
-export function normalizeLayout(value: unknown): DrumPiece[] {
-  const seen = new Set<DrumPiece>();
-  const out: DrumPiece[] = [];
+export function normalizeLayout(value: unknown, size: number): DrumPiece[] {
+  const wanted = normalizeSize(size);
+  const given: DrumPiece[] = [];
   if (Array.isArray(value)) {
     for (const entry of value) {
       const piece = entry as DrumPiece;
-      if (!KIT.includes(piece) || seen.has(piece)) continue;
-      seen.add(piece);
-      out.push(piece);
+      if (ROSTER.includes(piece) && !given.includes(piece)) given.push(piece);
     }
   }
-  for (const piece of KIT) if (!seen.has(piece)) out.push(piece);
+
+  /*
+   * Al recortar se van los toms, no lo que estuviera mas a la derecha.
+   *
+   * Bajar de seis piezas a cuatro quedandose con las cuatro primeras del reparto
+   * puede dejar un kit sin bombo y sin caja -basta con haberlos movido al lado
+   * derecho- y eso no es un kit mas simple, es un kit con el que no se puede
+   * tocar un ritmo. Las cuatro de siempre tienen preferencia, cada una en el
+   * sitio en que estuviera, y lo que sobra son las que se anadieron.
+   */
+  const seen = new Set<DrumPiece>();
+  const out: DrumPiece[] = [];
+  // La preferencia solo se aplica cuando de verdad sobra alguna. Aplicarla
+  // siempre reordenaria un reparto que cabe entero, y entonces esto dejaria de
+  // ser sanear para pasar a ser colocar.
+  const order =
+    given.length > wanted
+      ? [...given.filter((p) => KIT.includes(p)), ...given.filter((p) => !KIT.includes(p))]
+      : given;
+  for (const piece of order) {
+    if (out.length >= wanted) break;
+    seen.add(piece);
+    out.push(piece);
+  }
+  // Lo que falte, detras y en el orden de fabrica. Recuperar un reparto a medio
+  // escribir no puede mover de sitio lo que si se reconoce: quien puso el plato
+  // a la izquierda lo encuentra donde lo dejo.
+  for (const piece of defaultLayout(wanted)) {
+    if (out.length >= wanted) break;
+    if (seen.has(piece)) continue;
+    seen.add(piece);
+    out.push(piece);
+  }
   return out;
+}
+
+/**
+ * El mismo reparto con otro numero de piezas.
+ *
+ * No es lo mismo que sanear, y por eso es otra funcion: al sanear se recupera lo
+ * que se guardo y lo que falta va detras, porque no se sabe si falta por que
+ * alguien lo quito o porque el guardado se escribio a medias. Aqui si se sabe:
+ * alguien acaba de pedir dos piezas mas, y esas dos tienen un sitio.
+ *
+ * Y el sitio no es el final. Anadirlas al final es lo facil y deja los toms
+ * pasado el plato, que es el peor sitio que hay: el extremo solo puede
+ * permitirselo una pieza que se usa una vez por compas, y un tom no lo es. Cada
+ * una entra delante de la primera que en el escenario vaya detras de ella, asi
+ * que lo que ya estaba conserva su orden y lo nuevo cae donde la mano lo alcanza.
+ */
+export function growLayout(bands: KitLayout, size: number): DrumPiece[] {
+  const wanted = normalizeSize(size);
+  const out = normalizeLayout(bands, Math.min(wanted, bands.length)).slice(0, wanted);
+  for (const piece of defaultLayout(wanted)) {
+    if (out.length >= wanted) break;
+    if (out.includes(piece)) continue;
+    const after = out.findIndex((placed) => ROSTER.indexOf(placed) > ROSTER.indexOf(piece));
+    if (after < 0) out.push(piece);
+    else out.splice(after, 0, piece);
+  }
+  // Y saneado al final, que es lo unico que puede prometer que sale un reparto.
+  return normalizeLayout(out, wanted);
 }
 
 /**
@@ -144,7 +251,9 @@ export function normalizePieceNumbers(
 ): Record<DrumPiece, number> {
   const source = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
   const out = {} as Record<DrumPiece, number>;
-  for (const piece of KIT) {
+  // Todas las que existen y no solo las que estan puestas: quien afina un tom,
+  // baja el kit a cuatro y vuelve a subirlo tiene que encontrarlo como lo dejo.
+  for (const piece of ROSTER) {
     const entry = source[piece];
     out[piece] = typeof entry === 'number' && Number.isFinite(entry) ? clamp(entry, min, max) : fallback;
   }
@@ -167,7 +276,7 @@ export function kitTrim(
   const tuned = normalizePieceNumbers(tuning, 0, -TUNING_RANGE, TUNING_RANGE);
   const levels = normalizePieceNumbers(level, 1, 0, MAX_LEVEL);
   const out = {} as KitTrim;
-  for (const piece of KIT) out[piece] = { tuning: tuned[piece], level: levels[piece] };
+  for (const piece of ROSTER) out[piece] = { tuning: tuned[piece], level: levels[piece] };
   return out;
 }
 
@@ -194,6 +303,6 @@ export function kitTrim(
 export const OPEN_HAT_PINCH = 0.35;
 
 /** Centro de una banda, para dibujar su nombre y su destello. */
-export function bandCenter(index: number): number {
-  return (index + 0.5) * BAND;
+export function bandCenter(index: number, count: number): number {
+  return (index + 0.5) * bandWidth(count);
 }

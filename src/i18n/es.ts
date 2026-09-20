@@ -5,7 +5,7 @@ export const es: Strings = {
   htmlLang: 'es',
   notes: ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'],
 
-  pieces: { kick: 'bombo', snare: 'caja', hat: 'charles', crash: 'plato' },
+  pieces: { kick: 'bombo', snare: 'caja', tomLow: 'tom grave', tomHigh: 'tom agudo', hat: 'charles', crash: 'plato' },
 
   splash: {
     tagline: 'Un instrumento que se toca con las manos en el aire.',
@@ -73,7 +73,7 @@ export const es: Strings = {
     drumLayer: (index) => `Capa ${index} · ritmo`,
     layerMuted: 'Capa silenciada. Pulsa para activarla.',
     layerActive: 'Pulsa para silenciar esta capa.',
-    kit: 'batería · 4 piezas',
+    kit: (pieces: number) => `batería · ${pieces} piezas`,
   },
 
   actions: {
@@ -285,6 +285,8 @@ export const es: Strings = {
     kitBand: 'Banda',
     kitTuning: 'Afinación (semitonos)',
     kitLevel: 'Volumen',
+    kitSize: 'Piezas',
+    kitSizeHint: 'Cada pieza que añades estrecha las demás: con cuatro, cada banda es poco más de un palmo a distancia de brazo. Por debajo de cierto ancho los golpes empiezan a caer en la pieza de al lado, y dónde está ese límite depende de ti, de lo lejos que estés de la cámara y de lo ancho que sea el encuadre. Pruébalo antes de quedártelo.',
     kitSpace: 'Sala',
     swing: 'Swing',
     swingHint: 'Retrasa la corchea de en medio, que es lo que separa un ritmo tocado de uno cuadriculado. Se aplica al reproducir, así que puedes moverlo con la vuelta girando y volver a cero devuelve lo que tocaste.',

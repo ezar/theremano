@@ -1,5 +1,5 @@
 import * as Tone from 'tone';
-import { KIT, type DrumPiece, type KitTrim, type PieceTrim } from '../mapping/kit';
+import { ROSTER, type DrumPiece, type KitTrim, type PieceTrim } from '../mapping/kit';
 
 /**
  * Las voces de la bateria.
@@ -27,6 +27,17 @@ import { KIT, type DrumPiece, type KitTrim, type PieceTrim } from '../mapping/ki
  * lo que separa una caja de un charles.
  */
 const KICK_HZ = 32.7;
+
+/**
+ * Los dos toms, que son bombos afinados arriba y con menos caida de altura.
+ *
+ * Un tom es fisicamente lo mismo que un bombo -un parche tenso que baja de
+ * altura al golpearlo- y la diferencia esta en cuanto baja: el bombo se desploma
+ * seis octavas en treinta milesimas y lo que queda es el golpe; un tom baja
+ * poco y despacio, y por eso se le oye la nota. Con la misma voz y otros tres
+ * numeros salen los dos, que es ademas como se afinan de verdad.
+ */
+const TOM_HZ: Record<'tomLow' | 'tomHigh', number> = { tomLow: 98, tomHigh: 147 };
 const SNARE_HZ = 1900;
 const HAT_HZ = 8000;
 const CRASH_HZ = 3800;
@@ -36,6 +47,9 @@ const DECAY: Record<DrumPiece, number> = {
   kick: 0.34,
   // Mas largo suena a escoba, mas corto a chasquido.
   snare: 0.13,
+  // El tom grave suena mas que el agudo, como un parche mas grande.
+  tomLow: 0.42,
+  tomHigh: 0.3,
   hat: 0.045,
   crash: 1.1,
 };
@@ -74,6 +88,10 @@ const OPEN_HAT_CHOKE = 0.05;
 const LEVEL: Record<DrumPiece, number> = {
   kick: 0.82,
   snare: 2.8,
+  // Como el bombo y por lo mismo: un seno con cuerpo entra entero, asi que no
+  // necesita que lo empujen.
+  tomLow: 0.78,
+  tomHigh: 0.72,
   hat: 0.37,
   crash: 0.4,
 };
@@ -150,28 +168,45 @@ class NoiseVoice implements Voice {
 }
 
 /** El bombo: un tono que se desploma. */
-class KickVoice implements Voice {
+/**
+ * La voz de un parche afinado: el bombo y los dos toms.
+ *
+ * La misma y no tres, porque fisicamente son lo mismo -un parche tenso que baja
+ * de altura al golpearlo- y lo unico que cambia es cuanto baja y desde donde. El
+ * comentario de arriba ya lo decia sin quererlo: "mas lento suena a tom".
+ */
+class MembraneVoice implements Voice {
   private readonly synth: Tone.MembraneSynth;
   private readonly gain: Tone.Gain;
 
-  constructor(output: Tone.InputNode) {
-    this.gain = new Tone.Gain(LEVEL.kick).connect(output);
+  /**
+   * @param pitchDecay lo rapido que cae la altura. Es lo que separa un bombo de
+   * un tom: rapido deja el golpe y nada mas, lento deja que se le oiga la nota.
+   * @param octaves cuanto cae. El bombo se desploma; un tom apenas se dobla.
+   */
+  constructor(
+    output: Tone.InputNode,
+    private readonly hz: number,
+    private readonly decay: number,
+    private readonly level: number,
+    pitchDecay: number,
+    octaves: number,
+  ) {
+    this.gain = new Tone.Gain(level).connect(output);
     this.synth = new Tone.MembraneSynth({
-      // Lo rapido que cae la altura. Es todo el bombo: mas lento suena a tom,
-      // mas rapido deja de tener cuerpo y queda un chasquido sordo.
-      pitchDecay: 0.03,
-      octaves: 6,
+      pitchDecay,
+      octaves,
       oscillator: { type: 'sine' },
-      envelope: { attack: 0.001, decay: DECAY.kick, sustain: 0, release: 0.08 },
+      envelope: { attack: 0.001, decay, sustain: 0, release: 0.08 },
     }).connect(this.gain);
   }
 
   hit(force: number, time?: number): void {
-    this.synth.triggerAttackRelease(KICK_HZ, DECAY.kick, time, velocity(force));
+    this.synth.triggerAttackRelease(this.hz, this.decay, time, velocity(force));
   }
 
   /*
-   * La afinacion del bombo es la unica que de verdad es una altura, y aun asi va
+   * La afinacion de un parche es la unica que de verdad es una altura, y aun asi va
    * por el desafinado y no por la nota que se le pasa al golpe. La diferencia
    * esta en los golpes ya programados: una capa de bucle programa la vuelta
    * entera por delante, asi que con la nota metida en el golpe, mover el mando
@@ -181,7 +216,7 @@ class KickVoice implements Voice {
    */
   trim(trim: PieceTrim): void {
     this.synth.detune.rampTo(trim.tuning * 100, TRIM_RAMP);
-    this.gain.gain.rampTo(LEVEL.kick * trim.level, TRIM_RAMP);
+    this.gain.gain.rampTo(this.level * trim.level, TRIM_RAMP);
   }
 
   dispose(): void {
@@ -279,7 +314,16 @@ function velocity(force: number): number {
  * seco, el plato largo- y sin esto un solo mando para las cuatro obliga a
  * elegir entre un bombo turbio y un kit sin sala.
  */
-const SEND: Record<DrumPiece, number> = { kick: 0.05, snare: 0.3, hat: 0.12, crash: 0.45 };
+const SEND: Record<DrumPiece, number> = {
+  kick: 0.05,
+  snare: 0.3,
+  // Los toms piden sala: es donde se les oye el cuerpo, y en un kit de verdad
+  // son los que mas suenan a la habitacion en la que estan.
+  tomLow: 0.34,
+  tomHigh: 0.3,
+  hat: 0.12,
+  crash: 0.45,
+};
 
 /**
  * Lo que devuelve la sala, por debajo de lo que se le manda.
@@ -322,11 +366,18 @@ export class DrumKit {
     this.taps = {
       kick: tap('kick'),
       snare: tap('snare'),
+      tomLow: tap('tomLow'),
+      tomHigh: tap('tomHigh'),
       hat: tap('hat'),
       crash: tap('crash'),
     };
     this.voices = {
-      kick: new KickVoice(this.taps.kick),
+      // El bombo se desploma seis octavas en treinta milesimas y lo que queda
+      // es el golpe. Los toms bajan poco y despacio, que es lo que deja que se
+      // les oiga la nota.
+      kick: new MembraneVoice(this.taps.kick, KICK_HZ, DECAY.kick, LEVEL.kick, 0.03, 6),
+      tomLow: new MembraneVoice(this.taps.tomLow, TOM_HZ.tomLow, DECAY.tomLow, LEVEL.tomLow, 0.09, 1.2),
+      tomHigh: new MembraneVoice(this.taps.tomHigh, TOM_HZ.tomHigh, DECAY.tomHigh, LEVEL.tomHigh, 0.08, 1.1),
       // La campana estrecha alrededor de dos kilohercios es donde vive el
       // chasquido de un parche.
       snare: new NoiseVoice(this.taps.snare, DECAY.snare, LEVEL.snare, { type: 'bandpass', frequency: SNARE_HZ, Q: 0.9 }),
@@ -345,11 +396,11 @@ export class DrumKit {
   /** @param space de 0 (seco) a 1. Cada pieza se moja lo suyo. */
   setSpace(space: number): void {
     const amount = Math.min(1, Math.max(0, space));
-    for (const piece of KIT) this.sends[piece].gain.rampTo(amount * SEND[piece], 0.08);
+    for (const piece of ROSTER) this.sends[piece].gain.rampTo(amount * SEND[piece], 0.08);
   }
 
   trim(trim: KitTrim): void {
-    for (const piece of KIT) this.voices[piece].trim(trim[piece] ?? NEUTRAL);
+    for (const piece of ROSTER) this.voices[piece].trim(trim[piece] ?? NEUTRAL);
   }
 
   /**
@@ -365,7 +416,7 @@ export class DrumKit {
   }
 
   dispose(): void {
-    for (const piece of KIT) {
+    for (const piece of ROSTER) {
       this.voices[piece].dispose();
       this.sends[piece].dispose();
       this.taps[piece].dispose();
