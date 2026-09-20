@@ -1,8 +1,9 @@
 import { PRESETS, type PresetId } from '../audio/presets';
 import { isDuoMode } from '../tracking/duo';
+import { isEchoKind } from '../audio/echo';
 import { MELODIES, type MelodyKind } from '../mapping/melodies';
 import { SCALES, type ScaleId } from '../mapping/scales';
-import { KIT, MAX_LEVEL, TUNING_RANGE, type DrumPiece } from '../mapping/kit';
+import { MAX_LEVEL, MAX_PIECES, MIN_PIECES, TUNING_RANGE, growLayout, type DrumPiece } from '../mapping/kit';
 import { i18n, t } from '../i18n';
 import type { Settings, SettingsStore, StageMode } from '../state/store';
 import type { CameraInfo } from '../camera/stream';
@@ -26,6 +27,11 @@ interface ControlsDeps {
   onMelodyChange: (id: string) => void;
   onLocaleChange: (preference: string) => void;
   localePreference: () => string;
+  /** Tocar con otro dispositivo: invitar, unirse y cerrar el trato. */
+  onInvite: () => Promise<string | null>;
+  onJoin: (code: string) => Promise<string | null>;
+  onAccept: (code: string) => Promise<boolean>;
+  onDisconnect: () => void;
 }
 
 type Binder = (settings: Readonly<Settings>) => void;
@@ -312,6 +318,23 @@ export class Controls {
       this.hint(s.melodyHint);
     });
 
+    // El eco va con lo que se graba y no con el instrumento: lo que decide es
+    // que capa aparece al pedir una respuesta, no como suena lo que tocas.
+    this.select(
+      'echo-kind',
+      s.echoKind,
+      [
+        { value: 'invert', label: s.echoInvert },
+        { value: 'mirror', label: s.echoMirror },
+        { value: 'fifth', label: s.echoFifth },
+      ],
+      (x) => x.echoKind,
+      (value) => this.deps.store.set({ echoKind: isEchoKind(value) ? value : 'invert' }),
+    );
+    this.hint(s.echoHint);
+
+    this.together(s);
+
     this.section(s.cameraSection);
     this.cameraSelect = this.select('camera', s.device, [], (x) => x.cameraId ?? '', (value) => {
       this.deps.onCameraChange(value || null);
@@ -380,15 +403,30 @@ export class Controls {
     this.range('kit-space', s.kitSpace, 0, 1, 0.05, (x) => x.kitSpace, (v) => this.deps.store.set({ kitSpace: v }), (v) => `${Math.round(v * 100)}%`);
     this.range('swing', s.swing, 0, 1, 0.05, (x) => x.swing, (v) => this.deps.store.set({ swing: v }), (v) => `${Math.round(v * 100)}%`);
     this.hint(s.swingHint);
+    // Cuantas piezas caben. Va arriba del todo del kit porque cambia lo que
+    // sale debajo: las secciones por pieza son las que esten en el escenario.
+    this.range(
+      'kit-size',
+      s.kitSize,
+      MIN_PIECES,
+      MAX_PIECES,
+      1,
+      (x) => x.kitSize,
+      (v) => this.resize(v),
+      (v) => String(v),
+    );
+    this.hint(s.kitSizeHint);
     this.hint(s.kitHint);
 
-    for (const piece of KIT) {
+    // Las que esten puestas, en el orden en que estan: asi la lista de secciones
+    // se lee como se ve el encuadre, de izquierda a derecha.
+    for (const piece of this.deps.store.get().kitBands) {
       this.section(t().pieces[piece]);
 
       this.select(
         `kit-band-${piece}`,
         s.kitBand,
-        KIT.map((_, index) => ({ value: String(index), label: String(index + 1) })),
+        this.deps.store.get().kitBands.map((_, index) => ({ value: String(index), label: String(index + 1) })),
         (settings) => String(settings.kitBands.indexOf(piece)),
         (value) => this.moveToBand(piece, Number(value)),
       );
@@ -425,6 +463,21 @@ export class Controls {
    * Cambiarlas de sitio es ademas lo que uno espera al mover algo a un hueco
    * ocupado.
    */
+  /**
+   * Cambia cuantas piezas hay, y el reparto con ellas.
+   *
+   * Las dos a la vez y en una sola escritura: el reparto se sanea contra el
+   * tamano, asi que dejarlos discrepar aunque sea un instante deja un kit con
+   * mas bandas de las que dice tener. Y el panel se reconstruye entero, porque
+   * lo que cambia no es un valor sino cuantas secciones hay.
+   */
+  private resize(size: number): void {
+    const bands = growLayout(this.deps.store.get().kitBands, size);
+    this.deps.store.set({ kitSize: size, kitBands: bands });
+    this.build();
+    this.refresh();
+  }
+
   private moveToBand(piece: DrumPiece, band: number): void {
     const bands = [...this.deps.store.get().kitBands];
     const from = bands.indexOf(piece);
@@ -444,6 +497,89 @@ export class Controls {
    */
   private setPiece(key: 'kitTuning' | 'kitLevel', piece: DrumPiece, value: number): void {
     this.deps.store.set({ [key]: { ...this.deps.store.get()[key], [piece]: value } });
+  }
+
+  /**
+   * Tocar con otro dispositivo.
+   *
+   * Son dos viajes de copiar y pegar, y el panel no puede disimularlo: lo que
+   * hace es guiarlos en orden -genera, pega, devuelve- para que se vea que son
+   * dos pasos y no un boton que no funciona. Disfrazarlo de "conectar" y dejar
+   * al otro esperando seria peor que decir lo que cuesta.
+   */
+  private together(s: ReturnType<typeof t>['settings']): void {
+    this.section(s.netSection);
+    this.hint(s.netHint);
+
+    const code = document.createElement('textarea');
+    code.id = 'set-net-code';
+    code.className = 'net-code';
+    code.rows = 3;
+    code.spellcheck = false;
+    code.placeholder = s.netPlaceholder;
+
+    const status = document.createElement('p');
+    status.className = 'hint';
+    status.id = 'net-status';
+
+    const row = document.createElement('div');
+    row.className = 'share-row';
+    const button = (id: string, label: string, run: () => void): HTMLButtonElement => {
+      const node = document.createElement('button');
+      node.type = 'button';
+      node.id = id;
+      node.textContent = label;
+      node.addEventListener('click', run);
+      row.append(node);
+      return node;
+    };
+
+    // Invitar: genera el codigo y lo deja en la caja, ya seleccionado para
+    // copiar. Tarda unos segundos porque el navegador esta recogiendo
+    // direcciones, y decirlo es mejor que un boton que parece colgado.
+    button('net-invite', s.netInvite, () => {
+      status.textContent = s.netWorking;
+      void this.deps.onInvite().then((generated) => {
+        code.value = generated ?? '';
+        status.textContent = generated ? s.netShareCode : s.netFailed;
+        if (generated) code.select();
+      });
+    });
+
+    // Unirse: lee lo que hay pegado y devuelve el codigo de vuelta. El mismo
+    // boton sirve para cerrar el trato de quien invito, porque lo que hay que
+    // hacer con un codigo pegado depende de cual sea, no de en que boton pulse.
+    button('net-join', s.netJoin, () => {
+      const pasted = code.value.trim();
+      if (!pasted) return;
+      status.textContent = s.netWorking;
+      void this.deps.onAccept(pasted).then((closed) => {
+        if (closed) {
+          code.value = '';
+          status.textContent = s.netConnecting;
+          return;
+        }
+        void this.deps.onJoin(pasted).then((reply) => {
+          code.value = reply ?? '';
+          status.textContent = reply ? s.netSendBack : s.netBadCode;
+          if (reply) code.select();
+        });
+      });
+    });
+
+    button('net-leave', s.netLeave, () => {
+      this.deps.onDisconnect();
+      code.value = '';
+      status.textContent = '';
+    });
+
+    this.panel.append(code, row, status);
+  }
+
+  /** Lo que se ve del estado de la conexion, escrito desde fuera. */
+  setNetStatus(text: string): void {
+    const node = document.getElementById('net-status');
+    if (node) node.textContent = text;
   }
 
   private section(title: string): void {

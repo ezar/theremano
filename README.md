@@ -32,6 +32,12 @@ Se toca en el aire, se graba por capas y se sale de ahí con un vídeo. Está en
 - **Las manos de cada capa** — una capa no guarda sonido, guarda el gesto, así
   que mientras suena se vuelve a dibujar la mano que la tocó, en el color de su
   carril. Se pone la propia encima y se copia. Tecla **G**.
+- **Toms** — el kit puede tener de cuatro a seis piezas. Cuatro es lo que viene
+  puesto, y cada una que añades estrecha las demás: dónde está el límite lo
+  decide quien toca, no el código.
+- **El eco que contesta** — una capa que *responde* a la última en vez de
+  repetirla: invertida, en espejo o una quinta arriba. La llamada se queda donde
+  estaba, así que lo que se oye es una pregunta y una respuesta. Tecla **E**.
 - **Clip para compartir** — graba imagen y sonido en 9:16, hasta un minuto, con
   la nota y la marca sobreimpresas, y lo entrega por la hoja de compartir del
   móvil o como descarga.
@@ -266,9 +272,9 @@ la introducción, opcional, remata la faena: se cierra solo cuando el cambio de
 timbre ocurre de verdad, no cuando se levantan dedos.
 
 Con teclado: **espacio** graba una capa de bucle, **C** graba un clip, **Z**
-quita la última capa, **V** oculta o muestra la cámara, **G** muestra u oculta
-las manos de las capas, **D** cambia entre tocar solo y las dos formas de tocar
-en dúo, **H** abre la ayuda.
+quita la última capa, **E** añade una capa que contesta a la última, **V** oculta
+o muestra la cámara, **G** muestra u oculta las manos de las capas, **D** cambia
+entre tocar solo y las dos formas de tocar en dúo, **H** abre la ayuda.
 
 ### Solo manos
 
@@ -478,6 +484,81 @@ que quien entre después se encuentra guiada la que acaba de ver.
 
 ---
 
+## Sobre cuántas piezas caben
+
+El ancho útil son ochenta y cuatro centésimas de encuadre. Repartido entre
+cuatro, cada banda es poco más de un palmo a distancia de brazo; entre seis, dos
+tercios de eso. Por debajo de cierto ancho empiezan los golpes en la pieza de al
+lado — y no por ruido del detector, que es unas cien veces más pequeño que la
+banda más estrecha de aquí, sino por la puntería de una mano en el aire, sin
+nada que tocar y sin nada donde apoyarse.
+
+Dónde está ese límite depende de quien toca, de lo lejos que esté de la cámara y
+de lo ancho que sea el encuadre, así que no lo decide este código: **cuatro es lo
+que viene puesto y quien toca puede subirlo hasta seis**. Lo que no se puede es
+subirlo a ciegas y llamarlo mejor.
+
+Los toms van entre la caja y el charles, que es donde están en una batería de
+verdad y, sobre todo, donde la mano que alterna bombo y caja los alcanza sin
+cruzar el encuadre. Subir el número mete la pieza nueva ahí y no al final:
+añadirla al final es lo fácil y deja los toms pasado el plato, que es el peor
+sitio que hay — el extremo solo puede permitírselo una pieza que se usa una vez
+por compás. Y bajar el número se lleva los toms, no lo que estuviera más a la
+derecha: quedarse con las cuatro primeras bandas puede dejar un kit sin bombo y
+sin caja, y eso no es un kit más simple, es un kit con el que no se puede tocar.
+
+En el enlace, un ritmo con toms no cabe en el formato de antes: la pieza son dos
+bits y los toms no están entre las cuatro de siempre. Sube a la **versión 2**,
+que le roba un bit al tiempo —que tenía de sobra: doce bits siguen siendo cuarenta
+segundos para un ciclo que no pasa de veinte— y que una copia vieja de la página
+rechaza entera, porque esas piezas allí no existen. Un ritmo con las cuatro de
+siempre sigue saliendo en versión 1, byte por byte igual que antes, y hay una
+prueba que lo fija: los enlaces que ya existen se siguen leyendo en cualquier
+copia, incluidas las que están en caché sin actualizar.
+
+---
+
+## Sobre el eco que contesta
+
+La estación de bucles repite. El eco no repite: da la vuelta a la última capa y
+pone el resultado a sonar **al lado** del original, de modo que lo que se oye es
+una llamada y una respuesta y no una nota doblada. Es la diferencia entre un
+bucle y un dúo consigo mismo.
+
+Es aditivo a propósito, y ahí está todo. Transformar la capa en su sitio sería
+más barato y no serviría: sin la llamada no hay respuesta, hay otra melodía. La
+original se queda como estaba y la respuesta es una capa nueva, con su carril, su
+color y su botón de silencio, que se puede deshacer sola. Y es una capa normal y
+corriente: viaja en el enlace, se le dibuja su mano fantasma, y nadie más en la
+aplicación tiene que saber que salió de otra.
+
+Contesta de tres maneras. **Invertida** gira alrededor de la primera nota que
+sonó: lo que subía baja lo mismo. Se toma la primera y no el centro del rango
+porque es la que el oído usa de referencia — con otro pivote, la respuesta
+empieza en otra nota y suena a una melodía distinta que además va al revés. **En
+espejo** la toca del revés en el tiempo. **Una quinta arriba** es la respuesta
+más consonante que hay.
+
+Dos cosas que no se ven y sin las cuales no funcionaría. La primera: invertir o
+transponer saca notas que no son grados de la escala —una tercera menor invertida
+sobre una pentatónica cae en un hueco—, así que cada nota de la respuesta se
+ajusta a la escala por el mismo camino que usa el fantasma para saber dónde poner
+la mano. Sin eso, la respuesta suena desafinada contra su llamada, que es
+exactamente lo contrario de lo que se busca; con eso, además, cae en notas que se
+pueden tocar.
+
+La segunda: al dar la vuelta al tiempo, **el final de una nota pasa a ser su
+principio**. Sin cambiar los ataques por sueltas, la capa sale con una nota que
+no se cierra en toda la vuelta y, como cada vuelta la vuelve a atacar, se
+convierte en un bordón que ya no para — es el mismo fallo que el validador del
+enlace rechaza, y aquí se produciría desde dentro.
+
+Un ritmo siempre contesta del revés, sea cual sea la clase elegida: a un bombo no
+se le puede invertir el intervalo ni subirlo una quinta, porque un golpe no tiene
+altura que dar la vuelta. Lo que sí tiene un ritmo es un derecho y un revés.
+
+---
+
 ## Sobre tocar entre dos
 
 El instrumento es monofónico porque una persona tiene una voz. Con dos personas
@@ -543,6 +624,108 @@ nota y no lleva la melodía guiada. Las dos son de una sola persona —el rótul
 dice una nota y la guía apunta a una mano— y repartirlas entre dos pide decidir
 de quién son. Los golpes de batería sí suenan para las dos: el kit es uno y está
 en el encuadre.
+
+---
+
+## Sobre tocar desde dos dispositivos
+
+Tocar entre dos delante de una cámara tiene un límite que no se arregla
+programando: hay que estar en la misma habitación. Esto es lo mismo desde dos
+sitios, y va por WebRTC directo entre los dos navegadores.
+
+Lo que viaja por el cable **no es audio, es el gesto**. Es la misma decisión que
+hace que una interpretación quepa en un enlace, llevada al otro extremo: en vez
+de mandar sonido —que pesa cien veces más, se corta en cuanto la red tose y llega
+comprimido— se manda lo que la mano está haciendo, y cada navegador lo sintetiza
+con su propio motor. Cinco bytes cuando no hay mano en el encuadre, nueve con
+mano, once con un golpe: a treinta fotogramas por segundo son menos de cuatro
+cientos bytes por segundo, menos que un icono.
+
+Y tiene un efecto que mandar audio no puede tener: al otro lado no llega un
+sonido, **llega una mano**. Se dibuja con la misma maquinaria que dibuja la mano
+fantasma de una capa grabada, así que se ve a la otra persona tocar: dónde tiene
+la mano, cómo la ladea, cuánto cierra la pinza y a qué nota apunta. La marca de la
+rejilla sale de la frecuencia que viaja, deshaciendo el mismo camino que convirtió
+la posición en nota; si la otra persona tiene puesta otra escala, cae en la nota
+más cercana de la tuya, que es lo único útil que se puede decir ahí.
+
+### Los dos viajes de copiar y pegar
+
+Para que dos navegadores se hablen tienen que contarse antes dónde están, y eso
+normalmente lo hace un servidor de señalización: los dos se conectan a él, les
+pasa los papeles y se aparta. Aquí no hay servidor, así que **el papel lo pasas
+tú**: uno pulsa *Invitar* y sale un código; se lo manda al otro por donde quiera
+—un mensaje, un correo, leyéndolo en voz alta si tiene paciencia—; el otro lo pega
+y pulsa *Unirse*, lo que le devuelve un segundo código; ese vuelve al primero, que
+lo pega y pulsa *Unirse* otra vez. Ahí se abre el canal.
+
+Son dos viajes antes de que suene una nota y es incómodo, y no hay forma de que
+deje de serlo sin poner un servidor. Es la elección que se tomó: el README promete
+que esto no tiene servidor, y meter un servicio de terceros para esto sería dejar
+de prometerlo. El panel no lo disimula —guía los dos pasos en orden en vez de
+enseñar un botón de «conectar» que deja al otro esperando— porque decir lo que
+cuesta es mejor que un botón que parece colgado.
+
+El mismo botón sirve para los dos papeles, y no por ahorrar botones: lo que hay
+que hacer con un código pegado depende de qué código sea, no de quién lo pegue.
+
+### Lo que sí es una dependencia, y conviene decirlo
+
+Para conectar dos dispositivos que no están en la misma red hace falta que cada
+uno averigüe su dirección pública, y eso lo dice un **STUN**: un servidor ajeno al
+que se le pregunta una vez y que no ve ni un byte de lo que se toca. Se usa uno
+público. En la misma red —dos dispositivos en el mismo wifi— no hace falta y la
+conexión se abre sin preguntarle a nadie.
+
+«Sin servidor» sigue siendo verdad en lo que importa: no hay nada que montar, nada
+que pagar y nada que se entere de lo que suena. Pero no es «sin red», y decir lo
+contrario sería mentir por comodidad.
+
+### Por qué el canal va sin reintentos y sin orden
+
+El canal se abre con `ordered: false` y `maxRetransmits: 0`, que es lo contrario
+de lo que se pide siempre. Un paquete de gesto caduca en cuanto llega el
+siguiente: reintentar el de hace tres fotogramas para entregarlo en orden
+retrasaría todo lo que viene detrás para reproducir un instante que ya pasó. Es la
+misma razón por la que el audio en directo va por UDP y no por TCP. Perder uno no
+se oye, porque el siguiente trae el estado completo; esperarlo se oye como un
+tropiezo.
+
+Por lo mismo no hay cola de paquetes: se guarda el último y ya está. Reproducir
+los atrasados sería oír a la otra persona tocando en cámara lenta para ponerse al
+día.
+
+### Los eventos se atienden al llegar, no en el siguiente repintado
+
+Lo continuo —la frecuencia, el brillo, el volumen, dónde está la mano— vale lo
+último que haya llegado, y si no llega nada nuevo sigue valiendo. Los eventos
+—el ataque, la suelta, los golpes— son lo contrario: tienen que sonar **una vez**.
+Guardarlos para el siguiente fotograma los repite en todos los que quepan antes
+del paquete siguiente y se come los que lleguen de más entre dos repintados, y
+eso no es una sutileza teórica: en cuanto los dos dispositivos van a ritmos
+distintos —un móvil viejo y un portátil, que es el caso normal— empieza a
+notarse. Medido con el invitado repintando a diez fotogramas por segundo: de ocho
+golpes dados, atendiéndolos en el repintado se oye **uno**; atendiéndolos al
+llegar se oyen **los ocho**. La prueba de humo lo comprueba en cada ejecución.
+
+### Lo que esto no arregla
+
+**La red tarda.** Cada uno se oye a sí mismo al instante y al otro con el retraso
+que haya. En un bucle eso se esconde —el compás da vueltas y se entra en el
+siguiente— y tocando libre no: a partir de unas decenas de milisegundos se toca
+*contra* el otro en vez de *con* el otro. No hay nada en este proyecto que pueda
+arreglar eso, y saberlo antes es mejor que descubrirlo tocando.
+
+**Con alguien al otro lado, el dúo de la misma cámara se apaga.** Hay dos voces y
+las dos están ocupadas: la tuya y la de quien está conectado. Meter una tercera
+pediría decidir qué hacer con las capas, el rótulo y la guía, que es justo la
+decisión que el dúo dejó pendiente.
+
+**Lo que se toca junto no se graba junto.** Cada uno graba sus propias capas en su
+propia estación, porque las capas se disparan con el reloj de cada navegador y no
+hay nada que los sincronice. Si se cae la conexión, la voz de la otra persona se
+suelta y se calla: una nota abierta sin nadie que pueda cerrarla sonaría para
+siempre.
 
 ---
 

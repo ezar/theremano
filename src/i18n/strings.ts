@@ -107,7 +107,8 @@ export interface Strings {
     layerMuted: string;
     layerActive: string;
     /** Subtitulo del panel en modo bateria: ocupa el sitio de la escala. */
-    kit: string;
+    /** Lo que hay bajo las manos en bateria: cuantas piezas. */
+    kit: (pieces: number) => string;
   };
 
   actions: {
@@ -212,6 +213,9 @@ export interface Strings {
     /** Volumen de una pieza, sobre el suyo de fabrica. */
     kitLevel: string;
     /** Sala del kit entero. */
+    /** Cuantas piezas hay en el escenario. */
+    kitSize: string;
+    kitSizeHint: string;
     kitSpace: string;
     /** Swing de las capas de ritmo. */
     swing: string;
@@ -226,8 +230,29 @@ export interface Strings {
     duoOptionHalves: string;
     duoOptionHands: string;
     duoHint: string;
+    /** De que clase es la respuesta del eco. */
+    echoKind: string;
+    echoInvert: string;
+    echoMirror: string;
+    echoFifth: string;
+    echoHint: string;
     /** El timbre de la segunda persona, en duo. */
     presetTwo: string;
+    /** Tocar con otro dispositivo, por WebRTC y con senalizacion a mano. */
+    netSection: string;
+    netHint: string;
+    netPlaceholder: string;
+    netInvite: string;
+    netJoin: string;
+    netLeave: string;
+    netWorking: string;
+    netShareCode: string;
+    netSendBack: string;
+    netConnecting: string;
+    netBadCode: string;
+    netFailed: string;
+    netConnected: string;
+    netLost: string;
     reset: string;
   };
 
@@ -250,6 +275,9 @@ export interface Strings {
     layerSaved: (count: number) => string;
     layerDiscarded: string;
     layerRemoved: string;
+    /** El eco: una capa que contesta a la ultima. */
+    echoAdded: (count: number) => string;
+    echoEmpty: string;
     layersFull: string;
     clipRecording: string;
     clipUnsupported: string;

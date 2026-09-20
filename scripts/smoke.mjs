@@ -71,6 +71,53 @@ function audioProbe() {
   };
 }
 
+/**
+ * Sonda de golpes, para el trozo de red.
+ *
+ * El pico no sirve ahi: lo que hay que contar no es lo alto que suena sino
+ * CUANTAS veces empieza a sonar, porque un golpe perdido o repetido al otro
+ * lado del cable es un compas que nadie ha tocado. Cuenta cruces de umbral con
+ * histeresis, que es lo unico que distingue un golpe nuevo de la cola del
+ * anterior. Ventana corta a proposito: aqui se miden instantes, no presencia.
+ */
+function onsetProbe() {
+  const nativeConnect = AudioNode.prototype.connect;
+  window.__peak = 0;
+  window.__onsets = 0;
+  window.__resetOnsets = () => {
+    window.__onsets = 0;
+    window.__peak = 0;
+  };
+  AudioNode.prototype.connect = function (target, ...rest) {
+    try {
+      if (target instanceof AudioDestinationNode) {
+        const context = target.context;
+        if (!context.__onsetProbe) {
+          const probe = context.createAnalyser();
+          probe.fftSize = 2048;
+          context.__onsetProbe = probe;
+          const buffer = new Float32Array(probe.fftSize);
+          let above = false;
+          setInterval(() => {
+            probe.getFloatTimeDomainData(buffer);
+            let top = 0;
+            for (const value of buffer) top = Math.max(top, Math.abs(value));
+            if (top > window.__peak) window.__peak = top;
+            if (!above && top > 0.12) {
+              above = true;
+              window.__onsets += 1;
+            } else if (above && top < 0.03) above = false;
+          }, 15);
+        }
+        nativeConnect.call(this, context.__onsetProbe);
+      }
+    } catch {
+      /* la sonda nunca puede tumbar a la pagina que observa */
+    }
+    return nativeConnect.call(this, target, ...rest);
+  };
+}
+
 const logs = [];
 const browser = await chromium.launch({
   ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
@@ -835,6 +882,170 @@ console.log(
 await pointerPage.close();
 await pointer.close();
 
+/*
+ * --- Tocar con otro dispositivo.
+ *
+ * Dos pestanas del mismo navegador se conectan por el bucle local. No hace
+ * falta salir a internet para recorrer el camino entero -codigo, canal,
+ * paquete, voz y mano dibujada-, porque lo unico que anade una red de verdad es
+ * el retraso, y el retraso no cambia nada de lo que aqui se comprueba.
+ *
+ * Esto no tiene test unitario posible mas alla del paquete: el resto es WebRTC,
+ * y WebRTC no existe fuera de un navegador. Por eso el trozo largo esta aqui.
+ */
+/*
+ * Cada uno en su contexto, que aqui no es una manía: dos pestanas de la misma
+ * ventana no pueden estar las dos a la vista, y la que se queda detras recibe
+ * el aviso de que esta oculta y suspende su audio, que es lo que hace la
+ * aplicacion en cualquier pestana de fondo. Dos ventanas son dos dispositivos,
+ * que es lo que se esta imitando.
+ */
+const netHostCtx = await browser.newContext({ viewport: { width: 900, height: 640 } });
+const netGuestCtx = await browser.newContext({ viewport: { width: 900, height: 640 } });
+await netHostCtx.addInitScript(onsetProbe);
+await netGuestCtx.addInitScript(onsetProbe);
+const host = await netHostCtx.newPage();
+const guest = await netGuestCtx.newPage();
+const netLogs = [];
+host.on('pageerror', (e) => netLogs.push(`anfitrion: ${e.message}`));
+guest.on('pageerror', (e) => netLogs.push(`invitado: ${e.message}`));
+/*
+ * El invitado repinta a diez por segundo y no a sesenta.
+ *
+ * Un movil viejo al lado de un portatil, que es el caso normal y no el raro. Y
+ * es la condicion que de verdad prueba algo: los golpes que llegan por el canal
+ * se atienden en el instante en que llegan, no en el siguiente repintado, asi
+ * que a diez fotogramas por segundo tienen que oirse los ocho igual. Guardando
+ * cada paquete para el fotograma siguiente se oye uno.
+ */
+await guest.addInitScript(() => {
+  const pending = [];
+  window.requestAnimationFrame = (cb) => pending.push(cb);
+  setInterval(() => {
+    const due = pending.splice(0, pending.length);
+    const now = performance.now();
+    for (const cb of due) {
+      try {
+        cb(now);
+      } catch {
+        /* un fotograma roto no puede parar el reloj de los siguientes */
+      }
+    }
+  }, 100);
+});
+
+for (const page of [host, guest]) {
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await page.click('#mode-drums');
+  await page.waitForTimeout(300);
+  await page.click('#pointer-button');
+  await page.waitForTimeout(900);
+  await page.click('#settings-toggle');
+  await page.waitForTimeout(300);
+}
+
+// Los dos viajes de copiar y pegar, que es lo que cuesta no tener servidor.
+await host.click('#net-invite');
+await host.waitForFunction(() => document.querySelector('#set-net-code').value.length > 0, null, { timeout: 25000 });
+const offer = await host.inputValue('#set-net-code');
+await guest.fill('#set-net-code', offer);
+await guest.click('#net-join');
+await guest.waitForFunction(() => document.querySelector('#set-net-code').value.length > 0, null, { timeout: 25000 });
+const answer = await guest.inputValue('#set-net-code');
+await host.fill('#set-net-code', answer);
+await host.click('#net-join');
+await host.waitForTimeout(5000);
+const paired = {
+  // Una sola palabra y de las que sobreviven a cualquier sitio por donde se
+  // mande: un SDP con saltos de linea pegado a medias no conecta.
+  oferta: offer.length,
+  respuesta: answer.length,
+  deUnaPieza: /^[A-Za-z0-9_-]+$/.test(offer) && /^[A-Za-z0-9_-]+$/.test(answer),
+  anfitrion: await host.textContent('#net-status'),
+  invitado: await guest.textContent('#net-status'),
+};
+for (const page of [host, guest]) {
+  await page.click('#settings-toggle');
+  await page.waitForTimeout(200);
+}
+
+// Quien toca tiene que estar delante: sin repintados no hay mano que baje ni
+// golpe que dar. El invitado no lo necesita, y eso es justo lo que se comprueba.
+await host.bringToFront();
+const netBox = await host.locator('#overlay').boundingBox();
+const GOLPES = 8;
+await host.evaluate(() => window.__resetOnsets());
+await guest.evaluate(() => window.__resetOnsets());
+for (let i = 0; i < GOLPES; i += 1) {
+  const x = netBox.x + netBox.width * (0.2 + (i % 4) * 0.2);
+  await host.mouse.move(x, netBox.y + netBox.height * 0.25);
+  // La mano dibujada solo existe mientras el puntero esta pulsado: sin esto no
+  // hay mano que baje y por tanto no hay golpe que detectar.
+  await host.mouse.down();
+  await host.waitForTimeout(160);
+  for (let step = 1; step <= 6; step += 1) {
+    await host.mouse.move(x, netBox.y + netBox.height * (0.25 + step * 0.075));
+    await host.waitForTimeout(16);
+  }
+  await host.waitForTimeout(400);
+  await host.mouse.up();
+  await host.waitForTimeout(300);
+}
+await host.waitForTimeout(1200);
+const strikes = {
+  dados: GOLPES,
+  oidosPorQuienLosDa: await host.evaluate(() => window.__onsets),
+  oidosAlOtroLado: await guest.evaluate(() => window.__onsets),
+  // El pico aparte de la cuenta: separa "se oyo distinto" de "no se oyo nada".
+  picoAlOtroLado: Number((await guest.evaluate(() => window.__peak)).toFixed(4)),
+};
+
+/*
+ * Y la mano: lo que llega no es un sonido, es una mano, y se dibuja.
+ *
+ * Contar pixeles que cambian no sirve aqui, porque con algo sonando hay
+ * particulas y rotulos moviendose todo el rato y cambia medio encuadre se mueva
+ * la mano o no. Lo que dice si la mano del otro sigue a la suya es DONDE esta
+ * lo que se dibuja, y eso es un centro de masas.
+ */
+const inkCentre = () => {
+  const canvas = document.querySelector('#overlay');
+  const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+  let sum = 0;
+  let weighted = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const lum = (data[i] + data[i + 1] + data[i + 2]) / 3;
+    if (lum < 140) continue;
+    sum += lum;
+    weighted += lum * (((i / 4) % canvas.width) / canvas.width);
+  }
+  return sum > 0 ? Number((weighted / sum).toFixed(3)) : null;
+};
+await host.mouse.move(netBox.x + netBox.width * 0.2, netBox.y + netBox.height * 0.5);
+await host.mouse.down();
+await host.waitForTimeout(1200);
+const handLeft = await guest.evaluate(inkCentre);
+await host.mouse.move(netBox.x + netBox.width * 0.8, netBox.y + netBox.height * 0.4);
+await host.waitForTimeout(1200);
+const handRight = await guest.evaluate(inkCentre);
+await host.waitForTimeout(800);
+const hand = { izquierda: handLeft, derecha: handRight, quieta: await guest.evaluate(inkCentre) };
+
+// Al desconectar con el otro tocando, su voz no puede quedarse abierta.
+await guest.click('#settings-toggle');
+await guest.waitForTimeout(300);
+await guest.click('#net-leave');
+await guest.waitForTimeout(1500);
+await guest.evaluate(() => window.__resetOnsets());
+await guest.waitForTimeout(1200);
+const afterLeave = {
+  picoDelInvitado: Number((await guest.evaluate(() => window.__peak)).toFixed(4)),
+  estadoDelAnfitrion: await host.textContent('#net-status'),
+};
+console.log(JSON.stringify({ paired, strikes, hand, afterLeave, erroresDeRed: netLogs }, null, 2));
+await netHostCtx.close();
+await netGuestCtx.close();
+
 // --- Interpretacion en el enlace. Se abre uno guardado de la version 1, con
 // cuatro notas de theremin dentro, y se comprueba que suena sin camara: la
 // pantalla inicial cambia, escuchar arranca el audio y no aparece ningun error.
@@ -1204,6 +1415,58 @@ if (!soundingClass || released.sonando || pointerLogs.length > 0) {
   console.error(`\nFALLO: con el puntero, pulsar deberia abrir la nota y soltar cerrarla ${pointerLogs.join(' ')}`);
   process.exit(1);
 }
+if (!paired.deUnaPieza || paired.oferta < 200 || paired.respuesta < 200) {
+  console.error(
+    `\nFALLO: los codigos de conexion no salen como una sola palabra pegable (${paired.oferta}/${paired.respuesta}, de una pieza ${paired.deUnaPieza})`,
+  );
+  process.exit(1);
+}
+if (!paired.anfitrion || !paired.invitado || paired.anfitrion !== paired.invitado) {
+  console.error(`\nFALLO: los dos dispositivos no llegan a conectarse (${paired.anfitrion} | ${paired.invitado})`);
+  process.exit(1);
+}
+// Si quien los da no se los oye, aqui no se ha medido nada: el gesto no ha
+// llegado a golpear y lo que venga detras no dice ni que si ni que no.
+if (strikes.oidosPorQuienLosDa < strikes.dados - 2) {
+  console.error(
+    `\nFALLO: el gesto de golpear no ha sonado ni en la pestana que lo hace (dados ${strikes.dados}, oidos ${strikes.oidosPorQuienLosDa})`,
+  );
+  process.exit(1);
+}
+/*
+ * Y lo que importa: los dos lados tienen que oir lo mismo.
+ *
+ * Se comparan entre si y no contra los ocho porque el contador de golpes tiene
+ * un margen de uno -la cola de un golpe puede cruzar el umbral dos veces-, y
+ * ese margen no tiene nada que ver con lo que se esta midiendo. Lo que se mide
+ * es si al otro lado falta alguno, y ahi la diferencia no es de uno: atendiendo
+ * los golpes en el repintado en vez de al llegar, el invitado a diez fotogramas
+ * por segundo se queda en uno de ocho.
+ */
+if (Math.abs(strikes.oidosAlOtroLado - strikes.oidosPorQuienLosDa) > 1) {
+  console.error(
+    `\nFALLO: los golpes no llegan enteros al otro lado (dados ${strikes.dados}, aqui ${strikes.oidosPorQuienLosDa}, alla ${strikes.oidosAlOtroLado}, pico alla ${strikes.picoAlOtroLado})`,
+  );
+  process.exit(1);
+}
+// El margen de lo quieto dice cuanto se mueve el dibujo por su cuenta: el
+// movimiento de la mano tiene que ser mucho mayor que eso o no prueba nada.
+if (hand.izquierda === null || hand.derecha === null || hand.derecha - hand.izquierda < 0.1 || Math.abs(hand.quieta - hand.derecha) > 0.04) {
+  console.error(
+    `\nFALLO: la mano de la otra persona no se dibuja donde esta (izquierda ${hand.izquierda}, derecha ${hand.derecha}, quieta ${hand.quieta})`,
+  );
+  process.exit(1);
+}
+if (afterLeave.picoDelInvitado > 0.01 || afterLeave.estadoDelAnfitrion !== '') {
+  console.error(
+    `\nFALLO: al desconectar, la voz del otro se queda sonando o el aviso no se va (${afterLeave.picoDelInvitado}, "${afterLeave.estadoDelAnfitrion}")`,
+  );
+  process.exit(1);
+}
+if (netLogs.length > 0) {
+  console.error(`\nFALLO: errores tocando con otro dispositivo: ${netLogs.join(' | ')}`);
+  process.exit(1);
+}
 if (state.error || errors.length > 0) {
   console.error(`\nFALLO: ${state.error ?? errors.join('\n')}`);
   process.exit(1);
@@ -1215,5 +1478,6 @@ if (!state.splashHidden || !state.hudVisible) {
 console.log(
   `\nOK: mando de la portada, arranque, modelo, audio, introduccion de ${coachStart.dots} pasos y la de bateria de ${drumCoach.dots}, ayuda, espanol e ingles, ` +
     `bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB, solo manos con clip de ` +
-    `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion y puntero sin camara con vibrato, nota pedal y claqueta, ritmo grabado con melodia encima, y enlace compartible.`,
+    `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion y puntero sin camara con vibrato, nota pedal y claqueta, ritmo grabado con melodia encima, enlace compartible, ` +
+    `y dos dispositivos tocando juntos con ${strikes.oidosAlOtroLado} de ${strikes.dados} golpes al otro lado.`,
 );

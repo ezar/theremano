@@ -1,7 +1,7 @@
 import { PRESETS, type PresetId } from '../audio/presets';
 import type { DrumHitEvent, LoopEvent } from '../audio/loopTake';
 import { MAX_CYCLE_SECONDS, MAX_TRACKS, MIN_CYCLE_SECONDS } from '../audio/loopTake';
-import { KIT, MAX_LEVEL, TUNING_RANGE, type DrumPiece } from '../mapping/kit';
+import { KIT, MAX_LEVEL, MAX_PIECES, MIN_PIECES, ROSTER, TUNING_RANGE, type DrumPiece } from '../mapping/kit';
 
 /**
  * Una interpretacion dentro de un enlace.
@@ -48,7 +48,20 @@ export interface Performance {
   kit?: PerformanceKit;
 }
 
+/**
+ * Version 1: el kit son cuatro piezas, dos bits por golpe.
+ *
+ * Version 2: el kit puede tener hasta seis, asi que el golpe necesita tres bits
+ * de pieza y le quita uno al tiempo. Se escribe la 2 SOLO cuando hace falta -un
+ * ritmo con las cuatro de siempre sigue saliendo en version 1, byte por byte
+ * igual que antes-, y ahi esta lo que lo hace seguro: los enlaces que ya
+ * existen se siguen leyendo en cualquier copia de la pagina, y uno con toms lo
+ * rechaza entera una copia vieja, que no tiene esas piezas. Rechazar en bloque
+ * es lo mismo que se hace con todo lo demas de aqui, y es lo correcto: media
+ * bateria reconstruida con las piezas cambiadas sonaria a otro ritmo.
+ */
 const VERSION = 1;
+const VERSION_WIDE_KIT = 2;
 
 /**
  * Tope de bytes antes de pasar a base64.
@@ -102,6 +115,17 @@ const OPEN_HAT_BIT = 1 << 13;
 const MAX_HIT_TIME_UNITS = 0x1fff;
 
 /**
+ * Lo mismo con una pieza mas ancha, para los kits de mas de cuatro.
+ *
+ * Tres bits de pieza dan para ocho, que es mas de las que hay. El bit sale del
+ * tiempo, que se queda en doce: 40,95 segundos, que sigue doblando el ciclo
+ * maximo de veinte. El del charles abierto se corre un sitio.
+ */
+const WIDE_PIECE_SHIFT = 13;
+const WIDE_OPEN_HAT_BIT = 1 << 12;
+const MAX_WIDE_HIT_TIME_UNITS = 0xfff;
+
+/**
  * Marca de capa de bateria en el byte donde una capa de melodia lleva su timbre.
  *
  * Se elige un valor que no puede ser un indice de timbre en vez de subir la
@@ -135,7 +159,12 @@ const PITCH_SCALE = 100;
  * No lleva marca ni bandera: si alguna capa es de bateria, el bloque esta; si no,
  * no. Una bandera seria un estado mas que validar por nada.
  */
-const KIT_BLOCK_BYTES = 2 + KIT.length * 2;
+function kitBlockBytes(pieces: number): number {
+  // Un byte cada dos bandas -dos piezas por byte- y uno por pieza para cada uno
+  // de los dos ajustes. Con un numero impar de piezas, la ultima media banda se
+  // queda a cero y se lee como tal.
+  return Math.ceil(pieces / 2) + pieces * 2;
+}
 
 /** El volumen por pieza va de 0 a MAX_LEVEL repartido en un byte. */
 const LEVEL_SCALE = 255 / MAX_LEVEL;
@@ -182,7 +211,9 @@ export function decodePerformance(encoded: string): Performance | null {
   if (!bytes || bytes.length < 4) return null;
 
   let at = 0;
-  if (bytes[at++] !== VERSION) return null;
+  const version = bytes[at++];
+  if (version !== VERSION && version !== VERSION_WIDE_KIT) return null;
+  const wide = version === VERSION_WIDE_KIT;
 
   const cycleSeconds = readUint16(bytes, at) / TIME_SCALE;
   at += 2;
@@ -212,12 +243,15 @@ export function decodePerformance(encoded: string): Performance | null {
       let last = -1;
       for (let h = 0; h < eventCount; h += 1) {
         const packed = readUint16(bytes, at);
-        const piece = KIT[packed >> 14];
-        // Con cuatro piezas los dos bits estan llenos, asi que hoy esto no puede
-        // fallar. Se comprueba igual: el dia que el kit tenga tres, un enlace
-        // manipulado traeria un undefined golpeando.
+        // En version 1 la pieza son dos bits sobre las cuatro de siempre; en la
+        // 2, tres bits sobre todas las que existen. Es la unica diferencia entre
+        // las dos, y la razon por la que hay dos.
+        const piece = wide ? ROSTER[packed >> WIDE_PIECE_SHIFT] : KIT[packed >> 14];
+        // Tres bits dan para ocho y hay seis piezas, asi que los dos ultimos
+        // valores no existen: un enlace manipulado traeria un undefined
+        // golpeando, y con cuatro piezas pasaria lo mismo el dia que sean tres.
         if (!piece) return null;
-        const t = (packed & MAX_HIT_TIME_UNITS) / TIME_SCALE;
+        const t = (packed & (wide ? MAX_WIDE_HIT_TIME_UNITS : MAX_HIT_TIME_UNITS)) / TIME_SCALE;
         if (t > cycleSeconds + 0.5) return null;
         // En orden, por el mismo motivo que en melodia: el reproductor programa
         // por instante y no por posicion en la lista.
@@ -227,7 +261,7 @@ export function decodePerformance(encoded: string): Performance | null {
           t,
           piece,
           force: (bytes[at + 2] ?? 0) / 255,
-          open: (packed & OPEN_HAT_BIT) !== 0,
+          open: (packed & (wide ? WIDE_OPEN_HAT_BIT : OPEN_HAT_BIT)) !== 0,
         });
         at += BYTES_PER_HIT;
       }
@@ -286,10 +320,10 @@ export function decodePerformance(encoded: string): Performance | null {
    */
   let kit: PerformanceKit | undefined;
   if (tracks.some((track) => track.drums) && at < bytes.length) {
-    const read = readKit(bytes, at);
+    const read = readKit(bytes, at, wide);
     if (!read) return null;
-    kit = read;
-    at += KIT_BLOCK_BYTES;
+    kit = read.kit;
+    at += read.bytes;
   }
 
   // Bytes de sobra significan que esto no lo escribio esta version. Antes que
@@ -306,33 +340,62 @@ export function decodePerformance(encoded: string): Performance | null {
  * volumen fuera de rango puede apagar una pieza para siempre o reventar el
  * limitador. Recortar en silencio seria reproducir un kit que nadie toco.
  */
-function readKit(bytes: Uint8Array, at: number): PerformanceKit | null {
-  if (at + KIT_BLOCK_BYTES > bytes.length) return null;
+function readKit(bytes: Uint8Array, at: number, wide: boolean): { kit: PerformanceKit; bytes: number } | null {
+  /*
+   * En version 1 el kit son cuatro y no hace falta decirlo. En la 2 el bloque
+   * empieza por cuantas piezas trae, que es un byte y quita toda ambiguedad:
+   * deducirlo de lo que sobra al final obligaria a adivinar, que es justo lo
+   * que no se hace en ninguna otra parte de este formato.
+   */
+  let cursor = at;
+  const pieces = wide ? (bytes[cursor++] ?? 0) : KIT.length;
+  if (pieces < MIN_PIECES || pieces > MAX_PIECES) return null;
+  const size = (wide ? 1 : 0) + kitBlockBytes(pieces);
+  if (at + size > bytes.length) return null;
 
+  // De donde salen las piezas: en version 1 solo pueden ser las cuatro de
+  // siempre, y en la 2 cualquiera de las que existen.
+  const catalogue = wide ? ROSTER : KIT;
   const bands: DrumPiece[] = [];
-  for (let byte = 0; byte < KIT.length / 2; byte += 1) {
-    const packed = bytes[at + byte] ?? 0;
+  for (let byte = 0; byte < Math.ceil(pieces / 2); byte += 1) {
+    const packed = bytes[cursor + byte] ?? 0;
     for (const index of [packed >> 4, packed & 0x0f]) {
-      const piece = KIT[index];
+      // Con un numero impar de piezas, la ultima media banda no es una banda:
+      // se escribio a cero y aqui sobra.
+      if (bands.length >= pieces) break;
+      const piece = catalogue[index];
       // Cada pieza una vez y todas: es lo que hace que sea un reparto y no una
       // lista de piezas. Con una repetida, otra se queda sin banda.
       if (!piece || bands.includes(piece)) return null;
       bands.push(piece);
     }
   }
+  if (bands.length !== pieces) return null;
+  cursor += Math.ceil(pieces / 2);
 
+  /*
+   * La afinacion y el volumen van en el orden de las bandas y no en el de las
+   * piezas que existen: asi el bloque se lee sin saber nada de como esta
+   * ordenado el catalogo, que es lo que lo deja a salvo si algun dia se anade
+   * una pieza mas en medio.
+   */
   const tuning = {} as Record<DrumPiece, number>;
   const level = {} as Record<DrumPiece, number>;
-  let cursor = at + KIT.length / 2;
-  for (const piece of KIT) {
+  for (const piece of bands) {
     const raw = (bytes[cursor++] ?? 0) - TUNING_RANGE;
     if (raw < -TUNING_RANGE || raw > TUNING_RANGE) return null;
     tuning[piece] = raw;
   }
-  for (const piece of KIT) {
+  for (const piece of bands) {
     level[piece] = (bytes[cursor++] ?? 0) / LEVEL_SCALE;
   }
-  return { bands, tuning, level };
+  // Las que no estan en el escenario se quedan como vienen de fabrica: el
+  // enlace no dice nada de ellas porque no sonaron.
+  for (const piece of ROSTER) {
+    if (tuning[piece] === undefined) tuning[piece] = 0;
+    if (level[piece] === undefined) level[piece] = 1;
+  }
+  return { kit: { bands, tuning, level }, bytes: size };
 }
 
 /**
@@ -396,15 +459,28 @@ function write(performance: Performance, paramHz: number): Uint8Array | null {
     track.drums ? track : { ...track, events: thin(track.events, paramHz) },
   );
   const kit = thinned.some((track) => track.drums) ? performance.kit : undefined;
+  /*
+   * La version la decide lo que hay que escribir, no una preferencia.
+   *
+   * Un ritmo con las cuatro piezas de siempre sale en version 1, byte por byte
+   * igual que antes de que los toms existieran, y lo sigue leyendo cualquier
+   * copia de la pagina. Solo cuando hay una pieza que en la 1 no cabe -o un kit
+   * de mas de cuatro bandas- se sube a la 2, que una copia vieja rechaza entera
+   * en vez de reconstruir un ritmo con las piezas cambiadas.
+   */
+  const wide =
+    (kit !== undefined && kit.bands.length > KIT.length) ||
+    thinned.some((track) => (track.hits ?? []).some((hit) => !KIT.includes(hit.piece)));
+  const pieces = kit ? kit.bands.length : KIT.length;
   const total = thinned.reduce(
     (sum, track) =>
       sum + 3 + (track.drums ? (track.hits?.length ?? 0) * BYTES_PER_HIT : track.events.length * BYTES_PER_EVENT),
-    4 + (kit ? KIT_BLOCK_BYTES : 0),
+    4 + (kit ? (wide ? 1 : 0) + kitBlockBytes(pieces) : 0),
   );
   const bytes = new Uint8Array(total);
 
   let at = 0;
-  bytes[at++] = VERSION;
+  bytes[at++] = wide ? VERSION_WIDE_KIT : VERSION;
   writeUint16(bytes, at, Math.round(performance.cycleSeconds * TIME_SCALE));
   at += 2;
   bytes[at++] = thinned.length;
@@ -416,14 +492,17 @@ function write(performance: Performance, paramHz: number): Uint8Array | null {
       writeUint16(bytes, at, hits.length);
       at += 2;
       for (const hit of hits) {
-        const units = Math.min(MAX_HIT_TIME_UNITS, Math.max(0, Math.round(hit.t * TIME_SCALE)));
-        const piece = KIT.indexOf(hit.piece);
+        const ceiling = wide ? MAX_WIDE_HIT_TIME_UNITS : MAX_HIT_TIME_UNITS;
+        const units = Math.min(ceiling, Math.max(0, Math.round(hit.t * TIME_SCALE)));
+        const piece = (wide ? ROSTER : KIT).indexOf(hit.piece);
         // Como con un timbre que no existe: se rechaza el enlace entero en vez
-        // de escribir otra pieza en su sitio. Hoy el tipo lo impide, pero el dia
-        // que el kit cambie es mejor no compartir nada que compartir un ritmo
-        // con los golpes cambiados de sitio.
+        // de escribir otra pieza en su sitio. Con la version elegida por lo que
+        // hay dentro esto no deberia poder pasar, y sigue aqui porque compartir
+        // un ritmo con los golpes cambiados de sitio es peor que no compartir.
         if (piece < 0) return null;
-        writeUint16(bytes, at, (piece << 14) | (hit.open ? OPEN_HAT_BIT : 0) | units);
+        const shift = wide ? WIDE_PIECE_SHIFT : 14;
+        const openBit = wide ? WIDE_OPEN_HAT_BIT : OPEN_HAT_BIT;
+        writeUint16(bytes, at, (piece << shift) | (hit.open ? openBit : 0) | units);
         bytes[at + 2] = clampInt(Math.round(hit.force * 255), 0, 255);
         at += BYTES_PER_HIT;
       }
@@ -445,24 +524,29 @@ function write(performance: Performance, paramHz: number): Uint8Array | null {
   }
 
   if (kit) {
+    // Cuantas piezas trae, que en version 1 no hace falta porque son cuatro.
+    if (wide) bytes[at++] = pieces;
+    const catalogue = wide ? ROSTER : KIT;
     // El reparto, dos piezas por byte: cuatro bits sobran para un indice de
-    // cuatro. Y se escribe el indice y no el nombre, que en una direccion cada
-    // byte se paga.
-    for (let band = 0; band < KIT.length; band += 2) {
-      const high = KIT.indexOf(kit.bands[band] as DrumPiece);
-      const low = KIT.indexOf(kit.bands[band + 1] as DrumPiece);
+    // seis. Y se escribe el indice y no el nombre, que en una direccion cada
+    // byte se paga. Con un numero impar, la ultima media banda se queda a cero.
+    for (let band = 0; band < pieces; band += 2) {
+      const high = catalogue.indexOf(kit.bands[band] as DrumPiece);
+      const low = band + 1 < pieces ? catalogue.indexOf(kit.bands[band + 1] as DrumPiece) : 0;
       // Igual que con una pieza que no existe al escribir un golpe: antes no
       // compartir nada que compartir un kit con una banda vacia.
       if (high < 0 || low < 0) return null;
       bytes[at++] = (high << 4) | low;
     }
-    for (const piece of KIT) {
+    // En el orden de las bandas, que es como se leen: asi el bloque no depende
+    // de como este ordenado el catalogo.
+    for (const piece of kit.bands) {
       // La afinacion va con signo, y un byte no lo tiene: se le suma el tope
       // para dejarla en positivo y se le resta al leerla.
-      bytes[at++] = clampInt(Math.round(kit.tuning[piece]) + TUNING_RANGE, 0, 2 * TUNING_RANGE);
+      bytes[at++] = clampInt(Math.round(kit.tuning[piece] ?? 0) + TUNING_RANGE, 0, 2 * TUNING_RANGE);
     }
-    for (const piece of KIT) {
-      bytes[at++] = clampInt(Math.round(kit.level[piece] * LEVEL_SCALE), 0, 255);
+    for (const piece of kit.bands) {
+      bytes[at++] = clampInt(Math.round((kit.level[piece] ?? 1) * LEVEL_SCALE), 0, 255);
     }
   }
   return bytes;

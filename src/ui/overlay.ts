@@ -1,5 +1,5 @@
 import { HAND_BONES, point, type Finger, type Landmark, type RoleAssignment } from '../tracking/types';
-import { FULL_LENS, denormalize, denormalizeIn, palmCenter, type Lens } from '../mapping/features';
+import { FULL_LENS, denormalizeIn, palmCenter, type Lens } from '../mapping/features';
 import { midiToName, zoneCenters, type PitchLayout } from '../mapping/scales';
 import { t } from '../i18n';
 import { TrackGhost } from '../mapping/ghost';
@@ -7,7 +7,7 @@ import { drawnScale, phantomHand } from '../tracking/phantom';
 import type { LoopState, LoopTrack } from '../audio/looper';
 import { Visualizer } from './visualizer';
 import { coverRect, pitchHue, PIECE_HUE, type RenderTarget } from './target';
-import { BAND, KIT, bandCenter, type DrumPiece, type KitLayout } from '../mapping/kit';
+import { ROSTER, bandCenter, bandWidth, type DrumPiece, type KitLayout } from '../mapping/kit';
 
 /**
  * Todo lo que se ve encima del video: esqueleto, rejilla de la escala, efectos y
@@ -115,7 +115,9 @@ export class Overlay {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly visualizer = new Visualizer();
   /** Lo que le queda de destello a cada banda, de 1 a 0. */
-  private readonly flashes: Record<DrumPiece, number> = { kick: 0, snare: 0, hat: 0, crash: 0 };
+  private readonly flashes: Record<DrumPiece, number> = {
+    kick: 0, snare: 0, tomLow: 0, tomHigh: 0, hat: 0, crash: 0,
+  };
   /**
    * Un fantasma por capa, preparado una vez.
    *
@@ -161,7 +163,7 @@ export class Overlay {
     // El destello dura poco a proposito: tiene que leerse como un golpe y no
     // como una banda encendida, que es lo que parece en cuanto se solapa con el
     // siguiente.
-    for (const piece of KIT) {
+    for (const piece of ROSTER) {
       const left = this.flashes[piece];
       if (left > 0) this.flashes[piece] = Math.max(0, left - dtSeconds / FLASH_SECONDS);
     }
@@ -187,7 +189,7 @@ export class Overlay {
 
   resetEffects(): void {
     this.visualizer.reset();
-    for (const piece of KIT) this.flashes[piece] = 0;
+    for (const piece of ROSTER) this.flashes[piece] = 0;
   }
 
   /**
@@ -363,14 +365,18 @@ export class Overlay {
     ctx.font = `${11 * target.unit}px ui-monospace, monospace`;
     ctx.textAlign = 'center';
 
-    for (let i = 0; i < KIT.length; i += 1) {
+    // Tantas bandas como piezas haya puestas: el reparto es la lista de lo que
+    // esta en el escenario, y el encuadre se parte en tantas partes como haya.
+    const count = bands.length;
+    const width = bandWidth(count);
+    for (let i = 0; i < count; i += 1) {
       // El reparto llega ya saneado del mapeador, que es el mismo que decide
       // que suena al golpear ahi: no hay forma de que la banda diga una pieza y
       // suene otra. El respaldo es para el compilador, que eso no lo sabe.
-      const piece = bands[i] ?? KIT[i]!;
+      const piece = bands[i] ?? ROSTER[i]!;
       const hue = PIECE_HUE[piece];
-      const left = rect.x + denormalizeIn(i * BAND, lens) * rect.w;
-      const right = rect.x + denormalizeIn((i + 1) * BAND, lens) * rect.w;
+      const left = rect.x + denormalizeIn(i * width, lens) * rect.w;
+      const right = rect.x + denormalizeIn((i + 1) * width, lens) * rect.w;
       const flash = this.flashes[piece];
 
       // El relleno permanente es casi invisible y aun asi hace todo el trabajo:
@@ -398,7 +404,7 @@ export class Overlay {
         ctx.stroke();
       }
 
-      const x = rect.x + denormalize(bandCenter(i)) * rect.w;
+      const x = rect.x + denormalizeIn(bandCenter(i, count), lens) * rect.w;
       const labelX = Math.min(Math.max(x, labelPad), target.width - labelPad);
       ctx.fillStyle = `hsla(${hue}, 90%, ${70 + flash * 25}%, ${Math.min(1, (0.45 + flash * 0.5) * lift)})`;
       ctx.fillText(names[piece], labelX, labelY);

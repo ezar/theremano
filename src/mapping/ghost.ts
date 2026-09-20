@@ -1,5 +1,5 @@
 import { denormalize } from './features';
-import { KIT, bandCenter, bandOf, type DrumPiece, type KitLayout } from './kit';
+import { ROSTER, bandCenter, bandOf, type DrumPiece, type KitLayout } from './kit';
 import { freqToMidi, xForMidi, type PitchLayout } from './scales';
 import { HARD_FORCE, lerp, liftForForce, strokePose, type Stroke } from './strokes';
 import { CLOSED_PINCH, OPEN_PINCH, edgeLean, type HandPose } from '../tracking/phantom';
@@ -119,7 +119,7 @@ export class TrackGhost {
     if (this.placedFor === bands) return this.placed;
     this.placedFor = bands;
     this.placed = this.beats.map((hand) =>
-      hand.map((beat) => ({ ...beat, x: bandCenter(bandOf(bands, beat.piece)) })),
+      hand.map((beat) => ({ ...beat, x: bandCenter(bandOf(bands, beat.piece), bands.length) })),
     );
     return this.placed;
   }
@@ -247,7 +247,7 @@ function drumStrokes(hits: readonly DrumHitEvent[], cycleSeconds: number): DrumS
     // La mitad del kit en la que vive la pieza, en el orden de fabrica: es el
     // reparto para el que esta pensado, y el que alguien haya movido una pieza
     // no cambia de mano lo que se grabo con la otra.
-    const side = KIT.indexOf(hit.piece) < KIT.length / 2 ? 0 : 1;
+    const side = ROSTER.indexOf(hit.piece) < ROSTER.length / 2 ? 0 : 1;
     hands[side]!.push({
       at: hit.t,
       // El sitio lo pone el reparto de ahora, asi que aqui todavia no se sabe.

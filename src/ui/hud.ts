@@ -207,9 +207,11 @@ export class Hud {
     const scale = getScale(settings.scale);
     const name = strings.scales[scale.id];
     // En bateria no hay escala ni tonica que anunciar: lo que hay debajo de las
-    // manos son cuatro piezas, y eso es lo que tiene que decir el subtitulo.
+    // manos son unas cuantas piezas, y eso es lo que tiene que decir. Cuantas
+    // sale del reparto puesto y no de una constante: con el numero clavado, el
+    // subtitulo anunciaba cuatro piezas sobre seis bandas dibujadas.
     const sub = settings.drums
-      ? strings.hud.kit
+      ? strings.hud.kit(settings.kitBands.length)
       : scale.degrees.length === 0
         ? name
         : `${name} · ${strings.notes[settings.tonicPc] ?? '?'}`;

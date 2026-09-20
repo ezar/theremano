@@ -60,7 +60,7 @@ const TAIL_SECONDS = 1.6;
 
 /** Centro de la banda de una pieza, en el encuadre util. */
 function pieceX(layout: KitLayout, piece: DrumPiece): number {
-  return bandCenter(bandOf(layout, piece));
+  return bandCenter(bandOf(layout, piece), layout.length);
 }
 
 /**
