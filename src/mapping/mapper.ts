@@ -175,8 +175,13 @@ export class Mapper {
    * dos con dos respuestas distintas a la misma pregunta.
    */
   private lens: Lens = FULL_LENS;
-  /** Si este mapeador es el de la segunda persona del duo. */
-  private second = false;
+  /**
+   * Que puesto del grupo ocupa este mapeador. Cero es quien toca de siempre.
+   *
+   * Un numero y no un "es el segundo" porque ya no hay solo dos: lo unico que
+   * cambia con el puesto es de que ajuste sale el timbre, y eso es un indice.
+   */
+  private seat = 0;
 
   constructor(settings: Readonly<Settings>) {
     this.layout = createLayout(settings.scale, settings.tonicPc, settings.baseOctave, settings.octaves);
@@ -202,11 +207,15 @@ export class Mapper {
   /**
    * De que ajuste sale el timbre de este mapeador.
    *
-   * Cada persona tiene el suyo, y el mapeador es por persona: si los dos leyeran
-   * el mismo, el gesto de los dedos de una le cambiaria el timbre a la otra.
+   * Cada persona tiene el suyo, y el mapeador es por persona: si dos leyeran el
+   * mismo, el gesto de los dedos de una le cambiaria el timbre a la otra.
    */
   private presetOf(settings: Readonly<Settings>): PresetId {
-    return this.second ? settings.presetTwo : settings.preset;
+    if (this.seat === 0) return settings.preset;
+    // La lista siempre viene completa del saneado de los ajustes; el respaldo
+    // esta por si este mapeador se monta con un asiento que nadie ha previsto,
+    // que sonaria como un timbre de fabrica puesto de tapadillo.
+    return settings.presetOthers[this.seat - 1] ?? settings.preset;
   }
 
   syncSettings(settings: Readonly<Settings>): void {
@@ -300,9 +309,9 @@ export class Mapper {
    * movimiento rapidisimo de la mano: un glissando de un extremo al otro que
    * nadie ha tocado.
    */
-  /** Marca este mapeador como el de la segunda persona. Solo cambia de que ajuste lee el timbre. */
-  asSecond(settings: Readonly<Settings>): void {
-    this.second = true;
+  /** Sienta este mapeador en su puesto del grupo. Solo cambia de que ajuste lee el timbre. */
+  asPlayer(seat: number, settings: Readonly<Settings>): void {
+    this.seat = Math.max(0, Math.round(seat));
     this.syncSettings(settings);
   }
 

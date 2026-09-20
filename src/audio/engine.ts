@@ -134,7 +134,7 @@ export class AudioEngine {
     const wanted = Math.max(1, Math.round(count));
     while (this.voices.length > wanted) {
       // Al tirarla, lo que estuviera sonando en ella se va con ella: sin el
-      // panic de dispose, apagar el duo dejaria la nota de la segunda persona
+      // panic de dispose, encoger el grupo dejaria la nota de quien se va
       // sonando para siempre sin nadie que pudiera soltarla.
       this.voices.pop()?.dispose();
     }

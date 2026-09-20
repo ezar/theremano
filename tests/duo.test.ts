@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { DuoTracker, handsNeeded, lensFor, playerCount } from '../src/tracking/duo';
+import { DuoTracker, MAX_PLAYERS, MIN_PLAYERS, handsNeeded, lensFor, playerCount } from '../src/tracking/duo';
 import { FULL_LENS, melodyFeatures, normalizeIn } from '../src/mapping/features';
 import { Mapper } from '../src/mapping/mapper';
 import { createLayout, pitchAt } from '../src/mapping/scales';
 import { DEFAULT_SETTINGS } from '../src/state/store';
 import { makeHand } from './helpers';
 import type { HandFrame } from '../src/tracking/types';
+import type { PresetId } from '../src/audio/presets';
 
 /**
  * Dos personas delante de la misma camara.
@@ -109,6 +110,60 @@ describe('el reparto entre dos personas', () => {
     expect(players[1]!.roles.melody!.hand.raw[0]!.x).toBeGreaterThan(0.5);
   });
 
+  it('a una mano cada una pueden ser tres, y cada una con la suya', () => {
+    const tracker = new DuoTracker();
+    const players = tracker.update([hand(0.2, 0.5), hand(0.5, 0.5), hand(0.8, 0.5)], 0, 'hands', 3);
+
+    expect(players).toHaveLength(3);
+    for (const player of players) {
+      expect(player.roles.melody).not.toBeNull();
+      // El trato del modo: nadie tiene volumen ni pedal propios.
+      expect(player.roles.expression).toBeNull();
+      // Y nadie toca media escala: todas tienen el encuadre entero.
+      expect(player.lens).toEqual(FULL_LENS);
+    }
+    // De izquierda a derecha, que es lo unico que alguien adivina a la primera
+    // cuando el panel le habla de "la persona 2".
+    const xs = players.map((p) => p.roles.melody!.hand.raw[0]!.x);
+    expect(xs[0]!).toBeLessThan(xs[1]!);
+    expect(xs[1]!).toBeLessThan(xs[2]!);
+  });
+
+  it('por mitades siguen siendo dos por mucho que se pida un grupo mayor', () => {
+    /*
+     * No es una limitacion que se quedara sin hacer: tres franjas dejan un
+     * tercio de encuadre por persona, y dentro tiene que caber la escala entera.
+     * Donde falla eso no es el detector -su temblor es cien veces menor que una
+     * banda- sino la punteria de una mano en el aire. Se para aqui y no en el
+     * panel porque el ajuste se puede traer de un localStorage de cualquier
+     * sitio, y un tercer instrumento sin franja donde tocar no da un error: da
+     * una persona que no suena.
+     */
+    const tracker = new DuoTracker();
+    const players = tracker.update([...LEFT_PAIR, ...RIGHT_PAIR], 0, 'halves', 4);
+    expect(players).toHaveLength(2);
+    expect(playerCount('halves', 4)).toBe(2);
+    expect(handsNeeded('halves', 4)).toBe(4);
+  });
+
+  it('buscar manos cuesta por mano, asi que el detector sube con la gente', () => {
+    // Es lo unico que crece al anadir gente a este modo, y es lo que hay que
+    // poder ver de un vistazo: tres personas, tres manos.
+    expect(handsNeeded('hands', 2)).toBe(2);
+    expect(handsNeeded('hands', 3)).toBe(3);
+    expect(handsNeeded('hands', 4)).toBe(4);
+    // Y no se le cobra a quien toca solo un grupo que no esta usando.
+    expect(handsNeeded('off', 4)).toBe(2);
+  });
+
+  it('un grupo imposible se recorta en vez de dejar plazas que no suenan', () => {
+    // Puede venir de un localStorage de cualquier sitio. Cero personas no toca
+    // nadie y veinte son veinte voces y veinte manos que buscar.
+    expect(playerCount('hands', 0)).toBe(MIN_PLAYERS);
+    expect(playerCount('hands', 99)).toBe(MAX_PLAYERS);
+    expect(playerCount('hands', Number.NaN)).toBe(MIN_PLAYERS);
+  });
+
   it('sin duo sigue habiendo una sola persona con el encuadre entero', () => {
     const tracker = new DuoTracker();
     const players = tracker.update(LEFT_PAIR, 0, 'off');
@@ -131,19 +186,28 @@ describe('el timbre de cada persona', () => {
      * mano de una le cambiaria el timbre a la otra a mitad de nota: el gesto mas
      * facil de hacer sin querer, con el efecto mas raro de explicar.
      */
-    const settings = { ...DEFAULT_SETTINGS, preset: 'theremin' as const, presetTwo: 'bass' as const };
-    const first = new Mapper(settings);
-    const second = new Mapper(settings);
-    second.asSecond(settings);
-    expect(first.currentPreset.id).toBe('theremin');
-    expect(second.currentPreset.id).toBe('bass');
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      preset: 'theremin' as const,
+      presetOthers: ['bass', 'flute', 'strings'] as PresetId[],
+    };
+    const players = [0, 1, 2, 3].map((seat) => {
+      const mapper = new Mapper(settings);
+      mapper.asPlayer(seat, settings);
+      return mapper.currentPreset.id;
+    });
+    // Cada una el suyo y por su puesto, no "la primera y las demas".
+    expect(players).toEqual(['theremin', 'bass', 'flute', 'strings']);
   });
 
-  it('y de fabrica no son el mismo', () => {
+  it('y de fabrica no hay dos iguales', () => {
     // Dos instrumentos con el mismo timbre tocando a la vez suenan a uno
-    // desafinado. Encender el duo y que suenen iguales es la primera impresion
-    // equivocada, asi que vienen distintos de serie.
-    expect(DEFAULT_SETTINGS.presetTwo).not.toBe(DEFAULT_SETTINGS.preset);
+    // desafinado. Encender el grupo y que suenen iguales es la primera
+    // impresion equivocada, asi que vienen distintos de serie: hay cuatro
+    // timbres y caben cuatro personas, asi que salen justos.
+    const all = [DEFAULT_SETTINGS.preset, ...DEFAULT_SETTINGS.presetOthers];
+    expect(all).toHaveLength(MAX_PLAYERS);
+    expect(new Set(all).size).toBe(MAX_PLAYERS);
   });
 });
 

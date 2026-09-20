@@ -419,7 +419,7 @@ export class Looper {
   /**
    * @param others lo que toca cada persona a partir de la segunda. Vacio sin duo.
    */
-  capture(live: LiveSnapshot, ...others: LiveSnapshot[]): void {
+  capture(live: LiveSnapshot, ...others: (LiveSnapshot | null)[]): void {
     /*
      * La claqueta termina aqui, en el bucle de fotogramas, y no en un
      * temporizador. Un temporizador seria una pieza mas que cancelar, que
@@ -456,8 +456,9 @@ export class Looper {
       this.finish();
       return;
     }
-    // A cada persona lo suyo. La segunda instantanea solo llega en duo, y sin
-    // ella la segunda toma no existe.
+    // A cada persona lo suyo, por posicion. Quien no tenga manos delante manda
+    // un hueco vacio en vez de no mandar nada: sin el hueco, su instantanea se
+    // la quedaria la persona siguiente y las capas saldrian corridas.
     for (let player = 0; player < takes.length; player += 1) {
       const snapshot = player === 0 ? live : others[player - 1];
       if (snapshot) takes[player]!.take.capture(elapsed, snapshot);

@@ -65,8 +65,13 @@ export interface OverlayFrame {
    * donde no estan, que es peor que no ver rejilla ninguna.
    */
   lens: Lens;
-  /** La segunda persona, si hay duo. Se dibuja igual que la primera. */
-  partner: PartnerFrame | null;
+  /**
+   * Las demas personas, si hay mas de una. Se dibujan igual que la primera.
+   *
+   * Una lista y no una sola porque a una mano cada una pueden ser hasta cuatro.
+   * Vacia cuando se toca solo, que es lo de siempre.
+   */
+  partners: readonly PartnerFrame[];
 }
 
 /**
@@ -82,6 +87,11 @@ export interface PartnerFrame {
   lens: Lens;
   pitchX: number;
   gateOpen: boolean;
+}
+
+/** Dos franjas son la misma cuando empiezan y acaban en el mismo sitio. */
+function sameLens(a: Lens, b: Lens): boolean {
+  return a.from === b.from && a.to === b.to;
 }
 
 export interface PaintOptions {
@@ -221,23 +231,24 @@ export class Overlay {
     // subirla, porque ahi es de lo poco que queda en pantalla.
     const lift = options.backdrop ? 1.7 : 1;
     const mine = { pitchX: frame.pitchX, gateOpen: frame.gateOpen };
-    const partner = frame.partner;
     /*
      * Una rejilla por franja, no una por persona.
      *
      * A media pantalla son dos cosas distintas y hay dos rejillas, cada una con
      * su escala entera: sin la suya, la segunda persona no sabe donde estan sus
-     * notas, porque la de al lado no le sirve. A una mano cada una las dos
-     * franjas son la misma, y ahi dibujarla dos veces no anade nada: suma la
-     * misma linea sobre si misma y la deja del doble de fuerte.
+     * notas, porque la de al lado no le sirve. A una mano cada una las franjas
+     * son todas la misma, y ahi dibujarla una vez por persona no anade nada:
+     * suma la misma linea sobre si misma y la deja del doble de fuerte. Por eso
+     * lo que se agrupa es la franja y no la gente.
      */
-    const shared = partner !== null && partner.lens.from === frame.lens.from && partner.lens.to === frame.lens.to;
+    const sharing = frame.partners.filter((partner) => sameLens(partner.lens, frame.lens));
+    const apart = frame.partners.filter((partner) => !sameLens(partner.lens, frame.lens));
     if (frame.drums) this.drawKit(target, rect, frame.kit, lift, frame.lens);
-    else this.drawGrid(target, rect, frame, lift, frame.lens, shared && partner ? [mine, partner] : [mine], frame.targetZone);
-    if (partner && !shared) {
+    else this.drawGrid(target, rect, frame, lift, frame.lens, [mine, ...sharing], frame.targetZone);
+    for (const partner of apart) {
       if (frame.drums) this.drawKit(target, rect, frame.kit, lift, partner.lens);
       else this.drawGrid(target, rect, frame, lift, partner.lens, [partner], null);
-      this.drawSplit(target, rect, frame);
+      this.drawSplit(target, rect, frame, partner);
     }
 
     const melody = frame.assignment.melody;
@@ -254,9 +265,9 @@ export class Overlay {
       if (!frame.drums) this.drawRoleTag(target, rect, expression.hand.landmarks, t().overlay.expressionTag, expression.held);
       if (frame.drone !== null) this.drawDrone(target, rect, expression.hand.landmarks, frame.drone);
     }
-    // La otra persona, antes que la propia: al cruzarse, las manos de uno tienen
-    // que quedar encima de las del otro, que es lo que dice cual es la tuya.
-    if (partner) {
+    // Las demas, antes que la propia: al cruzarse, las manos de uno tienen que
+    // quedar encima de las de los otros, que es lo que dice cual es la tuya.
+    for (const partner of frame.partners) {
       for (const role of ['expression', 'melody'] as const) {
         const tracked = partner.assignment[role];
         if (!tracked) continue;
@@ -665,9 +676,8 @@ export class Overlay {
    * centro, y quien esta cerca del borde no entiende por que su nota no se mueve.
    * Con esto se ve que son dos instrumentos, uno al lado del otro.
    */
-  private drawSplit(target: RenderTarget, rect: Rect2, frame: OverlayFrame): void {
-    const partner = frame.partner;
-    if (!partner || partner.lens.from === frame.lens.from) return;
+  private drawSplit(target: RenderTarget, rect: Rect2, frame: OverlayFrame, partner: PartnerFrame): void {
+    if (partner.lens.from === frame.lens.from) return;
     const { ctx } = target;
     const left = rect.x + denormalizeIn(1, frame.lens) * rect.w;
     const right = rect.x + denormalizeIn(0, partner.lens) * rect.w;

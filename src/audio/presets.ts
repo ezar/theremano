@@ -89,6 +89,10 @@ export const PRESETS: readonly Preset[] = [
   },
 ];
 
+export function isPresetId(value: unknown): value is PresetId {
+  return typeof value === 'string' && PRESETS.some((p) => p.id === value);
+}
+
 export function getPreset(id: PresetId): Preset {
   return PRESETS.find((p) => p.id === id) ?? PRESETS[0]!;
 }

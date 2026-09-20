@@ -1,5 +1,5 @@
 import { PRESETS, type PresetId } from '../audio/presets';
-import { isDuoMode } from '../tracking/duo';
+import { MAX_PLAYERS, MIN_PLAYERS, isDuoMode, playerCount } from '../tracking/duo';
 import { isEchoKind } from '../audio/echo';
 import { MELODIES, type MelodyKind } from '../mapping/melodies';
 import { SCALES, type ScaleId } from '../mapping/scales';
@@ -123,7 +123,16 @@ export class Controls {
 
   private melodyOnly: HTMLElement[] = [];
   private drumOnly: HTMLElement[] = [];
-  private duoOnly: HTMLElement[] = [];
+  /**
+   * Lo que solo vale a partir de cierta cantidad de gente, con cuanta hace falta.
+   *
+   * El numero es la razon de que esto no sea una lista pelada: el timbre de la
+   * tercera persona no puede estar a la vista cuando el grupo es de dos, porque
+   * cambiarlo no haria nada y quien lo toca no entenderia por que.
+   */
+  private duoOnly: { needs: number; node: HTMLElement }[] = [];
+  /** Y el tamano del grupo, que solo existe a una mano cada una. */
+  private handsOnly: HTMLElement[] = [];
 
   private refresh(): void {
     const settings = this.deps.store.get();
@@ -135,9 +144,12 @@ export class Controls {
     // Y al reves con los del kit, que son doce: con la bateria apagada no hay
     // ninguna pieza que afinar y lo unico que aportan es tapar lo que si vale.
     for (const node of this.drumOnly) node.hidden = !settings.drums;
-    // Y el timbre de la segunda persona, que sin duo no es de nadie. Tambien se
-    // esconde en bateria, como el primero: ahi no hay timbre que elegir.
-    for (const node of this.duoOnly) node.hidden = settings.duo === 'off' || settings.drums;
+    // Y el timbre de cada persona de mas, que sin ella no es de nadie. Tambien
+    // se esconde en bateria, como el primero: ahi no hay timbre que elegir.
+    const people = playerCount(settings.duo, settings.groupSize);
+    for (const { needs, node } of this.duoOnly) node.hidden = settings.drums || people < needs;
+    // El tamano solo a una mano cada una: por mitades son dos y no se discute.
+    for (const node of this.handsOnly) node.hidden = settings.duo !== 'hands';
   }
 
   /**
@@ -156,9 +168,14 @@ export class Controls {
     this.collect(this.drumOnly, build);
   }
 
-  /** Y lo que solo vale con dos personas delante. */
-  private paired(build: () => void): void {
-    this.collect(this.duoOnly, build);
+  /** Y lo que solo vale a partir de `needs` personas delante. */
+  private paired(needs: number, build: () => void): void {
+    const from = this.panel.childElementCount;
+    build();
+    for (let i = from; i < this.panel.childElementCount; i += 1) {
+      const node = this.panel.children[i];
+      if (node instanceof HTMLElement) this.duoOnly.push({ needs, node });
+    }
   }
 
   private collect(into: HTMLElement[], build: () => void): void {
@@ -175,6 +192,8 @@ export class Controls {
     this.panel.replaceChildren();
     this.melodyOnly = [];
     this.drumOnly = [];
+    this.duoOnly = [];
+    this.handsOnly = [];
 
     this.select(
       'language',
@@ -265,17 +284,29 @@ export class Controls {
         (settings) => settings.preset,
         (value) => this.deps.store.set({ preset: value as PresetId }),
       );
-      // El de la otra persona, justo debajo y solo con el duo puesto: son el
-      // mismo ajuste dos veces y leerlos juntos es lo que dice que son dos.
-      this.paired(() => {
-        this.select(
-          'preset-two',
-          s.presetTwo,
-          timbres,
-          (settings) => settings.presetTwo,
-          (value) => this.deps.store.set({ presetTwo: value as PresetId }),
-        );
-      });
+      /*
+       * Y el de cada persona de mas, uno debajo de otro: son el mismo ajuste
+       * repetido, y leerlos juntos es lo que dice que son varios instrumentos y
+       * no uno con mandos sueltos. Se montan todos los que pueden existir y se
+       * esconden los que sobran, en vez de reconstruir el panel cada vez que
+       * alguien cambia el tamano del grupo: reconstruirlo cerraria el
+       * desplegable que se acaba de abrir.
+       */
+      for (let seat = 1; seat < MAX_PLAYERS; seat += 1) {
+        this.paired(seat + 1, () => {
+          this.select(
+            `preset-player-${seat + 1}`,
+            s.presetOther(seat + 1),
+            timbres,
+            (settings) => settings.presetOthers[seat - 1] ?? settings.preset,
+            (value) => {
+              const timbresNow = [...this.deps.store.get().presetOthers];
+              timbresNow[seat - 1] = value as PresetId;
+              this.deps.store.set({ presetOthers: timbresNow });
+            },
+          );
+        });
+      }
     });
 
     this.range(
@@ -354,6 +385,19 @@ export class Controls {
       (value) => this.deps.store.set({ duo: isDuoMode(value) ? value : 'off' }),
     );
     this.hint(s.duoHint);
+    this.collect(this.handsOnly, () => {
+      this.range(
+        'group-size',
+        s.groupSize,
+        MIN_PLAYERS,
+        MAX_PLAYERS,
+        1,
+        (x) => x.groupSize,
+        (v) => this.deps.store.set({ groupSize: v }),
+        (v) => s.groupSizeUnit(v),
+      );
+      this.hint(s.groupSizeHint);
+    });
 
     this.section(s.smoothingSection);
     this.hint(s.smoothingHint);

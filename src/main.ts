@@ -109,19 +109,19 @@ class Theremano {
   private readonly clip = new ClipRecorder();
   private readonly mapper: Mapper;
   /**
-   * El instrumento de la segunda persona, cuando hay duo.
+   * El instrumento de cada persona menos la primera.
    *
-   * Un mapeador entero y no unos cuantos campos sueltos: filtros, gate, pedal y
-   * detectores de golpe propios. Es lo que hace que sean dos instrumentos y no
-   * uno compartido, y es gratis porque el mapeador ya era de por si una cosa por
-   * instancia. Vive aqui a null mientras no haya duo: montarlo siempre seria
-   * filtrar a sesenta hercios unas manos que no existen.
+   * Un mapeador entero por cabeza y no unos cuantos campos sueltos: filtros,
+   * gate, pedal y detectores de golpe propios. Es lo que hace que sean varios
+   * instrumentos y no uno compartido, y es gratis porque el mapeador ya era de
+   * por si una cosa por instancia. La lista esta vacia mientras se toque solo:
+   * montarlos siempre seria filtrar a sesenta hercios unas manos que no existen.
    */
-  private second: Mapper | null = null;
+  private others: Mapper[] = [];
   /** Lo ultimo que repartio el duo. Lo mira el overlay para dibujar a las dos. */
   private players: Player[] = [];
-  /** Lo que toca la segunda persona en este fotograma, para su capa. */
-  private secondLive: LiveSnapshot | null = null;
+  /** Lo que toca cada una de las demas en este fotograma, para su capa. */
+  private otherLives: (LiveSnapshot | null)[] = [];
   /**
    * Lo ultimo que ha llegado del otro dispositivo.
    *
@@ -473,8 +473,8 @@ class Theremano {
      * grabar "lo que suena" no cabe en una capa: se abren dos. Quien no toque
      * nada en esa vuelta no deja capa, porque una toma vacia se descarta sola.
      */
-    const presets =
-      settings.duo === 'off' ? [settings.preset] : [settings.preset, settings.presetTwo];
+    const players = playerCount(settings.duo, settings.groupSize);
+    const presets = [settings.preset, ...settings.presetOthers.slice(0, players - 1)];
     switch (this.looper.toggle(presets, settings.drums)) {
       case 'rejected':
         this.hud.toast(t().toast.layersFull);
@@ -780,7 +780,7 @@ class Theremano {
       // no son un extra sobre lo que se toca, son lo unico que hay que ver.
       ghosts: true,
       lens: FULL_LENS,
-      partner: null,
+      partners: [],
     };
   }
 
@@ -943,7 +943,7 @@ class Theremano {
       // Ni duo: la demostracion la toca una mano dibujada, y son dos manos de la
       // misma persona.
       lens: FULL_LENS,
-      partner: null,
+      partners: [],
     };
 
     const dt = this.lastEffectsTime > 0 ? (now - this.lastEffectsTime) / 1000 : 1 / 60;
@@ -1009,7 +1009,7 @@ class Theremano {
       // Ni duo: la demostracion la toca una mano dibujada, y son dos manos de la
       // misma persona.
       lens: FULL_LENS,
-      partner: null,
+      partners: [],
     };
 
     const dt = this.lastEffectsTime > 0 ? (now - this.lastEffectsTime) / 1000 : 1 / 60;
@@ -1473,10 +1473,10 @@ class Theremano {
       // quedado sostenida, y eso se lee de un vistazo.
       if (output.drone > 0) this.hud.toast(t().toast.drone(midiToName(output.droneMidi, t().notes)), 1800);
     }
-    // Y la segunda persona, si la hay. Despues de la primera y no antes: lo que
-    // se atiende primero es lo que se oye antes, y la primera es quien lleva el
+    // Y las demas, si las hay. Despues de la primera y no antes: lo que se
+    // atiende primero es lo que se oye antes, y la primera es quien lleva el
     // bucle, la guia y el rotulo.
-    const partner = this.playSecond(seconds);
+    const partners = this.playOthers(seconds);
     // Lo que se toca aqui va al otro dispositivo, y lo que llega de alla suena
     // en la segunda voz: la misma que ocuparia la segunda persona de un duo.
     // Y se dibuja igual que ella, que es lo que hace que esto sea tocar juntos
@@ -1509,7 +1509,7 @@ class Theremano {
     runtime.midi = output.midi;
 
     // La capa que se este grabando guarda el gesto, no el sonido. Una por
-    // persona: en duo son dos instrumentos y una capa es monofonica.
+    // persona: son varios instrumentos y una capa es monofonica.
     this.looper.capture({
       gateEvent: output.gateEvent,
       gateOpen: output.gateOpen,
@@ -1517,8 +1517,11 @@ class Theremano {
       cutoffNorm: output.cutoffNorm,
       gain: output.gain,
       strikes: output.strikes,
-    }, ...(this.secondLive ? [this.secondLive] : []));
-    this.secondLive = null;
+      // Una capa por persona, en su sitio: quien no tenga manos delante deja su
+      // hueco vacio en vez de correr a las demas una plaza. La estacion descarta
+      // sola las tomas sin notas, asi que un hueco vacio no deja capa fantasma.
+    }, ...this.otherLives);
+    this.otherLives = [];
 
     const loops = this.looper.state;
     const frame: OverlayFrame = {
@@ -1536,7 +1539,7 @@ class Theremano {
       showRawTrace: settings.showRawTrace,
       ghosts: settings.ghosts,
       lens: this.mapper.currentLens,
-      partner: partner ?? remotePartner,
+      partners: remotePartner ? [...partners, remotePartner] : partners,
     };
 
     // Los efectos avanzan una vez por fotograma aunque se pinten dos veces:
@@ -1638,48 +1641,81 @@ class Theremano {
   }
 
   /**
-   * Toca la segunda persona.
+   * Los ajustes que son de todas, a todas.
    *
-   * Es el mismo recorrido que el de la primera y por eso es tan corto: su
-   * mapeador, su voz. Lo que NO hace, y es a proposito: no graba en el bucle, no
-   * mueve el HUD y no lleva la melodia guiada. Esas tres cosas son de una sola
-   * persona -una capa es monofonica, el rotulo dice una nota y la guia apunta a
-   * una mano- y repartirlas entre dos pide decidir de quien son, que es una
-   * pregunta que todavia no tiene respuesta buena.
-   *
-   * Los golpes si suenan: el kit es uno y esta en el encuadre, asi que si la
-   * segunda persona golpea una banda tiene que sonar esa banda.
+   * La escala, la tonica, el reparto del kit y el suavizado no son de nadie en
+   * particular: son el instrumento. Lo unico que cada mapeador lee por su cuenta
+   * es su timbre, y eso lo resuelve el propio `syncSettings` mirando su puesto.
    */
-  private playSecond(seconds: number): PartnerFrame | null {
-    const mapper = this.second;
-    const player = this.players[1];
-    if (!mapper || !player) return null;
+  private syncOthers(settings: Readonly<Settings>): void {
+    for (const mapper of this.others) mapper.syncSettings(settings);
+  }
+
+  /**
+   * Tocan las demas, en orden y despues de la primera.
+   *
+   * En orden porque lo que se atiende primero es lo que se oye antes, y no da
+   * igual quien: la primera persona es la que lleva el bucle, el rotulo y la
+   * guia. Cada una es el mismo recorrido que la primera y por eso es tan corto:
+   * su mapeador, su voz, su capa.
+   *
+   * Lo que NO hacen, y es a proposito: no mueven el rotulo de la nota y no
+   * llevan la melodia guiada. Las dos son de una sola persona -el rotulo dice
+   * una nota y la guia apunta a una mano- y repartirlas pide decidir de quien
+   * son, que es una pregunta que todavia no tiene respuesta buena.
+   *
+   * Los golpes si suenan: el kit es uno y esta en el encuadre, asi que si
+   * cualquiera golpea una banda tiene que sonar esa banda.
+   */
+  private playOthers(seconds: number): PartnerFrame[] {
+    const frames: PartnerFrame[] = [];
+    this.otherLives = [];
+    for (let seat = 1; seat <= this.others.length; seat += 1) {
+      const frame = this.playOne(this.others[seat - 1]!, seat, seconds);
+      if (frame) frames.push(frame);
+    }
+    return frames;
+  }
+
+  /** Una de ellas, con su mapeador y su voz. El puesto dice cual de las dos. */
+  private playOne(mapper: Mapper, seat: number, seconds: number): PartnerFrame | null {
+    const player = this.players[seat];
+    if (!player) {
+      // Sin manos en su plaza no toca nadie, pero la capa sigue existiendo y
+      // tiene que recibir su hueco: sin el, las tomas se correrian de persona.
+      this.otherLives.push(null);
+      return null;
+    }
 
     mapper.setLens(player.lens);
     const output = mapper.update(player.roles, seconds);
-    if (output.gateEvent === 'attack') this.engine.attack(output.freq, 1);
-    else if (output.gateEvent === 'release') this.engine.release(1);
+    if (output.gateEvent === 'attack') this.engine.attack(output.freq, seat);
+    else if (output.gateEvent === 'release') this.engine.release(seat);
     for (const hit of output.strikes) this.engine.hit(hit.piece, hit.force, hit.open);
-    this.engine.setFrequency(output.freq, output.glide, 1);
-    this.engine.setCutoffNorm(output.cutoffNorm, 1);
-    this.engine.setVolume(output.gain, 1);
-    this.engine.setSpace(output.space, 1);
-    this.engine.setVibrato(output.vibrato, output.vibratoRate, 1);
-    this.engine.setDrone(output.drone, 1);
+    this.engine.setFrequency(output.freq, output.glide, seat);
+    this.engine.setCutoffNorm(output.cutoffNorm, seat);
+    this.engine.setVolume(output.gain, seat);
+    this.engine.setSpace(output.space, seat);
+    this.engine.setVibrato(output.vibrato, output.vibratoRate, seat);
+    this.engine.setDrone(output.drone, seat);
     // Lo que toca, para su propia capa. Se deja aqui y lo recoge el bucle de
     // fotogramas unas lineas mas abajo, que es donde se graba: la alternativa
     // -grabar desde aqui- pondria dos llamadas a la estacion en el mismo
     // fotograma y una de las dos veria una toma que la otra acaba de cerrar.
-    this.secondLive = {
+    this.otherLives.push({
       gateEvent: output.gateEvent,
       gateOpen: output.gateOpen,
       freq: output.freq,
       cutoffNorm: output.cutoffNorm,
       gain: output.gain,
       strikes: output.strikes,
-    };
-    // El gesto de los dedos, que aqui cambia SU timbre y no el de la otra.
-    if (output.preset) this.store.set({ presetTwo: output.preset.id });
+    });
+    // El gesto de los dedos, que aqui cambia SU timbre y no el de las demas.
+    if (output.preset) {
+      const timbres = [...this.store.get().presetOthers];
+      timbres[seat - 1] = output.preset.id;
+      this.store.set({ presetOthers: timbres });
+    }
     return { assignment: player.roles, lens: player.lens, pitchX: output.pitchX, gateOpen: output.gateOpen };
   }
 
@@ -1771,28 +1807,29 @@ class Theremano {
    * toca nadie- y eso desde fuera parece que el instrumento va mal.
    */
   private applyDuo(mode: DuoMode): void {
-    // Con alguien al otro lado hace falta la segunda voz aunque no haya duo:
+    const settings = this.store.get();
+    // Con alguien al otro lado hace falta una segunda voz aunque no haya grupo:
     // es la que toca quien esta conectado.
-    const players = this.peer.isConnected ? 2 : playerCount(mode);
-    void this.landmarker.setHandCount(handsNeeded(mode));
+    const players = this.peer.isConnected ? 2 : playerCount(mode, settings.groupSize);
+    void this.landmarker.setHandCount(handsNeeded(mode, settings.groupSize));
     this.engine.setPlayers(players);
     this.roles.reset();
-    if (players > 1) {
-      if (!this.second) {
-        this.second = new Mapper(this.store.get());
-        this.second.asSecond(this.store.get());
-      }
-      this.second.setLens(lensFor(mode, 1));
-      // La voz nueva sale con el timbre de la primera: hay que darle el suyo o
-      // el duo empieza sonando a una sola persona con dos manos de mas.
-      this.engine.setPreset(getPreset(this.store.get().presetTwo), 1);
-    } else {
-      // Sin soltar la nota que tuviera abierta se quedaria sonando en una voz
-      // que ya no existe. La voz se tira con su propio corte, pero el mapeador
-      // tambien tiene que cerrar su gate o al volver al duo entraria abierto.
-      this.second?.silence();
-      this.second = null;
+
+    // Las que sobran se van con su nota cerrada. La voz se tira con su propio
+    // corte, pero el mapeador tambien tiene que cerrar su gate o al volver
+    // entraria abierto.
+    while (this.others.length > players - 1) this.others.pop()?.silence();
+    while (this.others.length < players - 1) {
+      const mapper = new Mapper(settings);
+      mapper.asPlayer(this.others.length + 1, settings);
+      this.others.push(mapper);
     }
+    this.others.forEach((mapper, index) => {
+      mapper.setLens(lensFor(mode, index + 1));
+      // La voz nueva sale con el timbre de la primera: hay que darle el suyo o
+      // el grupo empieza sonando a una sola persona con manos de mas.
+      this.engine.setPreset(getPreset(settings.presetOthers[index] ?? settings.preset), index + 1);
+    });
     this.players = [];
   }
 
@@ -1988,19 +2025,24 @@ class Theremano {
       changed.has('preset')
     ) {
       this.mapper.syncSettings(settings);
-      // La segunda persona toca el mismo instrumento con las mismas reglas: la
-      // escala, la tonica y el timbre son de los dos. Sin esta linea, cambiar de
-      // escala dejaria a una en la nueva y a la otra en la de antes.
-      this.second?.syncSettings(settings);
+      // Las demas tocan el mismo instrumento con las mismas reglas: la escala y
+      // la tonica son de todas. Sin esta linea, cambiar de escala dejaria a una
+      // en la nueva y a las otras en la de antes.
+      this.syncOthers(settings);
       this.hud.setSubtitle(settings);
     }
-    if (changed.has('duo')) {
+    if (changed.has('duo') || changed.has('groupSize')) {
       this.applyDuo(settings.duo);
-      this.second?.syncSettings(settings);
+      this.syncOthers(settings);
     }
-    if (changed.has('presetTwo')) {
-      this.second?.syncSettings(settings);
-      this.engine.setPreset(getPreset(settings.presetTwo), 1);
+    if (changed.has('presetOthers')) {
+      this.syncOthers(settings);
+      // Y la voz de cada una, que es donde suena: el mapeador solo decide que
+      // timbre pedir, y sin esto el cambio no llega al altavoz hasta la nota
+      // siguiente que abra esa persona.
+      this.others.forEach((_, index) => {
+        this.engine.setPreset(getPreset(settings.presetOthers[index] ?? settings.preset), index + 1);
+      });
     }
     if (changed.has('locale')) i18n.set(settings.locale);
     if (changed.has('melodyId')) this.syncGuide(settings.melodyId, { applySuggestedScale: true });
@@ -2026,7 +2068,7 @@ class Theremano {
     if (changed.has('kitSpace') || changed.has('swing')) this.applyKitTrim(settings);
     if (changed.has('kitBands') || changed.has('kitSize')) {
       this.mapper.syncSettings(settings);
-      this.second?.syncSettings(settings);
+      this.syncOthers(settings);
       // Y el subtitulo, que dice cuantas piezas hay debajo de las manos: sin
       // esto anunciaba cuatro sobre seis bandas dibujadas.
       this.hud.setSubtitle(settings);
@@ -2070,7 +2112,7 @@ class Theremano {
     if (changed.has('preset')) this.engine.setPreset(getPreset(settings.preset));
     if (changed.has('masterVolume')) {
       this.mapper.setVolume(settings.masterVolume);
-      this.second?.setVolume(settings.masterVolume);
+      for (const mapper of this.others) mapper.setVolume(settings.masterVolume);
     }
     if (changed.has('stageMode')) this.applyStageMode(settings.stageMode);
     if (changed.has('mirror')) {

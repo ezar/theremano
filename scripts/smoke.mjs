@@ -445,7 +445,58 @@ await page.waitForTimeout(400);
 // donde estaba. Se mira ahi y no en el almacenamiento porque el desplegable
 // sigue al ajuste en el acto y el almacenamiento va agrupado.
 const duoAfterKeys = await page.evaluate(() => document.getElementById('set-duo')?.value);
-console.log(JSON.stringify({ duo, duoKeys, duoAfterKeys }, null, 2));
+
+/*
+ * Y el grupo de mas de dos, que solo existe a una mano cada una.
+ *
+ * Lo que se comprueba es el panel y el recorrido que hay detras: subir el grupo
+ * monta un mapeador y una voz mas y le pide otra mano al detector, todo con la
+ * camara puesta. Que suenen tres no se puede comprobar aqui -delante de la
+ * camara falsa no hay manos- y lo comprueban las pruebas del reparto, que meten
+ * tres manos de mentira por el reparto de verdad.
+ *
+ * El panel tiene su parte: el timbre de la tercera persona no puede estar a la
+ * vista con un grupo de dos, porque cambiarlo no haria nada y quien lo toca no
+ * entenderia por que.
+ *
+ * El panel ya esta abierto de lo de arriba: la seccion de las teclas lo cierra
+ * y lo vuelve a abrir, y volver a pulsar aqui lo cerraria justo antes de ir a
+ * buscar el desplegable.
+ */
+const seen = async (id) =>
+  page.evaluate((which) => document.getElementById(which)?.closest('.field')?.hidden === false, id);
+const groupRow = async () => ({
+  tamano: await seen('set-group-size'),
+  persona2: await seen('set-preset-player-2'),
+  persona3: await seen('set-preset-player-3'),
+  persona4: await seen('set-preset-player-4'),
+});
+const group = { porMitades: null, aUnaMano: null, deTres: null, deCuatro: null, timbres: null };
+await page.selectOption('#set-duo', 'halves');
+await page.waitForTimeout(400);
+group.porMitades = await groupRow();
+await page.selectOption('#set-duo', 'hands');
+await page.waitForTimeout(400);
+group.aUnaMano = await groupRow();
+await page.locator('#set-group-size').fill('3');
+await page.waitForTimeout(400);
+group.deTres = await groupRow();
+await page.locator('#set-group-size').fill('4');
+await page.waitForTimeout(400);
+group.deCuatro = await groupRow();
+// El timbre de la tercera va a su sitio de la lista y no al de otra persona.
+await page.selectOption('#set-preset-player-3', 'theremin');
+for (let tries = 0; tries < 40; tries += 1) {
+  group.timbres = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('theremano.settings.v1') ?? '{}').presetOthers ?? null,
+  );
+  if (group.timbres?.[1] === 'theremin') break;
+  await page.waitForTimeout(250);
+}
+// Y se devuelve a donde estaba: lo que viene detras toca solo.
+await page.selectOption('#set-duo', 'off');
+await page.waitForTimeout(400);
+console.log(JSON.stringify({ duo, duoKeys, duoAfterKeys, group }, null, 2));
 
 // --- Cancion: elegirla amplia el rango si el encuadre se ha quedado corto.
 await page.evaluate(() => {
@@ -894,14 +945,29 @@ await pointer.close();
  * y WebRTC no existe fuera de un navegador. Por eso el trozo largo esta aqui.
  */
 /*
- * Cada uno en su contexto, que aqui no es una manía: dos pestanas de la misma
- * ventana no pueden estar las dos a la vista, y la que se queda detras recibe
- * el aviso de que esta oculta y suspende su audio, que es lo que hace la
- * aplicacion en cualquier pestana de fondo. Dos ventanas son dos dispositivos,
- * que es lo que se esta imitando.
+ * Cada uno en SU NAVEGADOR, que aqui no es una mania sino lo unico que sale
+ * estable.
+ *
+ * Solo una ventana de un navegador esta a la vista, y la que se queda detras
+ * recibe el aviso de que esta oculta: la aplicacion le suspende el audio -lo que
+ * hace en cualquier pestana de fondo, y esta bien que lo haga- y encima el
+ * navegador le frena los temporizadores. Como para tocar hacen falta manos, las
+ * manos las mueve el raton y el raton solo puede estar en una ventana, con los
+ * dos en el mismo navegador esto no medía el canal sino la suspension: la mitad
+ * de las veces el invitado oia cero. Dos navegadores son dos dispositivos, que
+ * es lo que se esta imitando, y cada uno se cree el que esta delante.
  */
 const netHostCtx = await browser.newContext({ viewport: { width: 900, height: 640 } });
-const netGuestCtx = await browser.newContext({ viewport: { width: 900, height: 640 } });
+const guestBrowser = await chromium.launch({
+  ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
+  args: [
+    '--use-fake-ui-for-media-stream',
+    '--use-fake-device-for-media-stream',
+    '--autoplay-policy=no-user-gesture-required',
+    '--enable-unsafe-swiftshader',
+  ],
+});
+const netGuestCtx = await guestBrowser.newContext({ viewport: { width: 900, height: 640 } });
 await netHostCtx.addInitScript(onsetProbe);
 await netGuestCtx.addInitScript(onsetProbe);
 const host = await netHostCtx.newPage();
@@ -969,8 +1035,9 @@ for (const page of [host, guest]) {
   await page.waitForTimeout(200);
 }
 
-// Quien toca tiene que estar delante: sin repintados no hay mano que baje ni
-// golpe que dar. El invitado no lo necesita, y eso es justo lo que se comprueba.
+// Quien toca tiene que estar delante de su navegador: sin repintados no hay
+// mano que baje ni golpe que dar. El invitado no lo necesita, y eso es justo lo
+// que se comprueba.
 await host.bringToFront();
 const netBox = await host.locator('#overlay').boundingBox();
 const GOLPES = 8;
@@ -1045,6 +1112,7 @@ const afterLeave = {
 console.log(JSON.stringify({ paired, strikes, hand, afterLeave, erroresDeRed: netLogs }, null, 2));
 await netHostCtx.close();
 await netGuestCtx.close();
+await guestBrowser.close();
 
 // --- Interpretacion en el enlace. Se abre uno guardado de la version 1, con
 // cuatro notas de theremin dentro, y se comprueba que suena sin camara: la
@@ -1467,6 +1535,23 @@ if (netLogs.length > 0) {
   console.error(`\nFALLO: errores tocando con otro dispositivo: ${netLogs.join(' | ')}`);
   process.exit(1);
 }
+if (group.porMitades.tamano || group.porMitades.persona3) {
+  console.error('\nFALLO: por mitades son dos, asi que ni el tamano del grupo ni el tercer timbre pintan nada ahi');
+  process.exit(1);
+}
+if (!group.aUnaMano.tamano || !group.aUnaMano.persona2 || group.aUnaMano.persona3 || group.aUnaMano.persona4) {
+  console.error(`\nFALLO: con un grupo de dos sobran los timbres de la tercera y la cuarta (${JSON.stringify(group.aUnaMano)})`);
+  process.exit(1);
+}
+if (!group.deTres.persona3 || group.deTres.persona4 || !group.deCuatro.persona4) {
+  console.error(`\nFALLO: los timbres no aparecen segun cuanta gente hay (${JSON.stringify(group.deTres)} / ${JSON.stringify(group.deCuatro)})`);
+  process.exit(1);
+}
+// En su sitio de la lista: en el de otra persona le cambiaria el timbre a ella.
+if (group.timbres?.[1] !== 'theremin' || group.timbres.length !== 3) {
+  console.error(`\nFALLO: el timbre de la tercera persona no va a su sitio (${JSON.stringify(group.timbres)})`);
+  process.exit(1);
+}
 if (state.error || errors.length > 0) {
   console.error(`\nFALLO: ${state.error ?? errors.join('\n')}`);
   process.exit(1);
@@ -1477,7 +1562,7 @@ if (!state.splashHidden || !state.hudVisible) {
 }
 console.log(
   `\nOK: mando de la portada, arranque, modelo, audio, introduccion de ${coachStart.dots} pasos y la de bateria de ${drumCoach.dots}, ayuda, espanol e ingles, ` +
-    `bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB, solo manos con clip de ` +
+    `grupo de hasta ${group.timbres.length + 1} personas a una mano cada una, bucle, clip de ${(clip.bytes / 1024).toFixed(0)} kB, solo manos con clip de ` +
     `${(handsClip.bytes / 1024).toFixed(0)} kB, demostracion y puntero sin camara con vibrato, nota pedal y claqueta, ritmo grabado con melodia encima, enlace compartible, ` +
     `y dos dispositivos tocando juntos con ${strikes.oidosAlOtroLado} de ${strikes.dados} golpes al otro lado.`,
 );
