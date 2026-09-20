@@ -7,7 +7,7 @@ import {
   normalizeLayout,
   normalizePieceNumbers,
 } from '../src/mapping/kit';
-import { DEFAULT_SETTINGS, SettingsStore } from '../src/state/store';
+import { DEFAULT_SETTINGS, SettingsStore, normalizePresets } from '../src/state/store';
 
 /**
  * Los ajustes del kit, que son los primeros que no son un numero.
@@ -156,5 +156,50 @@ describe('los ajustes guardados', () => {
       expect(state.kitLevel).not.toBe(DEFAULT_SETTINGS.kitLevel);
       expect(state.kitBands).toEqual([...KIT]);
     }
+  });
+});
+
+describe('los timbres de las demas personas', () => {
+  it('siempre vienen todos, aunque haya menos gente', () => {
+    /*
+     * Una lista corta dejaria a la tercera persona con un undefined por timbre,
+     * y eso no da un error: da el timbre de fabrica puesto de tapadillo, que es
+     * ademas el de otra persona. Dos instrumentos iguales sonando a la vez
+     * suenan a uno desafinado.
+     */
+    expect(normalizePresets(undefined, undefined)).toEqual(DEFAULT_SETTINGS.presetOthers);
+    expect(normalizePresets(['bass'], undefined)).toEqual(['bass', ...DEFAULT_SETTINGS.presetOthers.slice(1)]);
+    expect(normalizePresets(['bass', 'no existe', 7], undefined)).toEqual([
+      'bass',
+      ...DEFAULT_SETTINGS.presetOthers.slice(1),
+    ]);
+    expect(normalizePresets('ni siquiera es una lista', undefined)).toEqual(DEFAULT_SETTINGS.presetOthers);
+  });
+
+  it('la migracion llega hasta los ajustes de verdad, no solo hasta la funcion', () => {
+    /*
+     * Esto empezo roto y no lo dijo ningun test: la funcion recibia la lista ya
+     * rellenada con los valores de fabrica, asi que su primer hueco siempre
+     * venia ocupado y la clave vieja no se miraba nunca. Sanear bien una cosa
+     * que nadie te pasa no sirve de nada, y por eso esto entra por la puerta de
+     * verdad -unos ajustes guardados- y no por la funcion a pelo.
+     */
+    const store = storeWith({ presetTwo: 'flute' });
+    expect(store.get().presetOthers[0]).toBe('flute');
+    // Y el resto se queda de fabrica, no se arrastra el de la vieja.
+    expect(store.get().presetOthers.slice(1)).toEqual(DEFAULT_SETTINGS.presetOthers.slice(1));
+  });
+
+  it('y el de cuando solo habia una segunda persona no se pierde', () => {
+    /*
+     * Hasta que el grupo pudo pasar de dos, ese timbre vivia en su propia clave.
+     * Perderle a alguien un ajuste que eligio a mano, en silencio y por un
+     * cambio interno, es de las pocas cosas que no se arreglan reiniciando.
+     */
+    expect(normalizePresets(undefined, 'flute')[0]).toBe('flute');
+    // Pero solo cuando no hay nada mas nuevo: lo de la lista manda.
+    expect(normalizePresets(['bass'], 'flute')[0]).toBe('bass');
+    // Y una clave vieja con basura no le quita el sitio al de fabrica.
+    expect(normalizePresets(undefined, 'trompeta')).toEqual(DEFAULT_SETTINGS.presetOthers);
   });
 });

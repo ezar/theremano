@@ -8,10 +8,10 @@ import {
   normalizePieceNumbers,
   type DrumPiece,
 } from '../mapping/kit';
-import { isDuoMode, type DuoMode } from '../tracking/duo';
+import { MIN_PLAYERS, isDuoMode, normalizeGroup, type DuoMode } from '../tracking/duo';
 import { isEchoKind, type EchoKind } from '../audio/echo';
 import type { ScaleId } from '../mapping/scales';
-import type { PresetId } from '../audio/presets';
+import { isPresetId, type PresetId } from '../audio/presets';
 import type { ClipAspect } from '../capture/recorder';
 
 /**
@@ -69,17 +69,34 @@ export interface Settings {
    */
   duo: DuoMode;
   /**
-   * El timbre de la segunda persona. Solo significa algo con el duo puesto.
+   * Cuantas personas hay, de dos a cuatro. Solo cuenta a una mano cada una.
+   *
+   * Por mitades son dos y no se toca: partir el encuadre en tres le deja a cada
+   * persona un tercio en el que tiene que caber la escala entera, y ahi el
+   * limite no es el detector sino la punteria de una mano en el aire. A una mano
+   * cada una no se parte nada -todas tienen el encuadre entero- y lo unico que
+   * crece es cuantas manos hay que buscar, que se paga en fotogramas por
+   * segundo. Por eso lo elige quien toca y no este fichero.
+   */
+  groupSize: number;
+  /**
+   * El timbre de cada persona menos la primera, que usa `preset`.
+   *
+   * Una lista y no un campo por persona porque el numero de personas lo elige
+   * quien toca: `presetOthers[0]` es la segunda, `[1]` la tercera. Siempre estan
+   * las tres aunque haya menos gente, para que bajar el grupo y volver a subirlo
+   * no borre el timbre que alguien habia elegido.
    *
    * Propio y no compartido porque dos instrumentos con el mismo timbre tocando a
-   * la vez suenan a uno desafinado: lo que hace que se oigan como dos es que
-   * suenen distinto. Se elige como el otro -con los dedos de la mano de melodia
-   * o en los ajustes-, solo que con la mano de la otra persona.
+   * la vez suenan a uno desafinado: lo que hace que se oigan como varios es que
+   * suenen distinto. Se elige como el primero -con los dedos de la mano de
+   * melodia o en los ajustes-, solo que con la mano de esa persona.
    *
-   * De fabrica viene distinto del primero a proposito: encender el duo y que
-   * suenen los dos igual es la primera impresion equivocada.
+   * De fabrica vienen los cuatro distintos, que salen justos: hay cuatro timbres
+   * y caben cuatro personas. Encender el grupo y que suenen todas igual es la
+   * primera impresion equivocada.
    */
-  presetTwo: PresetId;
+  presetOthers: PresetId[];
   /**
    * Las manos que grabaron cada capa, dibujadas mientras la capa suena.
    *
@@ -171,7 +188,8 @@ export const DEFAULT_SETTINGS: Settings = {
   stageMode: 'camera',
   metronome: false,
   duo: 'off',
-  presetTwo: 'strings',
+  groupSize: MIN_PLAYERS,
+  presetOthers: ['strings', 'flute', 'bass'],
   ghosts: true,
   drums: false,
   kitBands: [...KIT],
@@ -242,6 +260,22 @@ function loadPersisted(): Settings {
     // Una cadena cualquiera pasa la puerta del tipo y aqui dejaria un duo que no
     // existe: dos manos repartidas en dos instrumentos sin la segunda voz.
     if (!isDuoMode(merged.duo)) merged.duo = DEFAULT_SETTINGS.duo;
+    // Un numero cualquiera pasa la puerta del tipo, y aqui dejaria un grupo de
+    // cero personas -nadie toca- o de veinte -veinte voces y veinte manos que
+    // buscar, que es un navegador parado-.
+    merged.groupSize = normalizeGroup(merged.groupSize);
+    /*
+     * Los timbres de las demas personas, con la migracion de cuando eran uno.
+     *
+     * Hasta que el grupo pudo pasar de dos, el timbre de la segunda persona
+     * vivia en su propia clave. Quien la tenga guardada la conserva: perderle a
+     * alguien un ajuste que eligio a mano, en silencio y por un cambio interno,
+     * es de las pocas cosas que no se arreglan reiniciando.
+     */
+    const stored = parsed as Record<string, unknown>;
+    // Lo de fuera y no `merged`, que a estas alturas ya trae los de fabrica: con
+    // la lista rellenada, la clave vieja no llegaria a mirarse nunca.
+    merged.presetOthers = normalizePresets(stored['presetOthers'], stored['presetTwo']);
     // El tamano primero: el reparto se sanea contra el, asi que uno imposible
     // dejaria un reparto imposible.
     merged.kitSize = normalizeSize(merged.kitSize);
@@ -259,6 +293,26 @@ function loadPersisted(): Settings {
   } catch {
     return freshDefaults();
   }
+}
+
+/**
+ * La lista de timbres, saneada y siempre completa.
+ *
+ * Completa aunque haya menos gente: una lista corta dejaria a la tercera persona
+ * con un `undefined` por timbre, que no da un error sino el timbre de fabrica
+ * puesto de tapadillo. Y "object" es lo que dice typeof de una lista vacia y de
+ * una con basura dentro, asi que la puerta del tipo de arriba no vale aqui.
+ */
+export function normalizePresets(value: unknown, legacy: unknown): PresetId[] {
+  const given = Array.isArray(value) ? value : [];
+  const defaults = DEFAULT_SETTINGS.presetOthers;
+  const out = defaults.map((fallback, index) => {
+    const here = given[index];
+    return isPresetId(here) ? here : fallback;
+  });
+  // La clave de cuando solo habia una segunda persona, si no hay nada mas nuevo.
+  if (!isPresetId(given[0]) && isPresetId(legacy)) out[0] = legacy;
+  return out;
 }
 
 export class SettingsStore {

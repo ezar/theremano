@@ -237,7 +237,10 @@ export interface Strings {
     echoFifth: string;
     echoHint: string;
     /** El timbre de la segunda persona, en duo. */
-    presetTwo: string;
+    presetOther: (n: number) => string;
+    groupSize: string;
+    groupSizeUnit: (n: number) => string;
+    groupSizeHint: string;
     /** Tocar con otro dispositivo, por WebRTC y con senalizacion a mano. */
     netSection: string;
     netHint: string;

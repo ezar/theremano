@@ -1,6 +1,7 @@
 import { palmCenter } from '../mapping/features';
 import { FULL_LENS, type Lens } from '../mapping/features';
 import { RoleTracker } from './handedness';
+import { SlotTracker } from './slots';
 import type { HandFrame, RoleAssignment } from './types';
 
 /**
@@ -21,12 +22,26 @@ import type { HandFrame, RoleAssignment } from './types';
  *   admite estar de pie una al lado de la otra sin estorbarse. Dentro de su
  *   mitad cada una tiene la escala entera: media escala por cabeza no seria un
  *   duo, seria un instrumento partido.
- * - **Una mano cada una**: las dos sobre el encuadre completo, cruzandose si
- *   quieren. Se pierde la mano de expresion -el volumen, el brillo, el pedal- y
- *   a cambio las dos tocan el mismo rango, que es lo que hace falta para
- *   perseguirse, doblar una melodia o repartirse un acorde.
+ * - **Una mano cada una**: sobre el encuadre completo, cruzandose si quieren. Se
+ *   pierde la mano de expresion -el volumen, el brillo, el pedal- y a cambio
+ *   todas tocan el mismo rango, que es lo que hace falta para perseguirse,
+ *   doblar una melodia o repartirse un acorde.
  *
  * Quien toca elige, porque las dos son buenas para cosas distintas.
+ *
+ * ## Y por que solo una de las dos pasa de dos personas
+ *
+ * A una mano cada una se puede ser mas de dos, y por mitades no. No es que
+ * cueste mas programarlo -son otros numeros en la misma lente- es que lo que
+ * sale no se toca: tres franjas reparten un tercio de encuadre a cada persona, y
+ * dentro de ese tercio tiene que caber la escala entera. Con los toms ya se vio
+ * donde esta el limite de estrechar bandas, y no es el temblor del detector
+ * -cien veces mas pequeno- sino la punteria de una mano en el aire. Partir el
+ * encuadre en tres es pedirle a tres personas esa punteria a la vez.
+ *
+ * A una mano cada una no se parte nada: todas tienen el encuadre entero, y lo
+ * unico que crece es cuantas manos hay que buscar. Por eso esta es la que lleva
+ * el numero y la otra se queda en dos.
  */
 
 export type DuoMode = 'off' | 'halves' | 'hands';
@@ -46,9 +61,33 @@ export interface Player {
 const LEFT_LENS: Lens = { from: 0, to: 0.5 };
 const RIGHT_LENS: Lens = { from: 0.5, to: 1 };
 
-/** Cuantas personas toca cada modo. Es fijo: el duo no se apaga por quedarse sola una. */
-export function playerCount(mode: DuoMode): number {
-  return mode === 'off' ? 1 : 2;
+/**
+ * De dos a cuatro personas a una mano cada una.
+ *
+ * El suelo es dos porque una persona a una mano es tocar solo sin la mano de
+ * expresion, que ya se puede hacer sin encender nada. El techo es cuatro porque
+ * es lo que ya cuesta hoy el modo de mitades -cuatro manos que buscar- y por ahi
+ * tambien se acaban las capas del bucle: cuatro personas grabando llenan la
+ * estacion en una sola vuelta.
+ */
+export const MIN_PLAYERS = 2;
+export const MAX_PLAYERS = 4;
+
+/** Saneado del tamano del grupo, para lo que venga de localStorage. */
+export function normalizeGroup(value: unknown): number {
+  const size = Math.round(Number(value));
+  if (!Number.isFinite(size)) return MIN_PLAYERS;
+  return Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, size));
+}
+
+/**
+ * Cuantas personas toca cada modo. Es fijo: el grupo no se encoge por que una se
+ * quede sin manos delante de la camara.
+ */
+export function playerCount(mode: DuoMode, group = MIN_PLAYERS): number {
+  if (mode === 'off') return 1;
+  // Por mitades son dos y solo dos: media pantalla no se parte en tres.
+  return mode === 'halves' ? 2 : normalizeGroup(group);
 }
 
 /**
@@ -59,8 +98,10 @@ export function playerCount(mode: DuoMode): number {
  * sube y baja con el modo, y por eso el modo de una mano cada una se queda en
  * dos: ahi tampoco hacen falta mas.
  */
-export function handsNeeded(mode: DuoMode): number {
-  return mode === 'halves' ? 4 : 2;
+export function handsNeeded(mode: DuoMode, group = MIN_PLAYERS): number {
+  if (mode === 'halves') return 4;
+  // A una mano cada una, una por persona; tocando solo, las dos de siempre.
+  return mode === 'hands' ? normalizeGroup(group) : 2;
 }
 
 /** La franja de cada persona en cada modo. */
@@ -92,9 +133,17 @@ export class DuoTracker {
    */
   private readonly solo = new RoleTracker();
   private readonly duo = [new RoleTracker(), new RoleTracker()];
+  /**
+   * Y el reparto de una mano por persona, que no tiene papeles que repartir.
+   *
+   * Vive aparte del de papeles porque no responde a la misma pregunta: alli hay
+   * dos huecos con oficio -la melodia lleva la nota, la expresion el volumen- y
+   * aqui hay personas, que hacen todas lo mismo. Ver `slots.ts`.
+   */
+  private readonly group = new SlotTracker();
   private mode: DuoMode = 'off';
 
-  update(hands: readonly HandFrame[], now: number, mode: DuoMode): Player[] {
+  update(hands: readonly HandFrame[], now: number, mode: DuoMode, group = MIN_PLAYERS): Player[] {
     if (mode !== this.mode) {
       // Cambiar de modo reparte de otra forma lo mismo, asi que la memoria de
       // antes no vale: describe manos que ya no son de quien dice.
@@ -108,16 +157,17 @@ export class DuoTracker {
 
     if (mode === 'hands') {
       /*
-       * Las dos manos de una persona son aqui las manos de dos personas, y el
-       * reparto de siempre vale tal cual: lo que hace es asignar dos manos a dos
-       * huecos estables por continuidad, que es justo esto. Cada una se queda
-       * con la suya aunque se crucen, que es la gracia del modo.
+       * Una mano por persona, en huecos estables por continuidad: cada una se
+       * queda con la suya aunque se crucen, que es la gracia del modo.
+       *
+       * Y ninguna tiene mano de expresion, que no es una carencia del reparto
+       * sino el trato: a cambio de poder ser mas y de tener todas el encuadre
+       * entero, nadie tiene volumen ni pedal propios.
        */
-      const pair = this.duo[0]!.update(hands, now);
-      return [
-        { roles: { melody: pair.melody, expression: null }, lens: FULL_LENS },
-        { roles: { melody: pair.expression, expression: null }, lens: FULL_LENS },
-      ];
+      return this.group.update(hands, now, playerCount('hands', group)).map((melody) => ({
+        roles: { melody, expression: null },
+        lens: FULL_LENS,
+      }));
     }
 
     /*
@@ -147,5 +197,6 @@ export class DuoTracker {
   reset(): void {
     this.solo.reset();
     for (const tracker of this.duo) tracker.reset();
+    this.group.reset();
   }
 }

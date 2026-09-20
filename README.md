@@ -274,7 +274,7 @@ timbre ocurre de verdad, no cuando se levantan dedos.
 Con teclado: **espacio** graba una capa de bucle, **C** graba un clip, **Z**
 quita la última capa, **E** añade una capa que contesta a la última, **V** oculta
 o muestra la cámara, **G** muestra u oculta las manos de las capas, **D** cambia
-entre tocar solo y las dos formas de tocar en dúo, **H** abre la ayuda.
+entre tocar solo y las dos formas de tocar acompañado, **H** abre la ayuda.
 
 ### Solo manos
 
@@ -559,9 +559,9 @@ altura que dar la vuelta. Lo que sí tiene un ritmo es un derecho y un revés.
 
 ---
 
-## Sobre tocar entre dos
+## Sobre tocar entre varios
 
-El instrumento es monofónico porque una persona tiene una voz. Con dos personas
+El instrumento es monofónico porque una persona tiene una voz. Con más de una
 deja de serlo, y eso no se consigue añadiéndole voces a un instrumento: se
 consigue añadiendo instrumentos. Cada una tiene el suyo entero —su mapeador, sus
 filtros, su gate, su pedal y su voz— sin compartir un solo campo. Salió más
@@ -572,9 +572,40 @@ la única que había.
 Hay dos maneras de repartirse y no sobra ninguna. **A media pantalla**, cada una
 tiene su mitad y dentro de ella toca con sus dos manos, igual que siempre: hay
 mano de melodía y mano de expresión, con su volumen y su pedal. **A una mano cada
-una**, las dos sobre el encuadre completo: se pierde la mano de expresión y a
-cambio las dos tocan el mismo rango, que es lo que hace falta para perseguirse,
-doblar una melodía o repartirse un acorde.
+una**, sobre el encuadre completo: se pierde la mano de expresión y a cambio
+todas tocan el mismo rango, que es lo que hace falta para perseguirse, doblar una
+melodía o repartirse un acorde.
+
+### Por qué solo una de las dos pasa de dos personas
+
+A media pantalla son dos y solo dos. A una mano cada una se puede ser **de dos a
+cuatro**, y la diferencia no es cuánto cuesta programarlo —son otros números en
+la misma lente— sino que lo que sale de partir el encuadre en tres no se toca.
+Cada persona tendría un tercio, y dentro de ese tercio tiene que caber la escala
+entera. Con los toms ya se vio dónde está el límite de estrechar: no lo pone el
+temblor del detector, que es unas cien veces menor que la banda más estrecha, lo
+pone la puntería de una mano en el aire. Partir el encuadre en tres es pedirle
+esa puntería a tres personas a la vez.
+
+A una mano cada una no se parte nada: todas tienen el encuadre entero. Lo único
+que crece es cuántas manos hay que buscar, y eso se paga en fotogramas por
+segundo —el detector cuesta por mano—. Por eso el número lo elige quien toca, con
+el aviso a la vista, y no este repositorio: si la nota empieza a llegar tarde, es
+que sobra gente para esa cámara. Cuatro es el techo porque es lo que ya cuesta el
+modo de mitades, y porque por ahí se acaban también las capas del bucle: cuatro
+personas grabando llenan la estación en una sola vuelta.
+
+De quién es cada mano lo lleva un reparto propio, en `slots.ts`, y no el reparto
+de papeles de siempre. No es duplicarlo: allí hay dos huecos **con oficio** —la
+melodía lleva la nota, la expresión el volumen, y hay reglas que solo tienen
+sentido con esos nombres puestos— y aquí hay personas, que hacen todas lo mismo y
+ninguna es la principal. Lo que sí se comparte es la idea que hace que aguante un
+cruce: adelantar cada mano con la velocidad que trae antes de buscarle hueco.
+Y hay una regla que solo aparece con tres: las manos se reparten empezando por la
+pareja que menos duda tiene, no hueco por hueco. Con tres personas y la de en
+medio con la mano bajada, sirviendo en orden el segundo hueco se queda con la
+mano de la tercera —es la única que queda libre— y acaban dos personas tocando el
+mismo instrumento.
 
 Dentro de su mitad, cada persona tiene la escala entera. Media escala por cabeza
 no sería un dúo, sería un instrumento partido. Y los márgenes de las dos mitades
@@ -610,20 +641,29 @@ otro —con los dedos de la mano de melodía o en Ajustes—, solo que con la ma
 la otra persona: si los dos leyeran el mismo ajuste, abrir la mano de una le
 cambiaría el timbre a la otra a mitad de nota.
 
-**Una vuelta, dos capas.** Grabar en dúo abre dos tomas, no una: son dos
-instrumentos sonando a la vez y una capa es monofónica, así que «lo que suena» no
-cabe en una. Se abren en el mismo instante y se cierran en el mismo instante, de
-modo que las dos capas comparten ciclo por construcción y no porque cuadren los
-números. Quien no toque nada en esa vuelta no deja capa: una toma vacía se
-descarta sola. Y si con tres capas ya grabadas solo cabe una de las dos, se dice
-—perder una capa que alguien acaba de tocar sin avisar es lo peor que podría
-hacer ahí.
+**Una vuelta, una capa por persona.** Grabar entre varios abre una toma por
+cabeza, no una sola: son varios instrumentos sonando a la vez y una capa es
+monofónica, así que «lo que suena» no cabe en una. Se abren en el mismo instante
+y se cierran en el mismo instante, de modo que todas comparten ciclo por
+construcción y no porque cuadren los números. Quien no toque nada en esa vuelta
+no deja capa: una toma vacía se descarta sola. Y quien no tenga las manos
+delante deja su hueco vacío en vez de correr a las demás una plaza, que es lo que
+haría que las capas salieran cambiadas de persona. Si con tres capas ya grabadas
+solo cabe una, se dice —perder una capa que alguien acaba de tocar sin avisar es
+lo peor que podría hacer ahí—.
 
-Lo que el dúo **no** hace todavía: la segunda persona no mueve el rótulo de la
-nota y no lleva la melodía guiada. Las dos son de una sola persona —el rótulo
-dice una nota y la guía apunta a una mano— y repartirlas entre dos pide decidir
-de quién son. Los golpes de batería sí suenan para las dos: el kit es uno y está
-en el encuadre.
+**Un timbre por cabeza**, y de fábrica los cuatro distintos, que salen justos:
+hay cuatro timbres y caben cuatro personas. Dos instrumentos con el mismo timbre
+tocando a la vez suenan a uno desafinado, así que lo que hace que se oigan como
+varios es que suenen distinto. Cada una elige el suyo con los dedos de su mano o
+en Ajustes; si leyeran el mismo, abrir la mano de una le cambiaría el timbre a
+otra a mitad de nota.
+
+Lo que esto **no** hace todavía: las personas de más no mueven el rótulo de la
+nota y no llevan la melodía guiada. Las dos cosas son de una sola persona —el
+rótulo dice una nota y la guía apunta a una mano— y repartirlas pide decidir de
+quién son. Los golpes de batería sí suenan para todas: el kit es uno y está en el
+encuadre.
 
 ---
 
@@ -716,7 +756,7 @@ siguiente— y tocando libre no: a partir de unas decenas de milisegundos se toc
 *contra* el otro en vez de *con* el otro. No hay nada en este proyecto que pueda
 arreglar eso, y saberlo antes es mejor que descubrirlo tocando.
 
-**Con alguien al otro lado, el dúo de la misma cámara se apaga.** Hay dos voces y
+**Con alguien al otro lado, el grupo de la misma cámara se apaga.** Hay dos voces y
 las dos están ocupadas: la tuya y la de quien está conectado. Meter una tercera
 pediría decidir qué hacer con las capas, el rótulo y la guía, que es justo la
 decisión que el dúo dejó pendiente.
@@ -1128,6 +1168,9 @@ Los que se pueden comprobar de forma automática están en `tests/`:
 Y los que solo existen en un navegador están en `scripts/smoke.mjs`, porque
 fuera de uno no hay ni WebRTC ni lienzo que mirar:
 
+- **Con más de dos personas, el panel enseña justo los timbres que hay.** El de
+  la tercera persona no puede estar a la vista con un grupo de dos: cambiarlo no
+  haría nada y quien lo toca no entendería por qué.
 - **Dos dispositivos oyen los mismos golpes.** Con el invitado repintando a diez
   fotogramas por segundo, que es la condición que separa atender los eventos al
   llegar de guardarlos para el siguiente repintado: de ocho golpes dados se oyen
@@ -1136,21 +1179,24 @@ fuera de uno no hay ni WebRTC ni lienzo que mirar:
   desconectar con el otro tocando su voz se suelta en lugar de quedarse abierta.
 
 Los que exigen oído o un dispositivo real —25 fps en un móvil de gama media,
-ausencia de chasquidos, dos personas de verdad delante de una cámara, y el
-retraso de una red que no sea el bucle local— no se pueden afirmar desde aquí y
-quedan por verificar en hardware.
+ausencia de chasquidos, **varias personas de verdad delante de una cámara** —si
+tres o cuatro manos mantienen los fotogramas por segundo, y si el reparto aguanta
+cruces reales y no solo los de mentira de las pruebas—, y el retraso de una red
+que no sea el bucle local— no se pueden afirmar desde aquí y quedan por verificar
+en hardware.
 
 ---
 
 ## Fuera del alcance
 
 Acordes tocados en directo, exportación a MIDI, gestos entrenables por el usuario
-y más de dos personas a la vez —con sus salas, su emparejamiento y su reparto de
-voces—. Queda arquitectónicamente posible, no implementado.
+y **más de dos dispositivos** a la vez —con sus salas, su emparejamiento y su
+reparto de voces—. Queda arquitectónicamente posible, no implementado: el saludo
+de copiar y pegar crece con el cuadrado de la gente, así que a tres ya no se usa.
 
-Dos personas sí: en la misma cámara o desde dos dispositivos. Lo que esas dos no
-comparten es el reloj de los bucles, el rótulo de la nota ni la melodía guiada,
-que siguen siendo de una sola persona.
+Delante de una misma cámara sí caben hasta cuatro, a una mano cada una. Lo que
+esas personas no comparten es el rótulo de la nota ni la melodía guiada, que
+siguen siendo de una sola; y entre dispositivos, tampoco el reloj de los bucles.
 
 ## Lo que esto no es
 
