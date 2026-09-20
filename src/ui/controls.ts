@@ -27,6 +27,11 @@ interface ControlsDeps {
   onMelodyChange: (id: string) => void;
   onLocaleChange: (preference: string) => void;
   localePreference: () => string;
+  /** Tocar con otro dispositivo: invitar, unirse y cerrar el trato. */
+  onInvite: () => Promise<string | null>;
+  onJoin: (code: string) => Promise<string | null>;
+  onAccept: (code: string) => Promise<boolean>;
+  onDisconnect: () => void;
 }
 
 type Binder = (settings: Readonly<Settings>) => void;
@@ -328,6 +333,8 @@ export class Controls {
     );
     this.hint(s.echoHint);
 
+    this.together(s);
+
     this.section(s.cameraSection);
     this.cameraSelect = this.select('camera', s.device, [], (x) => x.cameraId ?? '', (value) => {
       this.deps.onCameraChange(value || null);
@@ -490,6 +497,89 @@ export class Controls {
    */
   private setPiece(key: 'kitTuning' | 'kitLevel', piece: DrumPiece, value: number): void {
     this.deps.store.set({ [key]: { ...this.deps.store.get()[key], [piece]: value } });
+  }
+
+  /**
+   * Tocar con otro dispositivo.
+   *
+   * Son dos viajes de copiar y pegar, y el panel no puede disimularlo: lo que
+   * hace es guiarlos en orden -genera, pega, devuelve- para que se vea que son
+   * dos pasos y no un boton que no funciona. Disfrazarlo de "conectar" y dejar
+   * al otro esperando seria peor que decir lo que cuesta.
+   */
+  private together(s: ReturnType<typeof t>['settings']): void {
+    this.section(s.netSection);
+    this.hint(s.netHint);
+
+    const code = document.createElement('textarea');
+    code.id = 'set-net-code';
+    code.className = 'net-code';
+    code.rows = 3;
+    code.spellcheck = false;
+    code.placeholder = s.netPlaceholder;
+
+    const status = document.createElement('p');
+    status.className = 'hint';
+    status.id = 'net-status';
+
+    const row = document.createElement('div');
+    row.className = 'share-row';
+    const button = (id: string, label: string, run: () => void): HTMLButtonElement => {
+      const node = document.createElement('button');
+      node.type = 'button';
+      node.id = id;
+      node.textContent = label;
+      node.addEventListener('click', run);
+      row.append(node);
+      return node;
+    };
+
+    // Invitar: genera el codigo y lo deja en la caja, ya seleccionado para
+    // copiar. Tarda unos segundos porque el navegador esta recogiendo
+    // direcciones, y decirlo es mejor que un boton que parece colgado.
+    button('net-invite', s.netInvite, () => {
+      status.textContent = s.netWorking;
+      void this.deps.onInvite().then((generated) => {
+        code.value = generated ?? '';
+        status.textContent = generated ? s.netShareCode : s.netFailed;
+        if (generated) code.select();
+      });
+    });
+
+    // Unirse: lee lo que hay pegado y devuelve el codigo de vuelta. El mismo
+    // boton sirve para cerrar el trato de quien invito, porque lo que hay que
+    // hacer con un codigo pegado depende de cual sea, no de en que boton pulse.
+    button('net-join', s.netJoin, () => {
+      const pasted = code.value.trim();
+      if (!pasted) return;
+      status.textContent = s.netWorking;
+      void this.deps.onAccept(pasted).then((closed) => {
+        if (closed) {
+          code.value = '';
+          status.textContent = s.netConnecting;
+          return;
+        }
+        void this.deps.onJoin(pasted).then((reply) => {
+          code.value = reply ?? '';
+          status.textContent = reply ? s.netSendBack : s.netBadCode;
+          if (reply) code.select();
+        });
+      });
+    });
+
+    button('net-leave', s.netLeave, () => {
+      this.deps.onDisconnect();
+      code.value = '';
+      status.textContent = '';
+    });
+
+    this.panel.append(code, row, status);
+  }
+
+  /** Lo que se ve del estado de la conexion, escrito desde fuera. */
+  setNetStatus(text: string): void {
+    const node = document.getElementById('net-status');
+    if (node) node.textContent = text;
   }
 
   private section(title: string): void {

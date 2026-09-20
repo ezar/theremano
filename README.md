@@ -627,6 +627,108 @@ en el encuadre.
 
 ---
 
+## Sobre tocar desde dos dispositivos
+
+Tocar entre dos delante de una cámara tiene un límite que no se arregla
+programando: hay que estar en la misma habitación. Esto es lo mismo desde dos
+sitios, y va por WebRTC directo entre los dos navegadores.
+
+Lo que viaja por el cable **no es audio, es el gesto**. Es la misma decisión que
+hace que una interpretación quepa en un enlace, llevada al otro extremo: en vez
+de mandar sonido —que pesa cien veces más, se corta en cuanto la red tose y llega
+comprimido— se manda lo que la mano está haciendo, y cada navegador lo sintetiza
+con su propio motor. Cinco bytes cuando no hay mano en el encuadre, nueve con
+mano, once con un golpe: a treinta fotogramas por segundo son menos de cuatro
+cientos bytes por segundo, menos que un icono.
+
+Y tiene un efecto que mandar audio no puede tener: al otro lado no llega un
+sonido, **llega una mano**. Se dibuja con la misma maquinaria que dibuja la mano
+fantasma de una capa grabada, así que se ve a la otra persona tocar: dónde tiene
+la mano, cómo la ladea, cuánto cierra la pinza y a qué nota apunta. La marca de la
+rejilla sale de la frecuencia que viaja, deshaciendo el mismo camino que convirtió
+la posición en nota; si la otra persona tiene puesta otra escala, cae en la nota
+más cercana de la tuya, que es lo único útil que se puede decir ahí.
+
+### Los dos viajes de copiar y pegar
+
+Para que dos navegadores se hablen tienen que contarse antes dónde están, y eso
+normalmente lo hace un servidor de señalización: los dos se conectan a él, les
+pasa los papeles y se aparta. Aquí no hay servidor, así que **el papel lo pasas
+tú**: uno pulsa *Invitar* y sale un código; se lo manda al otro por donde quiera
+—un mensaje, un correo, leyéndolo en voz alta si tiene paciencia—; el otro lo pega
+y pulsa *Unirse*, lo que le devuelve un segundo código; ese vuelve al primero, que
+lo pega y pulsa *Unirse* otra vez. Ahí se abre el canal.
+
+Son dos viajes antes de que suene una nota y es incómodo, y no hay forma de que
+deje de serlo sin poner un servidor. Es la elección que se tomó: el README promete
+que esto no tiene servidor, y meter un servicio de terceros para esto sería dejar
+de prometerlo. El panel no lo disimula —guía los dos pasos en orden en vez de
+enseñar un botón de «conectar» que deja al otro esperando— porque decir lo que
+cuesta es mejor que un botón que parece colgado.
+
+El mismo botón sirve para los dos papeles, y no por ahorrar botones: lo que hay
+que hacer con un código pegado depende de qué código sea, no de quién lo pegue.
+
+### Lo que sí es una dependencia, y conviene decirlo
+
+Para conectar dos dispositivos que no están en la misma red hace falta que cada
+uno averigüe su dirección pública, y eso lo dice un **STUN**: un servidor ajeno al
+que se le pregunta una vez y que no ve ni un byte de lo que se toca. Se usa uno
+público. En la misma red —dos dispositivos en el mismo wifi— no hace falta y la
+conexión se abre sin preguntarle a nadie.
+
+«Sin servidor» sigue siendo verdad en lo que importa: no hay nada que montar, nada
+que pagar y nada que se entere de lo que suena. Pero no es «sin red», y decir lo
+contrario sería mentir por comodidad.
+
+### Por qué el canal va sin reintentos y sin orden
+
+El canal se abre con `ordered: false` y `maxRetransmits: 0`, que es lo contrario
+de lo que se pide siempre. Un paquete de gesto caduca en cuanto llega el
+siguiente: reintentar el de hace tres fotogramas para entregarlo en orden
+retrasaría todo lo que viene detrás para reproducir un instante que ya pasó. Es la
+misma razón por la que el audio en directo va por UDP y no por TCP. Perder uno no
+se oye, porque el siguiente trae el estado completo; esperarlo se oye como un
+tropiezo.
+
+Por lo mismo no hay cola de paquetes: se guarda el último y ya está. Reproducir
+los atrasados sería oír a la otra persona tocando en cámara lenta para ponerse al
+día.
+
+### Los eventos se atienden al llegar, no en el siguiente repintado
+
+Lo continuo —la frecuencia, el brillo, el volumen, dónde está la mano— vale lo
+último que haya llegado, y si no llega nada nuevo sigue valiendo. Los eventos
+—el ataque, la suelta, los golpes— son lo contrario: tienen que sonar **una vez**.
+Guardarlos para el siguiente fotograma los repite en todos los que quepan antes
+del paquete siguiente y se come los que lleguen de más entre dos repintados, y
+eso no es una sutileza teórica: en cuanto los dos dispositivos van a ritmos
+distintos —un móvil viejo y un portátil, que es el caso normal— empieza a
+notarse. Medido con el invitado repintando a diez fotogramas por segundo: de ocho
+golpes dados, atendiéndolos en el repintado se oye **uno**; atendiéndolos al
+llegar se oyen **los ocho**. La prueba de humo lo comprueba en cada ejecución.
+
+### Lo que esto no arregla
+
+**La red tarda.** Cada uno se oye a sí mismo al instante y al otro con el retraso
+que haya. En un bucle eso se esconde —el compás da vueltas y se entra en el
+siguiente— y tocando libre no: a partir de unas decenas de milisegundos se toca
+*contra* el otro en vez de *con* el otro. No hay nada en este proyecto que pueda
+arreglar eso, y saberlo antes es mejor que descubrirlo tocando.
+
+**Con alguien al otro lado, el dúo de la misma cámara se apaga.** Hay dos voces y
+las dos están ocupadas: la tuya y la de quien está conectado. Meter una tercera
+pediría decidir qué hacer con las capas, el rótulo y la guía, que es justo la
+decisión que el dúo dejó pendiente.
+
+**Lo que se toca junto no se graba junto.** Cada uno graba sus propias capas en su
+propia estación, porque las capas se disparan con el reloj de cada navegador y no
+hay nada que los sincronice. Si se cae la conexión, la voz de la otra persona se
+suelta y se calla: una nota abierta sin nadie que pueda cerrarla sonaría para
+siempre.
+
+---
+
 ## Sobre las manos de cada capa
 
 Una capa de bucle no guarda sonido. Guarda el gesto, y lo guarda ya convertido en

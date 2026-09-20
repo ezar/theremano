@@ -238,6 +238,21 @@ export interface Strings {
     echoHint: string;
     /** El timbre de la segunda persona, en duo. */
     presetTwo: string;
+    /** Tocar con otro dispositivo, por WebRTC y con senalizacion a mano. */
+    netSection: string;
+    netHint: string;
+    netPlaceholder: string;
+    netInvite: string;
+    netJoin: string;
+    netLeave: string;
+    netWorking: string;
+    netShareCode: string;
+    netSendBack: string;
+    netConnecting: string;
+    netBadCode: string;
+    netFailed: string;
+    netConnected: string;
+    netLost: string;
     reset: string;
   };
 

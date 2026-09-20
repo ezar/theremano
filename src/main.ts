@@ -15,11 +15,11 @@ import { i18n, t } from './i18n';
 import { applyStaticStrings } from './ui/static';
 import { Camera, HIGH_RES, LOW_RES, attachStream, type CameraInfo } from './camera/stream';
 import { LandmarkFilter } from './filter/vectorFilter';
-import { Mapper } from './mapping/mapper';
-import { midiToName } from './mapping/scales';
-import { denormalize } from './mapping/features';
+import { Mapper, type MappingOutput } from './mapping/mapper';
+import { freqToMidi, midiToName, xForMidi } from './mapping/scales';
+import { denormalize, normalize, palmCenter } from './mapping/features';
 import { kitTrim } from './mapping/kit';
-import { drawnScale, phantomHand, type HandPose } from './tracking/phantom';
+import { drawnScale, edgeLean, phantomHand, type HandPose } from './tracking/phantom';
 import { DuoTracker, handsNeeded, lensFor, playerCount, type DuoMode, type Player } from './tracking/duo';
 import { FULL_LENS } from './mapping/features';
 import { Landmarker } from './tracking/landmarker';
@@ -30,6 +30,8 @@ import { Help } from './ui/help';
 import { Hud } from './ui/hud';
 import { Onboarding } from './ui/onboarding';
 import { Overlay, type OverlayFrame, type PartnerFrame } from './ui/overlay';
+import { Peer } from './net/peer';
+import type { GesturePacket } from './net/packet';
 import { SettingsStore, runtime, type Settings, type StageMode } from './state/store';
 
 /**
@@ -120,6 +122,31 @@ class Theremano {
   private players: Player[] = [];
   /** Lo que toca la segunda persona en este fotograma, para su capa. */
   private secondLive: LiveSnapshot | null = null;
+  /**
+   * Lo ultimo que ha llegado del otro dispositivo.
+   *
+   * Se guarda el ultimo y no se hace cola: un paquete de gesto caduca en cuanto
+   * llega el siguiente, y reproducir los atrasados seria oir a la otra persona
+   * tocando en camara lenta para ponerse al dia.
+   */
+  private remote: GesturePacket | null = null;
+  private readonly peer = new Peer({
+    onGesture: (packet) => this.onRemote(packet),
+    onState: (state) => {
+      const message =
+        state === 'connected' ? t().settings.netConnected : state === 'failed' ? t().settings.netLost : '';
+      this.controls.setNetStatus(message);
+      if (state === 'connected' || state === 'failed') this.hud.toast(message || t().settings.netLost);
+      // Al caerse, la voz de la otra persona se queda con lo ultimo que llego:
+      // una nota abierta sonaria para siempre sin nadie que pudiera soltarla.
+      if (state !== 'connected') {
+        this.remote = null;
+        this.engine.release(1);
+        this.engine.setDrone(0, 1);
+      }
+      this.applyDuo(this.duoMode);
+    },
+  });
   private readonly hud = new Hud();
   private readonly overlay: Overlay;
   private readonly controls: Controls;
@@ -232,6 +259,10 @@ class Theremano {
       // camino en lugar de dejar la pantalla en un idioma y el selector en otro.
       onLocaleChange: (preference) => this.store.set({ locale: preference }),
       localePreference: () => this.store.get().locale,
+      onInvite: () => this.peer.invite(),
+      onJoin: (code) => this.peer.join(code),
+      onAccept: (code) => this.peer.accept(code),
+      onDisconnect: () => this.peer.close(),
     });
     i18n.subscribe(() => {
       applyStaticStrings(this.store.get().drums);
@@ -1446,6 +1477,12 @@ class Theremano {
     // se atiende primero es lo que se oye antes, y la primera es quien lleva el
     // bucle, la guia y el rotulo.
     const partner = this.playSecond(seconds);
+    // Lo que se toca aqui va al otro dispositivo, y lo que llega de alla suena
+    // en la segunda voz: la misma que ocuparia la segunda persona de un duo.
+    // Y se dibuja igual que ella, que es lo que hace que esto sea tocar juntos
+    // y no dos personas oyendose: nunca hay las dos, porque con alguien al otro
+    // lado el duo de la misma camara esta apagado.
+    const remotePartner = this.exchange(assignment, output);
 
     // El gesto de grabar hace exactamente lo mismo que el boton, y por el mismo
     // camino: es la unica forma de que no haya dos maneras distintas de grabar
@@ -1499,7 +1536,7 @@ class Theremano {
       showRawTrace: settings.showRawTrace,
       ghosts: settings.ghosts,
       lens: this.mapper.currentLens,
-      partner,
+      partner: partner ?? remotePartner,
     };
 
     // Los efectos avanzan una vez por fotograma aunque se pinten dos veces:
@@ -1587,9 +1624,17 @@ class Theremano {
     return this.players[0]!.roles;
   }
 
-  /** El duo que hay ahora mismo, que con el puntero no lo hay. */
+  /**
+   * El duo que hay ahora mismo.
+   *
+   * Con el puntero no lo hay -hay un raton y una persona- y con otro dispositivo
+   * conectado tampoco: la segunda voz es una sola y la ocupa quien esta al otro
+   * lado. Un duo en la misma camara Y alguien en remoto serian tres
+   * instrumentos, y de eso no hay.
+   */
   private get duoMode(): DuoMode {
-    return this.mode === 'pointer' ? 'off' : this.store.get().duo;
+    if (this.mode === 'pointer' || this.peer.isConnected) return 'off';
+    return this.store.get().duo;
   }
 
   /**
@@ -1639,6 +1684,85 @@ class Theremano {
   }
 
   /**
+   * Lo que llega del otro dispositivo, atendido en el instante en que llega.
+   *
+   * Los eventos -el ataque, la suelta, los golpes- no esperan al siguiente
+   * repintado, por lo mismo que no esperan los de la mano propia: el audio no
+   * puede ir al ritmo del render. Y hay una razon mas, que aqui es la de peso:
+   * tienen que sonar UNA vez. Guardados para el fotograma siguiente sonarian en
+   * todos los que quepan antes del paquete siguiente -una nota atacada sesenta
+   * veces por segundo, que es una ametralladora y no una nota- y se perderian
+   * los de un paquete al que le pise otro entre dos repintados.
+   *
+   * Lo continuo y la mano son justo lo contrario: vale lo ultimo que haya, y si
+   * no llega nada nuevo sigue valiendo. Por eso el paquete se guarda entero.
+   */
+  private onRemote(packet: GesturePacket): void {
+    this.remote = packet;
+    // Puede llegar antes de que nadie haya pulsado tocar: el motor de audio no
+    // existe todavia y atacar una nota ahi seria abrirlo sin que se haya dado
+    // el gesto que los navegadores piden para sonar.
+    if (this.rafHandle === null) return;
+    const live = packet.live;
+    if (live.gateEvent === 'attack') this.engine.attack(live.freq, 1);
+    else if (live.gateEvent === 'release') this.engine.release(1);
+    for (const hit of live.strikes) this.engine.hit(hit.piece, hit.force, hit.open);
+  }
+
+  /**
+   * El ida y vuelta con el otro dispositivo, una vez por fotograma.
+   *
+   * Se manda siempre lo mismo que se guardaria en una capa -el gesto ya
+   * convertido- mas donde esta la mano, para que al otro lado se pueda dibujar.
+   * Y lo que ha llegado se toca en la segunda voz, sin cola: lo ultimo que haya.
+   */
+  private exchange(assignment: RoleAssignment, output: MappingOutput): PartnerFrame | null {
+    if (!this.peer.isConnected) return null;
+
+    const melody = assignment.melody;
+    const palm = melody ? palmCenter(melody.hand.raw) : null;
+    this.peer.send({
+      live: {
+        gateEvent: output.gateEvent,
+        gateOpen: output.gateOpen,
+        freq: output.freq,
+        cutoffNorm: output.cutoffNorm,
+        gain: output.gain,
+        strikes: output.strikes,
+      },
+      // El ladeo se calcula y no se mide: lo que se dibuja al otro lado es una
+      // mano de mentira, y una mano de mentira se ladea segun donde este.
+      pose: palm ? { x: palm.x, y: palm.y, pinch: output.pinch, tilt: edgeLean(normalize(palm.x)) } : null,
+    });
+
+    const remote = this.remote;
+    if (!remote) return null;
+    // Los eventos ya sonaron al llegar; aqui solo va lo continuo, que es lo que
+    // vale hasta que llegue otro paquete.
+    const live = remote.live;
+    this.engine.setFrequency(live.freq, 0, 1);
+    this.engine.setCutoffNorm(live.cutoffNorm, 1);
+    this.engine.setVolume(live.gain, 1);
+
+    if (!remote.pose) return null;
+    const target = this.overlay.screenTarget;
+    return {
+      assignment: { melody: this.drawnHand(remote.pose, target.width / target.height), expression: null },
+      // El encuadre entero: la otra persona tiene su propia camara para ella
+      // sola, asi que su franja es toda. La media pantalla es cosa de dos
+      // personas compartiendo una camara, que es justo lo que aqui no pasa.
+      lens: FULL_LENS,
+      // La marca de la rejilla se saca de la nota que suena y no viaja en el
+      // paquete, porque la que viaja es la frecuencia y el camino de vuelta ya
+      // existe: es el mismo que dibuja la mano de una capa grabada. Sale en la
+      // escala de AQUI, que es la unica rejilla que hay dibujada; si el otro
+      // tiene puesta otra, la marca cae en la nota mas cercana de esta.
+      pitchX: xForMidi(this.mapper.currentLayout, freqToMidi(live.freq)),
+      gateOpen: live.gateOpen,
+    };
+  }
+
+  /**
    * Enciende o apaga el duo entero: manos que buscar, voces e instrumentos.
    *
    * Las tres cosas a la vez y en un solo sitio, porque las tres tienen que decir
@@ -1647,7 +1771,9 @@ class Theremano {
    * toca nadie- y eso desde fuera parece que el instrumento va mal.
    */
   private applyDuo(mode: DuoMode): void {
-    const players = playerCount(mode);
+    // Con alguien al otro lado hace falta la segunda voz aunque no haya duo:
+    // es la que toca quien esta conectado.
+    const players = this.peer.isConnected ? 2 : playerCount(mode);
     void this.landmarker.setHandCount(handsNeeded(mode));
     this.engine.setPlayers(players);
     this.roles.reset();

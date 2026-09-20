@@ -834,6 +834,32 @@ html, body {
 }
 .share-row button:hover { background: rgba(255, 209, 102, 0.2); }
 
+/* ---------- Tocar con otro dispositivo ---------- */
+
+/*
+ * La caja del codigo tiene que verse como algo que se copia y se pega, no como
+ * un campo de escribir: el codigo es largo, no lo escribe nadie a mano y lo
+ * unico que se hace con el es seleccionarlo entero. De ahi el monoespaciado y
+ * el corte por cualquier sitio -un base64 no tiene espacios donde romper- y de
+ * ahi que no se pueda estirar: redimensionarla no ensena nada mas.
+ */
+.net-code {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--edge);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  resize: none;
+}
+.net-code::placeholder { color: rgba(255, 255, 255, 0.35); }
+.net-code:focus { outline: 1px solid rgba(255, 209, 102, 0.5); }
+
 
 /* ---------- Melodia guiada ---------- */
 
