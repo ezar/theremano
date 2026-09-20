@@ -1125,16 +1125,32 @@ Los que se pueden comprobar de forma automática están en `tests/`:
   continuo no hay zonas, así que la guía se retira sola en lugar de quedarse
   puesta y muerta.
 
+Y los que solo existen en un navegador están en `scripts/smoke.mjs`, porque
+fuera de uno no hay ni WebRTC ni lienzo que mirar:
+
+- **Dos dispositivos oyen los mismos golpes.** Con el invitado repintando a diez
+  fotogramas por segundo, que es la condición que separa atender los eventos al
+  llegar de guardarlos para el siguiente repintado: de ocho golpes dados se oyen
+  los ocho, y guardándolos se oye uno.
+- **Al otro lado se dibuja una mano y sigue a la de quien toca**, y al
+  desconectar con el otro tocando su voz se suelta en lugar de quedarse abierta.
+
 Los que exigen oído o un dispositivo real —25 fps en un móvil de gama media,
-ausencia de chasquidos— no se pueden afirmar desde aquí y quedan por verificar
-en hardware.
+ausencia de chasquidos, dos personas de verdad delante de una cámara, y el
+retraso de una red que no sea el bucle local— no se pueden afirmar desde aquí y
+quedan por verificar en hardware.
 
 ---
 
 ## Fuera del alcance
 
-Acordes tocados en directo, exportación a MIDI, multijugador y gestos entrenables
-por el usuario. Queda arquitectónicamente posible, no implementado.
+Acordes tocados en directo, exportación a MIDI, gestos entrenables por el usuario
+y más de dos personas a la vez —con sus salas, su emparejamiento y su reparto de
+voces—. Queda arquitectónicamente posible, no implementado.
+
+Dos personas sí: en la misma cámara o desde dos dispositivos. Lo que esas dos no
+comparten es el reloj de los bucles, el rótulo de la nota ni la melodía guiada,
+que siguen siendo de una sola persona.
 
 ## Lo que esto no es
 
